@@ -22,7 +22,7 @@ const scheduleArray = [
 ];
 
 const menuPricingObject: Record<string, { price: number; image: string; desc: string }> = {
-  "Pizza Bagel":    { price: 75, image: "https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=600&q=80", desc: "Tomato · Mozz · Basil" },
+  "Pizza Bagel":    { price: 75, image: "/pizza-bagel.jpeg", desc: "Tomato · Mozz · Basil" },
   "Jalapeno Bagel": { price: 70, image: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&q=80", desc: "Spicy · Cream Cheese · Pickled" },
   "Cheesy Bagel":   { price: 65, image: "https://images.unsplash.com/photo-1550547660-d9450f859349?w=600&q=80", desc: "Triple Cheese · Chive" },
   "Plain Bagel":    { price: 45, image: "/plain-bagel.jpeg", desc: "Classic · Butter · Sea Salt" },
