@@ -88,6 +88,13 @@ export default function Home() {
   const [notes, setNotes] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [displayTotal, setDisplayTotal] = useState(0);
+  const slideImages = ["/pizza-bagel.jpeg", "/jalapeno-bagel.jpeg", "/cheesy-bagel.jpeg", "/plain-bagel.jpeg"];
+  const [slideIndex, setSlideIndex] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setSlideIndex(i => (i + 1) % slideImages.length), 3000);
+    return () => clearInterval(id);
+  }, []);
 
   const total = Object.entries(quantities).reduce(
     (sum, [item, qty]) => sum + qty * menuPricingObject[item].price, 0
@@ -164,37 +171,6 @@ export default function Home() {
       </header>
 
       <div className="max-w-md mx-auto px-4 space-y-10 py-8">
-
-        {/* ─── 00 ABOUT ───────────────────────────────────── */}
-        <section>
-          <div className="flex items-center gap-3 mb-5">
-            <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>00</span>
-            <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">About Us</h2>
-            <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
-          </div>
-          <div className="border-2 border-[#1A1A1A]">
-            <div className="p-5 border-b-2 border-[#1A1A1A]" style={{ background: ACCENT }}>
-              <p className="font-black text-white text-lg leading-snug tracking-tight" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.6rem" }}>
-                Cape Town's first stuffed bagel. Born on the street. Built different.
-              </p>
-            </div>
-            <div className="p-5 space-y-3 bg-[#FBFBF9]">
-              <p className="font-medium text-sm text-[#1A1A1A] leading-relaxed">
-                STUFF'D started with one question: why does Cape Town not have a proper stuffed bagel? We took the classic New York bagel, packed it with bold fillings, and brought it to the streets of the Mother City.
-              </p>
-              <p className="font-medium text-sm text-[#1A1A1A]/70 leading-relaxed">
-                We pop up at markets, events, and cricket grounds across Cape Town every weekend. No tables, no reservations — just fresh bagels, fast. Find us on the schedule below and place your order ahead so yours is ready when you arrive.
-              </p>
-              <div className="flex gap-2 pt-1 flex-wrap">
-                {["Street Food", "Cape Town", "Pop-Up", "Handmade"].map(tag => (
-                  <span key={tag} className="border-2 border-[#1A1A1A] px-2 py-0.5 font-black text-[10px] tracking-widest uppercase text-[#1A1A1A]">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
 
         {/* ─── 01 WHERE WE AT ──────────────────────────────── */}
         <section>
@@ -297,6 +273,72 @@ export default function Home() {
           </div>
         </section>
 
+        {/* ─── 03 ABOUT ────────────────────────────────────── */}
+        <section>
+          <div className="flex items-center gap-3 mb-5">
+            <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>03</span>
+            <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">About Us</h2>
+            <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
+          </div>
+          <div className="border-2 border-[#1A1A1A] overflow-hidden">
+            {/* Auto-cycling image panel */}
+            <div className="relative w-full overflow-hidden border-b-2 border-[#1A1A1A]" style={{ aspectRatio: "4/3" }}>
+              {slideImages.map((src, i) => (
+                <img
+                  key={src}
+                  src={src}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-cover"
+                  style={{
+                    opacity: i === slideIndex ? 1 : 0,
+                    transition: "opacity 0.8s ease-in-out",
+                    zIndex: i === slideIndex ? 1 : 0,
+                  }}
+                />
+              ))}
+              {/* Slide dots */}
+              <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2 z-10">
+                {slideImages.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setSlideIndex(i)}
+                    className="w-2 h-2 border border-white transition-all"
+                    style={{ background: i === slideIndex ? "#fff" : "transparent" }}
+                    aria-label={`Slide ${i + 1}`}
+                  />
+                ))}
+              </div>
+              {/* Label chip */}
+              <div className="absolute top-3 left-3 z-10 px-2 py-0.5 border border-white/60" style={{ background: `${ACCENT}dd` }}>
+                <span className="text-white font-black text-[9px] tracking-widest uppercase">
+                  {Object.keys(menuPricingObject)[slideIndex]}
+                </span>
+              </div>
+            </div>
+            {/* Text block */}
+            <div className="border-b-2 border-[#1A1A1A] px-5 py-4" style={{ background: ACCENT }}>
+              <p className="font-black text-white leading-snug" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.5rem" }}>
+                Cape Town's first stuffed bagel. Born on the street. Built different.
+              </p>
+            </div>
+            <div className="px-5 py-4 space-y-3 bg-[#FBFBF9]">
+              <p className="font-medium text-sm text-[#1A1A1A] leading-relaxed">
+                STUFF'D started with one question: why does Cape Town not have a proper stuffed bagel? We took the classic New York bagel, packed it with bold fillings, and brought it to the streets of the Mother City.
+              </p>
+              <p className="font-medium text-sm text-[#1A1A1A]/60 leading-relaxed">
+                We pop up at markets, events, and cricket grounds across Cape Town every weekend. No tables, no reservations — just fresh bagels, fast.
+              </p>
+              <div className="flex gap-2 pt-1 flex-wrap">
+                {["Street Food", "Cape Town", "Pop-Up", "Handmade"].map(tag => (
+                  <span key={tag} className="border-2 border-[#1A1A1A] px-2 py-0.5 font-black text-[10px] tracking-widest uppercase">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* ─── MASCOT STRIP ────────────────────────────────── */}
         <div className="border-2 border-[#1A1A1A] flex items-center overflow-hidden" style={{ background: ACCENT }}>
           <img src="/mascot.png" alt="STUFF'D mascot" className="w-28 shrink-0 -mb-1 mix-blend-multiply" />
@@ -310,7 +352,7 @@ export default function Home() {
         {/* ─── 03 YOUR DETAILS ─────────────────────────────── */}
         <section>
           <div className="flex items-center gap-3 mb-5">
-            <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>03</span>
+            <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>04</span>
             <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">Your Details</h2>
             <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
           </div>
@@ -360,7 +402,7 @@ export default function Home() {
         {/* ─── 04 FAQ ──────────────────────────────────────── */}
         <section>
           <div className="flex items-center gap-3 mb-5">
-            <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>04</span>
+            <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>05</span>
             <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">Got Questions?</h2>
             <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
           </div>
