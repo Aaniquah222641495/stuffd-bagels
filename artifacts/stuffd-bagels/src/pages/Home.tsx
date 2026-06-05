@@ -270,10 +270,73 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ─── 03 ABOUT ────────────────────────────────────── */}
+        {/* ─── MASCOT STRIP ────────────────────────────────── */}
+        <div className="border-2 border-[#1A1A1A] flex items-center overflow-hidden bg-white">
+          <img src="/mascot.png" alt="STUFF'D mascot" className="w-28 shrink-0 -mb-1" />
+          <div className="px-4 py-4">
+            <p className="font-black tracking-widest text-xs uppercase leading-snug" style={{ color: ACCENT }}>
+              Ready to order?
+            </p>
+            <p className="text-[#1A1A1A]/60 font-medium text-xs leading-snug mt-1">
+              Fill in your details below and we'll WhatsApp your order straight to the kitchen.
+            </p>
+          </div>
+        </div>
+
+        {/* ─── 03 YOUR DETAILS ─────────────────────────────── */}
+        <section>
+          <div className="flex items-center gap-3 mb-5">
+            <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>03</span>
+            <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">Your Details</h2>
+            <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
+          </div>
+
+          <div className="border-2 border-[#1A1A1A] divide-y-2 divide-[#1A1A1A]">
+            {[
+              { label: "Name",  type: "text", placeholder: "Your name",      value: name,  set: setName,  id: "input-name" },
+              { label: "Phone", type: "tel",  placeholder: "082 123 4567",   value: phone, set: setPhone, id: "input-phone" },
+            ].map(f => (
+              <div key={f.label} className="flex flex-col">
+                <label className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-[#1A1A1A]/40">{f.label}</label>
+                <input data-testid={f.id} type={f.type} placeholder={f.placeholder} value={f.value}
+                  onChange={e => f.set(e.target.value)}
+                  className="px-4 pb-3 bg-transparent font-bold text-base outline-none placeholder:text-[#1A1A1A]/25" />
+              </div>
+            ))}
+            <div className="flex flex-col">
+              <label className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-[#1A1A1A]/40">Pickup Location</label>
+              <select data-testid="select-venue" value={venue} onChange={e => setVenue(e.target.value)}
+                className="px-4 pb-3 bg-transparent font-bold text-base outline-none appearance-none">
+                {uniqueVenues.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col">
+              <label className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-[#1A1A1A]/40">Notes</label>
+              <textarea data-testid="textarea-notes" placeholder="Any special requests?" rows={2} value={notes}
+                onChange={e => setNotes(e.target.value)}
+                className="px-4 pb-3 bg-transparent font-bold text-base outline-none resize-none placeholder:text-[#1A1A1A]/25" />
+            </div>
+          </div>
+
+          <p className="text-xs font-medium mt-3 text-[#1A1A1A]/50 leading-relaxed px-1">
+            No payment online. Swipe your card (Yoco) or pay cash at the truck upon collection.
+          </p>
+
+          <button
+            data-testid="btn-place-order"
+            onClick={() => setShowModal(true)}
+            className="mt-4 w-full text-white border-2 p-4 font-black uppercase tracking-widest active:scale-[0.98] transition-transform"
+            style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.25rem", letterSpacing: "0.15em", background: ACCENT, borderColor: ACCENT_DK }}
+          >
+            Place WhatsApp Order
+            {total > 0 && <span className="ml-3 text-white/70 text-sm font-black">· R{total}</span>}
+          </button>
+        </section>
+
+        {/* ─── 04 ABOUT ────────────────────────────────────── */}
         <section className="-mx-4">
           <div className="flex items-center gap-3 mb-5 px-4">
-            <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>03</span>
+            <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>04</span>
             <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">About Us</h2>
             <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
           </div>
@@ -328,69 +391,6 @@ export default function Home() {
               </div>
             </div>
           </div>
-        </section>
-
-        {/* ─── MASCOT STRIP ────────────────────────────────── */}
-        <div className="border-2 border-[#1A1A1A] flex items-center overflow-hidden bg-[#1A1A1A]">
-          <img src="/mascot.png" alt="STUFF'D mascot" className="w-28 shrink-0 -mb-1" />
-          <div className="px-4 py-4">
-            <p className="font-black tracking-widest text-xs uppercase leading-snug" style={{ color: ACCENT }}>
-              Ready to order?
-            </p>
-            <p className="text-white font-medium text-xs leading-snug mt-1">
-              Fill in your details below and we'll WhatsApp your order straight to the kitchen.
-            </p>
-          </div>
-        </div>
-
-        {/* ─── 03 YOUR DETAILS ─────────────────────────────── */}
-        <section>
-          <div className="flex items-center gap-3 mb-5">
-            <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>04</span>
-            <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">Your Details</h2>
-            <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
-          </div>
-
-          <div className="border-2 border-[#1A1A1A] divide-y-2 divide-[#1A1A1A]">
-            {[
-              { label: "Name",  type: "text", placeholder: "Your name",      value: name,  set: setName,  id: "input-name" },
-              { label: "Phone", type: "tel",  placeholder: "082 123 4567",   value: phone, set: setPhone, id: "input-phone" },
-            ].map(f => (
-              <div key={f.label} className="flex flex-col">
-                <label className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-[#1A1A1A]/40">{f.label}</label>
-                <input data-testid={f.id} type={f.type} placeholder={f.placeholder} value={f.value}
-                  onChange={e => f.set(e.target.value)}
-                  className="px-4 pb-3 bg-transparent font-bold text-base outline-none placeholder:text-[#1A1A1A]/25" />
-              </div>
-            ))}
-            <div className="flex flex-col">
-              <label className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-[#1A1A1A]/40">Pickup Location</label>
-              <select data-testid="select-venue" value={venue} onChange={e => setVenue(e.target.value)}
-                className="px-4 pb-3 bg-transparent font-bold text-base outline-none appearance-none">
-                {uniqueVenues.map(v => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </div>
-            <div className="flex flex-col">
-              <label className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-[#1A1A1A]/40">Notes</label>
-              <textarea data-testid="textarea-notes" placeholder="Any special requests?" rows={2} value={notes}
-                onChange={e => setNotes(e.target.value)}
-                className="px-4 pb-3 bg-transparent font-bold text-base outline-none resize-none placeholder:text-[#1A1A1A]/25" />
-            </div>
-          </div>
-
-          <p className="text-xs font-medium mt-3 text-[#1A1A1A]/50 leading-relaxed px-1">
-            No payment online. Swipe your card (Yoco) or pay cash at the truck upon collection.
-          </p>
-
-          <button
-            data-testid="btn-place-order"
-            onClick={() => setShowModal(true)}
-            className="mt-4 w-full text-white border-2 p-4 font-black uppercase tracking-widest active:scale-[0.98] transition-transform"
-            style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.25rem", letterSpacing: "0.15em", background: ACCENT, borderColor: ACCENT_DK }}
-          >
-            Place WhatsApp Order
-            {total > 0 && <span className="ml-3 text-white/70 text-sm font-black">· R{total}</span>}
-          </button>
         </section>
 
         {/* ─── 05 FAQ — iMessage style ─────────────────────── */}
