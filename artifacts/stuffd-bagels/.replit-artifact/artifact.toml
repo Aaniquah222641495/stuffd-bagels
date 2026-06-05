@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "STUFF'D Bagels"
+version = "1.0.0"
+id = "artifacts/stuffd-bagels"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 26260
+
+[services.development]
+run = "pnpm --filter @workspace/stuffd-bagels run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/stuffd-bagels", "run", "build" ]
+publicDir = "artifacts/stuffd-bagels/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "26260"
+BASE_PATH = "/"

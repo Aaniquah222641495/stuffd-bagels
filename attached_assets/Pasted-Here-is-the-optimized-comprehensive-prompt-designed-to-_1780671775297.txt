@@ -1,0 +1,63 @@
+Here is the optimized, comprehensive prompt designed to be copied and pasted directly into *Replit Agent* or *Replit AI*. It condenses all your PRD criteria, design tokens, MVP architecture, and code logic into a structured set of instructions that Replit can execute perfectly in one go.
+
+---
+
+⁠ text
+You are an expert full-stack developer building a mobile-first, high-performance web application for "STUFF’D Bagels", an internet-culture-inspired street food brand in Cape Town, South Africa. 
+
+Build a single-page web app using React (Vite template) and Tailwind CSS. The app requires NO databases or external payment processors. It functions as a serverless Web-to-WhatsApp order router.
+
+Follow the exact specifications below:
+
+---
+
+### 1. DYNAMIC CONFIGURATION STATE (Top of Code)
+Isolate all updatable business data at the very top of the primary component file inside clear arrays/objects so the owner can change them weekly:
+- `BUSINESS_PHONE`: Set a placeholder string for a phone number including country code (e.g., "27123456789").
+- `scheduleArray`: An array of objects for the weekly calendar cards. Each card must contain: Day Name (e.g., "Saturday"), Calendar Date (e.g., "25"), Month Subtitle (e.g., "APRIL 25TH-26TH"), Operating Hours (e.g., "10AM - 9PM"), and Specific Venue Location (e.g., "Newlands Cricket Ground"). Populate with 3 realistic placeholder data points.
+- `menuPricingObject`: An object mapping the 4 core products to their prices in South African Rand (R):
+  * Pizza Bagel: R75
+  * Jalapeño Bagel: R70
+  * Cheesy Bagel: R65
+  * Plain Bagel: R45
+
+---
+
+### 2. CORE VISUAL IDENTITY & DESIGN PARADIGMS
+Replicate a minimalist, bold, Gen-Z zine-style look derived from these brand aesthetic guidelines:
+- Color Palette: Canvas Background is crisp off-white/ivory (#FBFBF9). All text, container lines, and structural boundaries use thick solid Charcoal-Black (#1A1A1A). The single interface accent color is Apple iMessage Blue (#007AFF), used only for interactive buttons and notifications.
+- Typography: Primary headers ("STUFF'D") must use an all-caps, ultra-heavy, tight-tracking sans-serif style. Secondary callouts, subheadings ("BAGELS"), and the brand tagline must use wide letter spacing (`tracking-widest` in Tailwind). 
+- Framing: UI sections must look like clean, flat flat-pack grid boxes using distinct thick black outline borders (`border-2 border-black`) with zero drop-shadows. Leave generous open canvas whitespace.
+- Photo-Realistic Hybrid Elements: Use high-quality Unsplash image placeholders for the 4 bagels. To mimic the brand's aesthetic, overlay clean, transparent vector style line drawings or message bubbles directly on top of or clipped across these realistic food photos.
+
+---
+
+### 3. INTERFACE COMPONENT STRUCTURAL LAYOUT
+Build a single-page mobile layout containing these sequential blocks:
+
+- [HEADER]: Features the primary branding logo stylized in a geometric semicircular upward arc design, with the wide-tracked subheaders "BAGELS" and tagline "EVERY BITE PACKED RIGHT." sitting right below it.
+- [STICKY AD BANNER]: A persistent element showing the brand hook: "This is the bagel place I was telling you about. Get Stuff’d — Cape Town’s first stuffed bagel!"
+- [WEEKLY SCHEDULE (FR-1)]: A grid showing the calendar elements from `scheduleArray`. Follow the exact pattern from reference assets: Day name written in a casual handwriting font style directly above an oversized, chunky, rounded numeric date block, framed inside thick black bounding boxes.
+- [MENU MATRIX (FR-2)]: A clean grid displaying the 4 items from `menuPricingObject` with their prices, image containers, and prominent incremental count controls (+ / - buttons) built right next to each food option so users can modify quantities on the fly.
+- [ORDER FORM (FR-3)]: A high-contrast mobile container collecting:
+  * Customer Name (Text Input)
+  * Phone Number (Tel Input)
+  * Pickup Location (Dropdown list dynamically generated from the venues inside `scheduleArray`)
+  * Custom Notes (Textarea)
+  Include a prominent disclaimer: "No payment online. Securely swipe your card (Yoco) or pay cash at the truck upon collection."
+- [FAQ ACCORDION (FR-5)]: Simple interactive dropdown panels answering: "Where exactly do I collect my order?", "How do I pay if there is no checkout here?" (Answer: Pay at the truck using Yoco/Card or Cash), and "Can I book STUFF'D for private corporate catering or pop-ups around Cape Town?"
+
+---
+
+### 4. TRANSACTION CAPTURE & WHATSAPP REDIRECT LOGIC
+- Form State Engine: Manage form input selections and calculate the total price estimate dynamically in South African Rand (R) based on selected quantities.
+- Interstitial Modal (FR-4): Clicking the primary "Place WhatsApp Order" CTA must NOT immediately redirect the user. It must interrupt the flow to present a sleek confirmation modal window.
+  * Modal Title: "Awesome! Handing over to WhatsApp..."
+  * Modal Body Text: "We've built your order message for you. When WhatsApp opens up on your device, please make sure to hit 'Send' in the chat window to officially log your order with our kitchen!"
+  * Modal Action Button: "Open WhatsApp & Send"
+- String Compiler: When the modal's action button is clicked, gather the active React state values and compile them into a perfectly formatted, clean string block using native `encodeURIComponent()`. Omit items completely if their quantity is 0.
+- Launch Endpoint: Fire the browser native link action directing to:
+  `https://wa.me/<BUSINESS_PHONE>?text=<EncodedOrderPayload>`
+
+Ensure the layout is flawlessly optimized for mobile viewports, responsive, and ready for one-click static deployment. Ensure all interactive components work smoothly.
+
