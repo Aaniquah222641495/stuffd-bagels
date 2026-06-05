@@ -165,6 +165,37 @@ export default function Home() {
 
       <div className="max-w-md mx-auto px-4 space-y-10 py-8">
 
+        {/* ─── 00 ABOUT ───────────────────────────────────── */}
+        <section>
+          <div className="flex items-center gap-3 mb-5">
+            <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>00</span>
+            <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">About Us</h2>
+            <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
+          </div>
+          <div className="border-2 border-[#1A1A1A]">
+            <div className="p-5 border-b-2 border-[#1A1A1A]" style={{ background: ACCENT }}>
+              <p className="font-black text-white text-lg leading-snug tracking-tight" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.6rem" }}>
+                Cape Town's first stuffed bagel. Born on the street. Built different.
+              </p>
+            </div>
+            <div className="p-5 space-y-3 bg-[#FBFBF9]">
+              <p className="font-medium text-sm text-[#1A1A1A] leading-relaxed">
+                STUFF'D started with one question: why does Cape Town not have a proper stuffed bagel? We took the classic New York bagel, packed it with bold fillings, and brought it to the streets of the Mother City.
+              </p>
+              <p className="font-medium text-sm text-[#1A1A1A]/70 leading-relaxed">
+                We pop up at markets, events, and cricket grounds across Cape Town every weekend. No tables, no reservations — just fresh bagels, fast. Find us on the schedule below and place your order ahead so yours is ready when you arrive.
+              </p>
+              <div className="flex gap-2 pt-1 flex-wrap">
+                {["Street Food", "Cape Town", "Pop-Up", "Handmade"].map(tag => (
+                  <span key={tag} className="border-2 border-[#1A1A1A] px-2 py-0.5 font-black text-[10px] tracking-widest uppercase text-[#1A1A1A]">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* ─── 01 WHERE WE AT ──────────────────────────────── */}
         <section>
           <div className="flex items-center gap-3 mb-6">
