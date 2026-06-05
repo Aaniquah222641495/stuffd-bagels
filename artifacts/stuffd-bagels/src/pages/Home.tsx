@@ -393,32 +393,97 @@ export default function Home() {
           </button>
         </section>
 
-        {/* ─── 04 FAQ ──────────────────────────────────────── */}
+        {/* ─── 05 FAQ — iMessage style ─────────────────────── */}
         <section>
           <div className="flex items-center gap-3 mb-5">
             <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>05</span>
             <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">Got Questions?</h2>
             <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
           </div>
-          <Accordion type="single" collapsible className="w-full">
-            {[
-              { q: "Where exactly do I collect my order?", a: "At the venue listed on your pickup date. Look for the STUFF'D truck — you won't miss it!" },
-              { q: "How do I pay if there is no checkout?", a: "Pay at the truck with Yoco (card tap) or cash. No online payment needed, ever." },
-              { q: "Can I book STUFF'D for private catering or pop-ups?", a: "Absolutely! Drop us a WhatsApp and we'll sort you out with a custom quote." },
-            ].map((faq, i) => (
-              <AccordionItem key={i} value={`item-${i}`} className="border-2 border-[#1A1A1A] mb-2 rounded-none">
-                <AccordionTrigger className="font-black uppercase tracking-wide text-sm px-4 hover:no-underline text-left [&>svg]:hidden">
-                  <span className="flex items-center gap-3 w-full">
-                    <span className="font-black text-xs tabular-nums" style={{ color: ACCENT }}>{String(i + 1).padStart(2, "0")}</span>
-                    <span>{faq.q}</span>
-                  </span>
-                </AccordionTrigger>
-                <AccordionContent className="px-4 pb-4 text-sm font-medium text-[#1A1A1A]/70 border-t-2 border-[#1A1A1A] pt-3">
-                  {faq.a}
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
+
+          {/* iMessage phone shell */}
+          <div className="border-2 border-[#1A1A1A] overflow-hidden" style={{ background: "#F2F2F7" }}>
+            {/* Chat header bar */}
+            <div className="flex items-center gap-3 px-4 py-3 border-b-2 border-[#1A1A1A] bg-white">
+              <div className="relative">
+                <div className="w-9 h-9 rounded-full border-2 border-[#1A1A1A] overflow-hidden flex items-center justify-center" style={{ background: ACCENT }}>
+                  <span className="text-white font-black text-xs" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>S'D</span>
+                </div>
+                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-[#34C759] border border-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-black text-sm text-[#1A1A1A]">STUFF'D Bagels</div>
+                <div className="text-[10px] text-[#34C759] font-medium">Active now</div>
+              </div>
+              {/* Signal bars decoration */}
+              <div className="flex items-end gap-[2px] opacity-40">
+                {[3, 5, 7, 9].map(h => <div key={h} className="w-[3px] bg-[#1A1A1A] rounded-sm" style={{ height: h }} />)}
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div className="px-3 py-4 space-y-5">
+              {[
+                {
+                  q: "Where do I collect my order?",
+                  a: "At the venue on your pickup date 📍 Look for the STUFF'D setup — you won't miss us!",
+                  time: "10:42",
+                },
+                {
+                  q: "How do I pay? There's no checkout here 🤔",
+                  a: "Pay at the truck with Yoco (tap your card) or cash. No online payment ever needed 🙌",
+                  time: "10:44",
+                },
+                {
+                  q: "Can I book you guys for a private event?",
+                  a: "Absolutely! Drop us a WhatsApp below and we'll put together a custom quote for you 🥯",
+                  time: "10:47",
+                },
+              ].map((msg, i) => (
+                <div key={i} className="space-y-1.5">
+                  {/* Timestamp */}
+                  <div className="text-center text-[10px] text-[#8E8E93] font-medium">{msg.time}</div>
+                  {/* Customer bubble — left / grey */}
+                  <div className="flex items-end gap-2">
+                    <div className="w-6 h-6 rounded-full bg-[#C7C7CC] border border-[#1A1A1A]/10 shrink-0 flex items-center justify-center mb-0.5">
+                      <span className="text-[8px] font-black text-[#3C3C43]">YOU</span>
+                    </div>
+                    <div
+                      className="max-w-[72%] px-3 py-2 text-sm font-medium text-[#1A1A1A] leading-snug"
+                      style={{ background: "#FFFFFF", borderRadius: "18px 18px 18px 4px", boxShadow: "0 1px 1px rgba(0,0,0,0.08)" }}
+                    >
+                      {msg.q}
+                    </div>
+                  </div>
+                  {/* STUFF'D reply — right / blue */}
+                  <div className="flex justify-end">
+                    <div
+                      className="max-w-[72%] px-3 py-2 text-sm font-medium text-white leading-snug"
+                      style={{ background: "#007AFF", borderRadius: "18px 18px 4px 18px", boxShadow: "0 1px 2px rgba(0,122,255,0.3)" }}
+                    >
+                      {msg.a}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Typing indicator */}
+              <div className="flex items-end gap-2">
+                <div className="w-6 h-6 rounded-full shrink-0 overflow-hidden border border-[#1A1A1A]/10" style={{ background: ACCENT }}>
+                  <span className="flex items-center justify-center h-full text-[7px] font-black text-white" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>S'D</span>
+                </div>
+                <div className="px-4 py-3 flex gap-1 items-center" style={{ background: "#FFFFFF", borderRadius: "18px 18px 18px 4px", boxShadow: "0 1px 1px rgba(0,0,0,0.08)" }}>
+                  {[0, 0.2, 0.4].map((delay, i) => (
+                    <div
+                      key={i}
+                      className="w-2 h-2 rounded-full bg-[#8E8E93]"
+                      style={{ animation: `bounce 1.2s ${delay}s infinite` }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* FOOTER */}
