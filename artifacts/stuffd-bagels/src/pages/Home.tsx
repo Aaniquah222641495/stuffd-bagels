@@ -34,44 +34,36 @@ const TICKER_TEXT = "STUFF'D BAGELS · CAPE TOWN'S FIRST STUFFED BAGEL · EVERY 
 const ACCENT    = "#C8900F";
 const ACCENT_DK = "#A06808";
 
-// Realistic bagel SVG pin — warm golden ring, sesame seeds, date in hole
 function BagelPin({ date, active = false }: { date: string; active?: boolean }) {
-  const ring   = active ? ACCENT    : "#D4A44C";
-  const shadow = active ? ACCENT_DK : "#A07828";
-  const seeds  = [
-    [28,  5, 5],  [44, 13, 40], [50, 28, 80],
-    [44, 43, 130],[28, 50, 175],[12, 43, 220],
-    [ 6, 28, 270],[12, 13, 310],
-  ];
   return (
-    <svg viewBox="0 0 56 56" width="54" height="54" style={{ display: "block", filter: active ? "drop-shadow(0 2px 6px rgba(200,144,15,0.55))" : "none" }}>
-      {/* Bagel ring body */}
-      <circle cx="28" cy="28" r="25" fill={ring} stroke="#1A1A1A" strokeWidth="2" />
-      {/* Inner shadow arc for depth */}
-      <circle cx="28" cy="28" r="25" fill="none" stroke={shadow} strokeWidth="6" opacity="0.4" />
-      {/* Hole */}
-      <circle cx="28" cy="28" r="10.5" fill="#FBFBF9" stroke="#1A1A1A" strokeWidth="1.5" />
-      {/* Sesame seeds */}
-      {seeds.map(([cx, cy, angle], i) => (
-        <ellipse
-          key={i}
-          cx={cx} cy={cy}
-          rx="2.4" ry="1.1"
-          fill="#6B4A10"
-          opacity="0.85"
-          transform={`rotate(${angle} ${cx} ${cy})`}
-        />
-      ))}
-      {/* Date number */}
-      <text
-        x="28" y="33"
-        textAnchor="middle"
-        fontFamily="'Bebas Neue', sans-serif"
-        fontSize="13"
-        fontWeight="900"
-        fill="#1A1A1A"
-      >{date}</text>
-    </svg>
+    <div className="relative" style={{ width: 54, height: 54 }}>
+      <img
+        src="/bagel-pin.png"
+        alt="bagel location pin"
+        className="w-full h-full object-contain"
+        style={{
+          filter: active
+            ? "drop-shadow(0 2px 8px rgba(200,144,15,0.7))"
+            : "grayscale(0.3) brightness(0.88)",
+        }}
+      />
+      {/* Date in the hole */}
+      <div
+        className="absolute inset-0 flex items-center justify-center"
+        style={{ paddingBottom: "2px" }}
+      >
+        <span
+          className="font-black text-white leading-none"
+          style={{
+            fontFamily: "'Bebas Neue', sans-serif",
+            fontSize: "0.95rem",
+            textShadow: "0 1px 3px rgba(0,0,0,0.8), 0 0 6px rgba(0,0,0,0.6)",
+          }}
+        >
+          {date}
+        </span>
+      </div>
+    </div>
   );
 }
 
