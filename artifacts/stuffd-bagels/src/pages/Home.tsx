@@ -138,27 +138,25 @@ export default function Home() {
           alt=""
           className="absolute inset-0 w-full h-full object-cover object-center"
         />
-        {/* Dark gradient so text stays readable */}
-        <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 50%, rgba(0,0,0,0.72) 100%)" }} />
+        {/* Light overlay so black text stays readable over the photo */}
+        <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(251,251,249,0.30) 0%, rgba(251,251,249,0.55) 50%, rgba(251,251,249,0.78) 100%)" }} />
 
         {/* Wordmark overlaid */}
-        <div className="relative px-5 pt-8 pb-8 max-w-md mx-auto flex flex-col justify-between" style={{ minHeight: 320 }}>
-          <div>
-            <p className="font-black tracking-[0.35em] text-[10px] uppercase text-white/60 mb-1">Cape Town · Est. 2024</p>
-          </div>
-          <div>
+        <div className="relative px-5 pt-8 pb-8 max-w-md mx-auto flex flex-col items-center justify-between text-center" style={{ minHeight: 320 }}>
+          <p className="font-black tracking-[0.35em] text-[10px] uppercase text-[#1A1A1A]/60 mb-1">Cape Town · Est. 2024</p>
+          <div className="w-full">
             <h1
-              className="leading-none tracking-tighter text-white m-0"
-              style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "clamp(5rem,22vw,9rem)" }}
+              className="leading-none tracking-tighter text-[#1A1A1A] m-0"
+              style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "clamp(5rem,22vw,9rem)", textShadow: "0 1px 0 rgba(255,255,255,0.15)" }}
             >
               STUFF'D
             </h1>
             <div className="flex items-center gap-2 mt-1">
-              <div className="flex-1 h-[2px] bg-white/70" />
-              <span className="font-black tracking-[0.35em] text-[10px] text-white uppercase">Bagels</span>
-              <div className="flex-1 h-[2px] bg-white/70" />
+              <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
+              <span className="font-black tracking-[0.35em] text-[10px] text-[#1A1A1A] uppercase">Bagels</span>
+              <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
             </div>
-            <p className="font-black tracking-widest text-[10px] uppercase text-white/60 mt-3">
+            <p className="font-black tracking-widest text-[10px] uppercase text-[#1A1A1A]/70 mt-3">
               Every bite packed right.
             </p>
           </div>
