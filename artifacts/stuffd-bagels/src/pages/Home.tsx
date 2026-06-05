@@ -214,12 +214,12 @@ export default function Home() {
             <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
           </div>
 
-          <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
             {Object.entries(menuPricingObject).map(([item, info]) => (
-              <div key={item} className="border-2 border-[#1A1A1A] flex overflow-hidden bg-[#FBFBF9]" data-testid={`menu-item-${item}`}>
+              <div key={item} className="border-2 border-[#1A1A1A] flex flex-col overflow-hidden bg-[#FBFBF9]" data-testid={`menu-item-${item}`}>
                 {/* Photo */}
-                <div className="w-28 shrink-0 relative overflow-hidden border-r-2 border-[#1A1A1A]">
-                  <img src={info.image} alt={item} className="w-full h-full object-cover" style={{ minHeight: 112 }} />
+                <div className="relative overflow-hidden border-b-2 border-[#1A1A1A]" style={{ aspectRatio: "1/1" }}>
+                  <img src={info.image} alt={item} className="w-full h-full object-cover" />
                   {quantities[item] > 0 && (
                     <div className="absolute inset-0 flex items-center justify-center" style={{ background: `${ACCENT}ee` }}>
                       <span className="text-white font-black" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "3.5rem", lineHeight: 1 }}>
@@ -229,24 +229,24 @@ export default function Home() {
                   )}
                 </div>
                 {/* Details */}
-                <div className="flex flex-col flex-1 p-3 justify-between min-h-[112px]">
+                <div className="flex flex-col flex-1 p-2.5 gap-2">
                   <div>
-                    <div className="font-black uppercase text-sm leading-tight">{item}</div>
-                    <div className="text-[#1A1A1A]/45 text-xs font-medium mt-0.5">{info.desc}</div>
+                    <div className="font-black uppercase text-xs leading-tight">{item}</div>
+                    <div className="text-[#1A1A1A]/45 text-[10px] font-medium mt-0.5 leading-snug">{info.desc}</div>
                   </div>
-                  <div className="flex items-center justify-between mt-2">
-                    <div className="font-black text-xl" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>R{info.price}</div>
-                    <div className="flex items-center gap-1">
+                  <div className="flex items-center justify-between mt-auto">
+                    <div className="font-black text-lg" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>R{info.price}</div>
+                    <div className="flex items-center gap-0.5">
                       <button
                         data-testid={`btn-decrease-${item}`}
                         onClick={() => updateQuantity(item, -1)}
-                        className="w-9 h-9 border-2 border-[#1A1A1A] font-black text-lg flex items-center justify-center active:scale-90 transition-transform bg-[#FBFBF9] hover:bg-[#1A1A1A] hover:text-white"
+                        className="w-8 h-8 border-2 border-[#1A1A1A] font-black text-base flex items-center justify-center active:scale-90 transition-transform bg-[#FBFBF9] hover:bg-[#1A1A1A] hover:text-white"
                       >−</button>
-                      <span className="font-black text-base w-6 text-center tabular-nums">{quantities[item]}</span>
+                      <span className="font-black text-sm w-5 text-center tabular-nums">{quantities[item]}</span>
                       <button
                         data-testid={`btn-increase-${item}`}
                         onClick={() => updateQuantity(item, 1)}
-                        className="w-9 h-9 border-2 text-white font-black text-lg flex items-center justify-center active:scale-90 transition-transform"
+                        className="w-8 h-8 border-2 text-white font-black text-base flex items-center justify-center active:scale-90 transition-transform"
                         style={{ background: ACCENT, borderColor: ACCENT_DK }}
                       >+</button>
                     </div>
