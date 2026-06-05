@@ -13,7 +13,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
-const BUSINESS_PHONE = "27123456789";
+const BUSINESS_PHONE = "27724111011";
 
 const scheduleArray = [
   { day: "Saturday", date: "14", subtitle: "JUNE 14TH-15TH", hours: "10AM - 9PM", venue: "Newlands Cricket Ground" },
