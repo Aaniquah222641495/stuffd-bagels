@@ -131,51 +131,37 @@ export default function Home() {
       </div>
 
       {/* ─── HERO ─────────────────────────────────────────── */}
-      <header className="border-b-2 border-[#1A1A1A] bg-[#FBFBF9]">
+      <header className="border-b-2 border-[#1A1A1A] relative overflow-hidden" style={{ minHeight: 320 }}>
+        {/* Full-bleed background photo */}
+        <img
+          src="/hero-bagel.jpeg"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover object-center"
+        />
+        {/* Dark gradient so text stays readable */}
+        <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 50%, rgba(0,0,0,0.72) 100%)" }} />
 
-        {/* Wordmark block */}
-        <div className="px-5 pt-8 pb-4 max-w-md mx-auto">
-          <p className="font-black tracking-[0.35em] text-[10px] uppercase text-[#1A1A1A]/40 mb-1">Cape Town · Est. 2024</p>
-          <h1
-            className="leading-none tracking-tighter text-[#1A1A1A] m-0"
-            style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "clamp(4.5rem,20vw,8rem)" }}
-          >
-            STUFF'D
-          </h1>
-          <div className="flex items-center gap-2 mt-0.5">
-            <div className="flex-1 h-[2.5px] bg-[#1A1A1A]" />
-            <span className="font-black tracking-[0.35em] text-[10px] text-[#1A1A1A] uppercase">Bagels</span>
-            <div className="flex-1 h-[2.5px] bg-[#1A1A1A]" />
+        {/* Wordmark overlaid */}
+        <div className="relative px-5 pt-8 pb-8 max-w-md mx-auto flex flex-col justify-between" style={{ minHeight: 320 }}>
+          <div>
+            <p className="font-black tracking-[0.35em] text-[10px] uppercase text-white/60 mb-1">Cape Town · Est. 2024</p>
           </div>
-          <p className="font-black tracking-widest text-[10px] uppercase text-[#1A1A1A]/40 mt-2">
-            Every bite packed right.
-          </p>
-        </div>
-
-        {/* 2×2 food photo grid */}
-        <div className="grid grid-cols-2 border-t-2 border-[#1A1A1A]">
-          {heroImages.map((src, i) => (
-            <div
-              key={i}
-              className="relative overflow-hidden"
-              style={{
-                borderRight:  i % 2 === 0 ? "2px solid #1A1A1A" : "none",
-                borderBottom: i < 2       ? "2px solid #1A1A1A" : "none",
-                aspectRatio: "1 / 1",
-              }}
+          <div>
+            <h1
+              className="leading-none tracking-tighter text-white m-0"
+              style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "clamp(5rem,22vw,9rem)" }}
             >
-              <img src={src} alt="" className="w-full h-full object-cover" />
-              {/* label chip */}
-              <div
-                className="absolute bottom-2 left-2 px-2 py-0.5 border border-white/60"
-                style={{ background: "rgba(200,144,15,0.88)" }}
-              >
-                <span className="text-white font-black text-[9px] tracking-widest uppercase">
-                  {Object.keys(menuPricingObject)[i]}
-                </span>
-              </div>
+              STUFF'D
+            </h1>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="flex-1 h-[2px] bg-white/70" />
+              <span className="font-black tracking-[0.35em] text-[10px] text-white uppercase">Bagels</span>
+              <div className="flex-1 h-[2px] bg-white/70" />
             </div>
-          ))}
+            <p className="font-black tracking-widest text-[10px] uppercase text-white/60 mt-3">
+              Every bite packed right.
+            </p>
+          </div>
         </div>
       </header>
 
