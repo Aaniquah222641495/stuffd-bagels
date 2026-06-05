@@ -173,6 +173,11 @@ export default function Home() {
           </div>
 
           {/* Journey map */}
+          {/* Intro line */}
+          <p className="font-black text-xs tracking-widest uppercase mb-5" style={{ color: ACCENT }}>
+            This week — come get STUFF'D here ↓
+          </p>
+
           <div className="relative pl-8">
             {/* Dotted connecting line */}
             <div
@@ -266,15 +271,15 @@ export default function Home() {
         </section>
 
         {/* ─── 03 ABOUT ────────────────────────────────────── */}
-        <section>
-          <div className="flex items-center gap-3 mb-5">
+        <section className="-mx-4">
+          <div className="flex items-center gap-3 mb-5 px-4">
             <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>03</span>
             <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">About Us</h2>
             <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
           </div>
-          <div className="border-2 border-[#1A1A1A] overflow-hidden">
-            {/* Auto-cycling image panel */}
-            <div className="relative w-full overflow-hidden border-b-2 border-[#1A1A1A]" style={{ aspectRatio: "4/3" }}>
+          <div className="border-t-2 border-b-2 border-[#1A1A1A] overflow-hidden">
+            {/* Auto-cycling image panel — swap in lifestyle shots when ready */}
+            <div className="relative w-full overflow-hidden border-b-2 border-[#1A1A1A]" style={{ aspectRatio: "16/9" }}>
               {slideImages.map((src, i) => (
                 <img
                   key={src}
@@ -300,15 +305,9 @@ export default function Home() {
                   />
                 ))}
               </div>
-              {/* Label chip */}
-              <div className="absolute top-3 left-3 z-10 px-2 py-0.5 border border-white/60" style={{ background: `${ACCENT}dd` }}>
-                <span className="text-white font-black text-[9px] tracking-widest uppercase">
-                  {Object.keys(menuPricingObject)[slideIndex]}
-                </span>
-              </div>
             </div>
             {/* Text block */}
-            <div className="border-b-2 border-[#1A1A1A] px-5 py-4" style={{ background: ACCENT }}>
+            <div className="border-b-2 border-[#1A1A1A] px-5 py-4 bg-[#1A1A1A]">
               <p className="font-black text-white leading-snug" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.5rem" }}>
                 Cape Town's first stuffed bagel. Born on the street. Built different.
               </p>
@@ -332,11 +331,14 @@ export default function Home() {
         </section>
 
         {/* ─── MASCOT STRIP ────────────────────────────────── */}
-        <div className="border-2 border-[#1A1A1A] flex items-center overflow-hidden" style={{ background: ACCENT }}>
-          <img src="/mascot.png" alt="STUFF'D mascot" className="w-28 shrink-0 -mb-1 mix-blend-multiply" />
+        <div className="border-2 border-[#1A1A1A] flex items-center overflow-hidden bg-[#1A1A1A]">
+          <img src="/mascot.png" alt="STUFF'D mascot" className="w-28 shrink-0 -mb-1" />
           <div className="px-4 py-4">
-            <p className="text-white font-black tracking-widest text-xs uppercase leading-snug">
-              Ready to order?<br />Fill in your details below and we'll WhatsApp your order straight to the kitchen.
+            <p className="font-black tracking-widest text-xs uppercase leading-snug" style={{ color: ACCENT }}>
+              Ready to order?
+            </p>
+            <p className="text-white font-medium text-xs leading-snug mt-1">
+              Fill in your details below and we'll WhatsApp your order straight to the kitchen.
             </p>
           </div>
         </div>
