@@ -99,18 +99,31 @@ export default function Home() {
           <div className="inline-block border-2 border-[#007AFF] px-3 py-1 mb-4">
             <span className="text-[#007AFF] font-black text-xs tracking-widest uppercase">Cape Town · Est. 2024</span>
           </div>
-          <h1
-            className="text-[clamp(5rem,22vw,9rem)] leading-none tracking-tighter font-black text-[#FBFBF9] m-0"
-            style={{ fontFamily: "'Bebas Neue', sans-serif" }}
-          >
-            STUFF'D
-          </h1>
-          <div className="flex items-center gap-3 mt-1">
-            <div className="flex-1 h-[2px] bg-[#007AFF]" />
-            <span className="font-black tracking-[0.3em] text-sm text-[#FBFBF9] uppercase">Bagels</span>
-            <div className="flex-1 h-[2px] bg-[#007AFF]" />
+
+          {/* Mascot + wordmark row */}
+          <div className="flex items-flex-end gap-0">
+            <img
+              src="/mascot.png"
+              alt="STUFF'D mascot"
+              className="w-36 shrink-0 -mb-2"
+              style={{ filter: "drop-shadow(0 0 6px rgba(255,255,255,0.55)) drop-shadow(0 0 1px white)" }}
+            />
+            <div className="flex flex-col justify-end pb-2">
+              <h1
+                className="text-[clamp(4rem,18vw,7rem)] leading-none tracking-tighter font-black text-[#FBFBF9] m-0"
+                style={{ fontFamily: "'Bebas Neue', sans-serif" }}
+              >
+                STUFF'D
+              </h1>
+              <div className="flex items-center gap-2 mt-1">
+                <div className="flex-1 h-[2px] bg-[#007AFF]" />
+                <span className="font-black tracking-[0.3em] text-xs text-[#FBFBF9] uppercase">Bagels</span>
+                <div className="flex-1 h-[2px] bg-[#007AFF]" />
+              </div>
+            </div>
           </div>
-          <p className="mt-6 font-black tracking-widest text-sm uppercase text-[#FBFBF9]/70">
+
+          <p className="mt-5 font-black tracking-widest text-sm uppercase text-[#FBFBF9]/70">
             Every bite packed right.
           </p>
         </div>
