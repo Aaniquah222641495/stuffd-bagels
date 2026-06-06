@@ -130,7 +130,7 @@ export default function Home() {
       </div>
 
       {/* ─── HERO ─────────────────────────────────────────── */}
-      <header className="border-b-2 border-[#1A1A1A] relative overflow-hidden" style={{ minHeight: 320 }}>
+      <header className="border-b-2 border-[#1A1A1A] relative overflow-hidden" style={{ minHeight: "clamp(320px, 45vh, 560px)" }}>
         {/* Full-bleed background photo */}
         <img
           src="/hero-bagel.jpeg"
@@ -141,7 +141,7 @@ export default function Home() {
         <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(251,251,249,0.30) 0%, rgba(251,251,249,0.55) 50%, rgba(251,251,249,0.78) 100%)" }} />
 
         {/* Wordmark overlaid */}
-        <div className="relative px-5 pt-8 pb-8 max-w-md mx-auto flex flex-col items-center justify-between text-center" style={{ minHeight: 320 }}>
+        <div className="relative px-5 pt-8 pb-8 max-w-4xl mx-auto flex flex-col items-center justify-between text-center" style={{ minHeight: "clamp(320px, 45vh, 560px)" }}>
           <p className="font-black tracking-[0.35em] text-[10px] uppercase text-[#1A1A1A]/60 mb-1">Cape Town · Est. 2024</p>
           <div className="w-full">
             <h1
@@ -162,248 +162,232 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="max-w-md mx-auto px-4 space-y-10 py-8">
+      <div className="max-w-6xl mx-auto px-4 lg:px-10 py-8">
 
-        {/* ─── 01 WHERE WE AT ──────────────────────────────── */}
-        <section>
-          <div className="flex items-center gap-3 mb-6">
-            <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>01</span>
-            <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">Where We At</h2>
-            <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
-          </div>
+        {/* ─── DESKTOP 2-COL: Schedule left, Order right ────── */}
+        <div className="lg:grid lg:grid-cols-2 lg:gap-10 lg:items-start space-y-10 lg:space-y-0">
 
-          {/* Journey map */}
-          {/* Intro line */}
-          <p className="font-black text-xs tracking-widest uppercase mb-5" style={{ color: ACCENT }}>
-            This week — come get STUFF'D here ↓
-          </p>
+          {/* LEFT — 01 WHERE WE AT */}
+          <section>
+            <div className="flex items-center gap-3 mb-6">
+              <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>01</span>
+              <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">Where We At</h2>
+              <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
+            </div>
 
-          <div className="relative pl-8">
-            {/* Dotted connecting line */}
-            <div
-              className="absolute left-[25px] top-7 bottom-7 w-[2px]"
-              style={{ background: "repeating-linear-gradient(to bottom,#1A1A1A 0,#1A1A1A 5px,transparent 5px,transparent 12px)" }}
-            />
-            {scheduleArray.map((sched, idx) => (
-              <div key={idx} className="relative flex items-start gap-4 mb-8 last:mb-0" data-testid={`schedule-card-${idx}`}>
-                {/* Bagel pin */}
-                <div className="shrink-0 -ml-8 z-10 mt-1">
-                  <BagelPin date={sched.date} active={idx === 0} />
-                </div>
-                {/* Info card */}
-                <div className="flex-1 border-2 border-[#1A1A1A] overflow-hidden">
-                  <div
-                    className="px-3 py-2 flex items-center justify-between border-b-2 border-[#1A1A1A]"
-                    style={{ background: idx === 0 ? ACCENT : "#1A1A1A" }}
-                  >
-                    <span style={{ fontFamily: "'Permanent Marker', cursive" }} className="text-white text-sm">
-                      {sched.day}
-                    </span>
-                    <span className="font-black text-white text-xs tracking-widest uppercase">{sched.hours}</span>
+            <p className="font-black text-xs tracking-widest uppercase mb-5" style={{ color: ACCENT }}>
+              This week — come get STUFF'D here ↓
+            </p>
+
+            <div className="relative pl-8">
+              <div
+                className="absolute left-[25px] top-7 bottom-7 w-[2px]"
+                style={{ background: "repeating-linear-gradient(to bottom,#1A1A1A 0,#1A1A1A 5px,transparent 5px,transparent 12px)" }}
+              />
+              {scheduleArray.map((sched, idx) => (
+                <div key={idx} className="relative flex items-start gap-4 mb-8 last:mb-0" data-testid={`schedule-card-${idx}`}>
+                  <div className="shrink-0 -ml-8 z-10 mt-1">
+                    <BagelPin date={sched.date} active={idx === 0} />
                   </div>
-                  <div className="px-3 py-3 bg-[#FBFBF9]">
-                    <div className="font-black text-[10px] tracking-widest uppercase text-[#1A1A1A]/40">{sched.subtitle}</div>
-                    <div className="font-bold text-sm mt-0.5">{sched.venue}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ─── 02 ORDER UP ─────────────────────────────────── */}
-        <section>
-          <div className="flex items-center gap-3 mb-5">
-            <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>02</span>
-            <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">Order Up</h2>
-            <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            {Object.entries(menuPricingObject).map(([item, info]) => (
-              <div key={item} className="border-2 border-[#1A1A1A] flex flex-col overflow-hidden bg-[#FBFBF9]" data-testid={`menu-item-${item}`}>
-                {/* Photo */}
-                <div className="relative overflow-hidden border-b-2 border-[#1A1A1A]" style={{ aspectRatio: "1/1" }}>
-                  <img src={info.image} alt={item} className="w-full h-full object-cover" />
-                  {quantities[item] > 0 && (
-                    <div className="absolute inset-0 flex items-center justify-center" style={{ background: `${ACCENT}ee` }}>
-                      <span className="text-white font-black" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "3.5rem", lineHeight: 1 }}>
-                        {quantities[item]}
-                      </span>
+                  <div className="flex-1 border-2 border-[#1A1A1A] overflow-hidden">
+                    <div
+                      className="px-3 py-2 flex items-center justify-between border-b-2 border-[#1A1A1A]"
+                      style={{ background: idx === 0 ? ACCENT : "#1A1A1A" }}
+                    >
+                      <span style={{ fontFamily: "'Permanent Marker', cursive" }} className="text-white text-sm">{sched.day}</span>
+                      <span className="font-black text-white text-xs tracking-widest uppercase">{sched.hours}</span>
                     </div>
-                  )}
-                </div>
-                {/* Details */}
-                <div className="flex flex-col flex-1 p-2.5 gap-2">
-                  <div>
-                    <div className="font-black uppercase text-xs leading-tight">{item}</div>
-                    <div className="text-[#1A1A1A]/45 text-[10px] font-medium mt-0.5 leading-snug">{info.desc}</div>
-                  </div>
-                  <div className="flex items-center justify-between mt-auto">
-                    <div className="font-black text-lg" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>R{info.price}</div>
-                    <div className="flex items-center gap-0.5">
-                      <button
-                        data-testid={`btn-decrease-${item}`}
-                        onClick={() => updateQuantity(item, -1)}
-                        className="w-8 h-8 border-2 border-[#1A1A1A] font-black text-base flex items-center justify-center active:scale-90 transition-transform bg-[#FBFBF9] hover:bg-[#1A1A1A] hover:text-white"
-                      >−</button>
-                      <span className="font-black text-sm w-5 text-center tabular-nums">{quantities[item]}</span>
-                      <button
-                        data-testid={`btn-increase-${item}`}
-                        onClick={() => updateQuantity(item, 1)}
-                        className="w-8 h-8 border-2 text-white font-black text-base flex items-center justify-center active:scale-90 transition-transform"
-                        style={{ background: ACCENT, borderColor: ACCENT_DK }}
-                      >+</button>
+                    <div className="px-3 py-3 bg-[#FBFBF9]">
+                      <div className="font-black text-[10px] tracking-widest uppercase text-[#1A1A1A]/40">{sched.subtitle}</div>
+                      <div className="font-bold text-sm mt-0.5">{sched.venue}</div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Total bar */}
-          <div className="mt-4 border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#FBFBF9] p-4 flex items-center justify-between">
-            <span className="font-black tracking-widest text-sm uppercase">
-              {itemCount > 0 ? `${itemCount} item${itemCount !== 1 ? "s" : ""}` : "Your order"}
-            </span>
-            <span className="font-black text-2xl" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>R{displayTotal}</span>
-          </div>
-        </section>
-
-        {/* ─── MASCOT STRIP ────────────────────────────────── */}
-        <div className="border-2 border-[#1A1A1A] flex items-center overflow-hidden bg-white">
-          <img src="/mascot.png" alt="STUFF'D mascot" className="w-28 shrink-0 -mb-1" />
-          <div className="px-4 py-4">
-            <p className="font-black tracking-widest text-xs uppercase leading-snug" style={{ color: ACCENT }}>
-              Ready to order?
-            </p>
-            <p className="text-[#1A1A1A]/60 font-medium text-xs leading-snug mt-1">
-              Fill in your details below and we'll WhatsApp your order straight to the kitchen.
-            </p>
-          </div>
-        </div>
-
-        {/* ─── 03 YOUR DETAILS ─────────────────────────────── */}
-        <section>
-          <div className="flex items-center gap-3 mb-5">
-            <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>03</span>
-            <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">Your Details</h2>
-            <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
-          </div>
-
-          <div className="border-2 border-[#1A1A1A] divide-y-2 divide-[#1A1A1A]">
-            {[
-              { label: "Name",  type: "text", placeholder: "Your name",      value: name,  set: setName,  id: "input-name" },
-              { label: "Phone", type: "tel",  placeholder: "082 123 4567",   value: phone, set: setPhone, id: "input-phone" },
-            ].map(f => (
-              <div key={f.label} className="flex flex-col">
-                <label className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-[#1A1A1A]/40">{f.label}</label>
-                <input data-testid={f.id} type={f.type} placeholder={f.placeholder} value={f.value}
-                  onChange={e => f.set(e.target.value)}
-                  className="px-4 pb-3 bg-transparent font-bold text-base outline-none placeholder:text-[#1A1A1A]/25" />
-              </div>
-            ))}
-            <div className="flex flex-col">
-              <label className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-[#1A1A1A]/40">Pickup Location</label>
-              <select data-testid="select-venue" value={venue} onChange={e => setVenue(e.target.value)}
-                className="px-4 pb-3 bg-transparent font-bold text-base outline-none appearance-none">
-                {uniqueVenues.map(v => <option key={v} value={v}>{v}</option>)}
-              </select>
+              ))}
             </div>
-            <div className="flex flex-col">
-              <label className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-[#1A1A1A]/40">Notes</label>
-              <textarea data-testid="textarea-notes" placeholder="Any special requests?" rows={2} value={notes}
-                onChange={e => setNotes(e.target.value)}
-                className="px-4 pb-3 bg-transparent font-bold text-base outline-none resize-none placeholder:text-[#1A1A1A]/25" />
+          </section>
+
+          {/* RIGHT — 02 ORDER UP + checkout */}
+          <div className="space-y-8">
+            <section>
+              <div className="flex items-center gap-3 mb-5">
+                <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>02</span>
+                <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">Order Up</h2>
+                <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {Object.entries(menuPricingObject).map(([item, info]) => (
+                  <div key={item} className="border-2 border-[#1A1A1A] flex flex-col overflow-hidden bg-[#FBFBF9]" data-testid={`menu-item-${item}`}>
+                    <div className="relative overflow-hidden border-b-2 border-[#1A1A1A]" style={{ aspectRatio: "1/1" }}>
+                      <img src={info.image} alt={item} className="w-full h-full object-cover" />
+                      {quantities[item] > 0 && (
+                        <div className="absolute inset-0 flex items-center justify-center" style={{ background: `${ACCENT}ee` }}>
+                          <span className="text-white font-black" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "3.5rem", lineHeight: 1 }}>
+                            {quantities[item]}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col flex-1 p-2.5 gap-2">
+                      <div>
+                        <div className="font-black uppercase text-xs leading-tight">{item}</div>
+                        <div className="text-[#1A1A1A]/45 text-[10px] font-medium mt-0.5 leading-snug">{info.desc}</div>
+                      </div>
+                      <div className="flex items-center justify-between mt-auto">
+                        <div className="font-black text-lg" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>R{info.price}</div>
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            data-testid={`btn-decrease-${item}`}
+                            onClick={() => updateQuantity(item, -1)}
+                            className="w-8 h-8 border-2 border-[#1A1A1A] font-black text-base flex items-center justify-center active:scale-90 transition-transform bg-[#FBFBF9] hover:bg-[#1A1A1A] hover:text-white"
+                          >−</button>
+                          <span className="font-black text-sm w-5 text-center tabular-nums">{quantities[item]}</span>
+                          <button
+                            data-testid={`btn-increase-${item}`}
+                            onClick={() => updateQuantity(item, 1)}
+                            className="w-8 h-8 border-2 text-white font-black text-base flex items-center justify-center active:scale-90 transition-transform"
+                            style={{ background: ACCENT, borderColor: ACCENT_DK }}
+                          >+</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#FBFBF9] p-4 flex items-center justify-between">
+                <span className="font-black tracking-widest text-sm uppercase">
+                  {itemCount > 0 ? `${itemCount} item${itemCount !== 1 ? "s" : ""}` : "Your order"}
+                </span>
+                <span className="font-black text-2xl" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>R{displayTotal}</span>
+              </div>
+            </section>
+
+            {/* MASCOT STRIP */}
+            <div className="border-2 border-[#1A1A1A] flex items-center overflow-hidden bg-white">
+              <img src="/mascot.png" alt="STUFF'D mascot" className="w-28 shrink-0 -mb-1" />
+              <div className="px-4 py-4">
+                <p className="font-black tracking-widest text-xs uppercase leading-snug" style={{ color: ACCENT }}>Ready to order?</p>
+                <p className="text-[#1A1A1A]/60 font-medium text-xs leading-snug mt-1">
+                  Fill in your details below and we'll WhatsApp your order straight to the kitchen.
+                </p>
+              </div>
             </div>
+
+            {/* 03 YOUR DETAILS */}
+            <section>
+              <div className="flex items-center gap-3 mb-5">
+                <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>03</span>
+                <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">Your Details</h2>
+                <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
+              </div>
+
+              <div className="border-2 border-[#1A1A1A] divide-y-2 divide-[#1A1A1A]">
+                {[
+                  { label: "Name",  type: "text", placeholder: "Your name",    value: name,  set: setName,  id: "input-name" },
+                  { label: "Phone", type: "tel",  placeholder: "082 123 4567", value: phone, set: setPhone, id: "input-phone" },
+                ].map(f => (
+                  <div key={f.label} className="flex flex-col">
+                    <label className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-[#1A1A1A]/40">{f.label}</label>
+                    <input data-testid={f.id} type={f.type} placeholder={f.placeholder} value={f.value}
+                      onChange={e => f.set(e.target.value)}
+                      className="px-4 pb-3 bg-transparent font-bold text-base outline-none placeholder:text-[#1A1A1A]/25" />
+                  </div>
+                ))}
+                <div className="flex flex-col">
+                  <label className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-[#1A1A1A]/40">Pickup Location</label>
+                  <select data-testid="select-venue" value={venue} onChange={e => setVenue(e.target.value)}
+                    className="px-4 pb-3 bg-transparent font-bold text-base outline-none appearance-none">
+                    {uniqueVenues.map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </div>
+                <div className="flex flex-col">
+                  <label className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-[#1A1A1A]/40">Notes</label>
+                  <textarea data-testid="textarea-notes" placeholder="Any special requests?" rows={2} value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    className="px-4 pb-3 bg-transparent font-bold text-base outline-none resize-none placeholder:text-[#1A1A1A]/25" />
+                </div>
+              </div>
+
+              <p className="text-xs font-medium mt-3 text-[#1A1A1A]/50 leading-relaxed px-1">
+                No payment online. Swipe your card (Yoco) or pay cash at the truck upon collection.
+              </p>
+
+              <button
+                data-testid="btn-place-order"
+                onClick={() => setShowModal(true)}
+                className="mt-4 w-full text-white border-2 p-4 font-black uppercase tracking-widest active:scale-[0.98] transition-transform"
+                style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.25rem", letterSpacing: "0.15em", background: ACCENT, borderColor: ACCENT_DK }}
+              >
+                Place WhatsApp Order
+                {total > 0 && <span className="ml-3 text-white/70 text-sm font-black">· R{total}</span>}
+              </button>
+            </section>
           </div>
+        </div>{/* end desktop 2-col */}
 
-          <p className="text-xs font-medium mt-3 text-[#1A1A1A]/50 leading-relaxed px-1">
-            No payment online. Swipe your card (Yoco) or pay cash at the truck upon collection.
-          </p>
-
-          <button
-            data-testid="btn-place-order"
-            onClick={() => setShowModal(true)}
-            className="mt-4 w-full text-white border-2 p-4 font-black uppercase tracking-widest active:scale-[0.98] transition-transform"
-            style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.25rem", letterSpacing: "0.15em", background: ACCENT, borderColor: ACCENT_DK }}
-          >
-            Place WhatsApp Order
-            {total > 0 && <span className="ml-3 text-white/70 text-sm font-black">· R{total}</span>}
-          </button>
-        </section>
-
-        {/* ─── 04 ABOUT ────────────────────────────────────── */}
-        <section className="-mx-4">
-          <div className="flex items-center gap-3 mb-5 px-4">
+        {/* ─── 04 ABOUT — full-bleed on mobile, side-by-side on desktop ── */}
+        <section className="-mx-4 lg:mx-0 mt-10">
+          <div className="flex items-center gap-3 mb-5 px-4 lg:px-0">
             <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>04</span>
             <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">About Us</h2>
             <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
           </div>
-          <div className="border-t-2 border-b-2 border-[#1A1A1A] overflow-hidden">
-            {/* Auto-cycling image panel — swap in lifestyle shots when ready */}
-            <div className="relative w-full overflow-hidden border-b-2 border-[#1A1A1A]" style={{ aspectRatio: "16/9" }}>
+          <div className="border-t-2 border-b-2 lg:border-2 border-[#1A1A1A] overflow-hidden lg:flex lg:flex-row">
+            {/* Slideshow — left half on desktop */}
+            <div className="relative overflow-hidden border-b-2 lg:border-b-0 lg:border-r-2 border-[#1A1A1A] lg:w-1/2 shrink-0" style={{ aspectRatio: "16/9" }}>
               {slideImages.map((src, i) => (
                 <img
                   key={src}
                   src={src}
                   alt=""
                   className="absolute inset-0 w-full h-full object-cover"
-                  style={{
-                    opacity: i === slideIndex ? 1 : 0,
-                    transition: "opacity 0.8s ease-in-out",
-                    zIndex: i === slideIndex ? 1 : 0,
-                  }}
+                  style={{ opacity: i === slideIndex ? 1 : 0, transition: "opacity 0.8s ease-in-out", zIndex: i === slideIndex ? 1 : 0 }}
                 />
               ))}
-              {/* Slide dots */}
               <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2 z-10">
                 {slideImages.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setSlideIndex(i)}
+                  <button key={i} onClick={() => setSlideIndex(i)}
                     className="w-2 h-2 border border-white transition-all"
                     style={{ background: i === slideIndex ? "#fff" : "transparent" }}
-                    aria-label={`Slide ${i + 1}`}
-                  />
+                    aria-label={`Slide ${i + 1}`} />
                 ))}
               </div>
             </div>
-            {/* Text block */}
-            <div className="border-b-2 border-[#1A1A1A] px-5 py-4 bg-[#1A1A1A]">
-              <p className="font-black text-white leading-snug" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.5rem" }}>
-                Cape Town's first stuffed bagel. Born on the street. Built different.
-              </p>
-            </div>
-            <div className="px-5 py-4 space-y-3 bg-[#FBFBF9]">
-              <p className="font-medium text-sm text-[#1A1A1A] leading-relaxed">
-                STUFF'D started with one question: why does Cape Town not have a proper stuffed bagel? We took the classic New York bagel, packed it with bold fillings, and brought it to the streets of the Mother City.
-              </p>
-              <p className="font-medium text-sm text-[#1A1A1A]/60 leading-relaxed">
-                We pop up at markets, events, and cricket grounds across Cape Town every weekend. No tables, no reservations — just fresh bagels, fast.
-              </p>
-              <div className="flex gap-2 pt-1 flex-wrap">
-                {["Street Food", "Cape Town", "Pop-Up", "Handmade"].map(tag => (
-                  <span key={tag} className="border-2 border-[#1A1A1A] px-2 py-0.5 font-black text-[10px] tracking-widest uppercase">
-                    {tag}
-                  </span>
-                ))}
+            {/* Text — right half on desktop */}
+            <div className="lg:flex lg:flex-col lg:justify-between">
+              <div className="border-b-2 border-[#1A1A1A] px-5 py-4 bg-[#1A1A1A]">
+                <p className="font-black text-white leading-snug" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.5rem" }}>
+                  Cape Town's first stuffed bagel. Born on the street. Built different.
+                </p>
+              </div>
+              <div className="px-5 py-4 space-y-3 bg-[#FBFBF9] flex-1">
+                <p className="font-medium text-sm text-[#1A1A1A] leading-relaxed">
+                  STUFF'D started with one question: why does Cape Town not have a proper stuffed bagel? We took the classic New York bagel, packed it with bold fillings, and brought it to the streets of the Mother City.
+                </p>
+                <p className="font-medium text-sm text-[#1A1A1A]/60 leading-relaxed">
+                  We pop up at markets, events, and cricket grounds across Cape Town every weekend. No tables, no reservations — just fresh bagels, fast.
+                </p>
+                <div className="flex gap-2 pt-1 flex-wrap">
+                  {["Street Food", "Cape Town", "Pop-Up", "Handmade"].map(tag => (
+                    <span key={tag} className="border-2 border-[#1A1A1A] px-2 py-0.5 font-black text-[10px] tracking-widest uppercase">{tag}</span>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* ─── 05 FAQ — iMessage style ─────────────────────── */}
-        <section>
+        {/* ─── 05 FAQ — iMessage, capped width on desktop ──── */}
+        <section className="mt-10 lg:max-w-2xl lg:mx-auto">
           <div className="flex items-center gap-3 mb-5">
             <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>05</span>
             <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">Got Questions?</h2>
             <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
           </div>
 
-          {/* iMessage phone shell */}
           <div className="border-2 border-[#1A1A1A] overflow-hidden" style={{ background: "#F2F2F7" }}>
-            {/* Chat header bar */}
             <div className="flex items-center gap-3 px-4 py-3 border-b-2 border-[#1A1A1A] bg-white">
               <div className="relative">
                 <div className="w-9 h-9 rounded-full border-2 border-[#1A1A1A] overflow-hidden flex items-center justify-center" style={{ background: ACCENT }}>
@@ -415,70 +399,44 @@ export default function Home() {
                 <div className="font-black text-sm text-[#1A1A1A]">STUFF'D Bagels</div>
                 <div className="text-[10px] text-[#34C759] font-medium">Active now</div>
               </div>
-              {/* Signal bars decoration */}
               <div className="flex items-end gap-[2px] opacity-40">
                 {[3, 5, 7, 9].map(h => <div key={h} className="w-[3px] bg-[#1A1A1A] rounded-sm" style={{ height: h }} />)}
               </div>
             </div>
 
-            {/* Messages */}
             <div className="px-3 py-4 space-y-5">
               {[
-                {
-                  q: "Where do I collect my order?",
-                  a: "At the venue on your pickup date 📍 Look for the STUFF'D setup — you won't miss us!",
-                  time: "10:42",
-                },
-                {
-                  q: "How do I pay? There's no checkout here 🤔",
-                  a: "Pay at the truck with Yoco (tap your card) or cash. No online payment ever needed 🙌",
-                  time: "10:44",
-                },
-                {
-                  q: "Can I book you guys for a private event?",
-                  a: "Absolutely! Drop us a WhatsApp below and we'll put together a custom quote for you 🥯",
-                  time: "10:47",
-                },
+                { q: "Where do I collect my order?",           a: "At the venue on your pickup date 📍 Look for the STUFF'D setup — you won't miss us!", time: "10:42" },
+                { q: "How do I pay? There's no checkout here 🤔", a: "Pay at the truck with Yoco (tap your card) or cash. No online payment ever needed 🙌", time: "10:44" },
+                { q: "Can I book you guys for a private event?", a: "Absolutely! Drop us a WhatsApp below and we'll put together a custom quote for you 🥯", time: "10:47" },
               ].map((msg, i) => (
                 <div key={i} className="space-y-1.5">
-                  {/* Timestamp */}
                   <div className="text-center text-[10px] text-[#8E8E93] font-medium">{msg.time}</div>
-                  {/* Customer bubble — left / grey */}
                   <div className="flex items-end gap-2">
                     <div className="w-6 h-6 rounded-full bg-[#C7C7CC] border border-[#1A1A1A]/10 shrink-0 flex items-center justify-center mb-0.5">
                       <span className="text-[8px] font-black text-[#3C3C43]">YOU</span>
                     </div>
-                    <div
-                      className="max-w-[72%] px-3 py-2 text-sm font-medium text-[#1A1A1A] leading-snug"
-                      style={{ background: "#FFFFFF", borderRadius: "18px 18px 18px 4px", boxShadow: "0 1px 1px rgba(0,0,0,0.08)" }}
-                    >
+                    <div className="max-w-[72%] px-3 py-2 text-sm font-medium text-[#1A1A1A] leading-snug"
+                      style={{ background: "#FFFFFF", borderRadius: "18px 18px 18px 4px", boxShadow: "0 1px 1px rgba(0,0,0,0.08)" }}>
                       {msg.q}
                     </div>
                   </div>
-                  {/* STUFF'D reply — right / blue */}
                   <div className="flex justify-end">
-                    <div
-                      className="max-w-[72%] px-3 py-2 text-sm font-medium text-white leading-snug"
-                      style={{ background: "#007AFF", borderRadius: "18px 18px 4px 18px", boxShadow: "0 1px 2px rgba(0,122,255,0.3)" }}
-                    >
+                    <div className="max-w-[72%] px-3 py-2 text-sm font-medium text-white leading-snug"
+                      style={{ background: "#007AFF", borderRadius: "18px 18px 4px 18px", boxShadow: "0 1px 2px rgba(0,122,255,0.3)" }}>
                       {msg.a}
                     </div>
                   </div>
                 </div>
               ))}
 
-              {/* Typing indicator */}
               <div className="flex items-end gap-2">
                 <div className="w-6 h-6 rounded-full shrink-0 overflow-hidden border border-[#1A1A1A]/10" style={{ background: ACCENT }}>
                   <span className="flex items-center justify-center h-full text-[7px] font-black text-white" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>S'D</span>
                 </div>
                 <div className="px-4 py-3 flex gap-1 items-center" style={{ background: "#FFFFFF", borderRadius: "18px 18px 18px 4px", boxShadow: "0 1px 1px rgba(0,0,0,0.08)" }}>
                   {[0, 0.2, 0.4].map((delay, i) => (
-                    <div
-                      key={i}
-                      className="w-2 h-2 rounded-full bg-[#8E8E93]"
-                      style={{ animation: `bounce 1.2s ${delay}s infinite` }}
-                    />
+                    <div key={i} className="w-2 h-2 rounded-full bg-[#8E8E93]" style={{ animation: `bounce 1.2s ${delay}s infinite` }} />
                   ))}
                 </div>
               </div>
@@ -487,7 +445,7 @@ export default function Home() {
         </section>
 
         {/* FOOTER */}
-        <footer className="border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#FBFBF9] p-6 text-center">
+        <footer className="mt-10 border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#FBFBF9] p-6 text-center">
           <div className="font-black tracking-widest" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.2rem" }}>Stuff'd Bagels</div>
           <div className="text-[#FBFBF9]/40 text-xs tracking-widest uppercase mt-1 font-medium">Cape Town, South Africa 🇿🇦</div>
           <div className="mt-3 flex justify-center gap-2">
