@@ -164,10 +164,9 @@ export default function Home() {
 
       <div className="max-w-6xl mx-auto px-4 lg:px-10 py-8">
 
-        {/* ─── DESKTOP 2-COL: Schedule left, Order right ────── */}
-        <div className="lg:grid lg:grid-cols-2 lg:gap-10 lg:items-start space-y-10 lg:space-y-0">
+        <div className="space-y-10">
 
-          {/* LEFT — 01 WHERE WE AT */}
+          {/* ─── 01 WHERE WE AT ──────────────────────────────── */}
           <section>
             <div className="flex items-center gap-3 mb-6">
               <span className="font-black tracking-widest uppercase text-xs" style={{ color: ACCENT }}>01</span>
@@ -179,21 +178,16 @@ export default function Home() {
               This week — come get STUFF'D here ↓
             </p>
 
-            <div className="relative pl-8">
-              <div
-                className="absolute left-[25px] top-7 bottom-7 w-[2px]"
-                style={{ background: "repeating-linear-gradient(to bottom,#1A1A1A 0,#1A1A1A 5px,transparent 5px,transparent 12px)" }}
-              />
+            {/* Mobile: vertical timeline */}
+            <div className="lg:hidden relative pl-8">
+              <div className="absolute left-[25px] top-7 bottom-7 w-[2px]"
+                style={{ background: "repeating-linear-gradient(to bottom,#1A1A1A 0,#1A1A1A 5px,transparent 5px,transparent 12px)" }} />
               {scheduleArray.map((sched, idx) => (
                 <div key={idx} className="relative flex items-start gap-4 mb-8 last:mb-0" data-testid={`schedule-card-${idx}`}>
-                  <div className="shrink-0 -ml-8 z-10 mt-1">
-                    <BagelPin date={sched.date} active={idx === 0} />
-                  </div>
+                  <div className="shrink-0 -ml-8 z-10 mt-1"><BagelPin date={sched.date} active={idx === 0} /></div>
                   <div className="flex-1 border-2 border-[#1A1A1A] overflow-hidden">
-                    <div
-                      className="px-3 py-2 flex items-center justify-between border-b-2 border-[#1A1A1A]"
-                      style={{ background: idx === 0 ? ACCENT : "#1A1A1A" }}
-                    >
+                    <div className="px-3 py-2 flex items-center justify-between border-b-2 border-[#1A1A1A]"
+                      style={{ background: idx === 0 ? ACCENT : "#1A1A1A" }}>
                       <span style={{ fontFamily: "'Permanent Marker', cursive" }} className="text-white text-sm">{sched.day}</span>
                       <span className="font-black text-white text-xs tracking-widest uppercase">{sched.hours}</span>
                     </div>
@@ -205,9 +199,29 @@ export default function Home() {
                 </div>
               ))}
             </div>
+
+            {/* Desktop: horizontal cards */}
+            <div className="hidden lg:flex gap-5">
+              {scheduleArray.map((sched, idx) => (
+                <div key={idx} className="flex-1 flex flex-col items-center gap-3" data-testid={`schedule-card-${idx}`}>
+                  <BagelPin date={sched.date} active={idx === 0} />
+                  <div className="w-full border-2 border-[#1A1A1A] overflow-hidden">
+                    <div className="px-4 py-2.5 flex items-center justify-between border-b-2 border-[#1A1A1A]"
+                      style={{ background: idx === 0 ? ACCENT : "#1A1A1A" }}>
+                      <span style={{ fontFamily: "'Permanent Marker', cursive" }} className="text-white text-base">{sched.day}</span>
+                      <span className="font-black text-white text-xs tracking-widest uppercase">{sched.hours}</span>
+                    </div>
+                    <div className="px-4 py-4 bg-[#FBFBF9]">
+                      <div className="font-black text-[10px] tracking-widest uppercase text-[#1A1A1A]/40">{sched.subtitle}</div>
+                      <div className="font-bold text-sm mt-1">{sched.venue}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </section>
 
-          {/* RIGHT — 02 ORDER UP + checkout */}
+          {/* ─── 02 ORDER UP + checkout ──────────────────────── */}
           <div className="space-y-8">
             <section>
               <div className="flex items-center gap-3 mb-5">
@@ -216,7 +230,7 @@ export default function Home() {
                 <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {Object.entries(menuPricingObject).map(([item, info]) => (
                   <div key={item} className="border-2 border-[#1A1A1A] flex flex-col overflow-hidden bg-[#FBFBF9]" data-testid={`menu-item-${item}`}>
                     <div className="relative overflow-hidden border-b-2 border-[#1A1A1A]" style={{ aspectRatio: "1/1" }}>
@@ -444,17 +458,18 @@ export default function Home() {
           </div>
         </section>
 
-        {/* FOOTER */}
-        <footer className="mt-10 border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#FBFBF9] p-6 text-center">
-          <div className="font-black tracking-widest" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.2rem" }}>Stuff'd Bagels</div>
-          <div className="text-[#FBFBF9]/40 text-xs tracking-widest uppercase mt-1 font-medium">Cape Town, South Africa 🇿🇦</div>
-          <div className="mt-3 flex justify-center gap-2">
-            <div className="w-2 h-2" style={{ background: ACCENT }} />
-            <div className="w-2 h-2 bg-[#FBFBF9]/20" />
-            <div className="w-2 h-2 bg-[#FBFBF9]/20" />
-          </div>
-        </footer>
       </div>
+
+      {/* FOOTER — full width */}
+      <footer className="mt-10 border-t-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#FBFBF9] py-8 px-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="font-black tracking-widest" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.4rem" }}>Stuff'd Bagels</div>
+        <div className="text-[#FBFBF9]/40 text-xs tracking-widest uppercase font-medium">Cape Town, South Africa 🇿🇦</div>
+        <div className="flex gap-2">
+          <div className="w-2 h-2" style={{ background: ACCENT }} />
+          <div className="w-2 h-2 bg-[#FBFBF9]/20" />
+          <div className="w-2 h-2 bg-[#FBFBF9]/20" />
+        </div>
+      </footer>
 
       {/* MODAL */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
