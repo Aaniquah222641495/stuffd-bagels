@@ -71,6 +71,9 @@ const TICKER_TEXT =
 const ACCENT = "#f2f6d0";
 const ACCENT_DK = "#d6daa8";
 
+// Dates (YYYY-MM-DD, SAST) on which online ordering is closed
+const CLOSED_DATES: string[] = [];
+
 function BagelPin({
   date,
   active = false,
@@ -83,6 +86,9 @@ function BagelPin({
       <img
         src="/bagel-pin.png"
         alt="bagel location pin"
+        width={108}
+        height={108}
+        decoding="async"
         className="w-full h-full object-contain"
         style={{
           filter: active
@@ -187,6 +193,13 @@ export default function Home() {
 
   const itemCount = Object.values(quantities).reduce((a, b) => a + b, 0);
 
+  const todaySAST = new Date(
+    new Date().toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg" }),
+  )
+    .toISOString()
+    .slice(0, 10);
+  const ordersDisabled = CLOSED_DATES.includes(todaySAST);
+
   return (
     <div
       className="bg-[#FBFBF9] min-h-screen text-[#1A1A1A] overflow-x-hidden"
@@ -197,7 +210,7 @@ export default function Home() {
         className="sticky top-0 z-50 overflow-hidden border-b-2 border-[#1A1A1A]"
         style={{ background: ACCENT }}
       >
-        <div className="ticker-track whitespace-nowrap py-2.5 text-white font-black text-xs tracking-widest uppercase">
+        <div className="ticker-track whitespace-nowrap py-2.5 text-[#1A1A1A] font-black text-xs tracking-widest uppercase">
           {TICKER_TEXT.repeat(6)}
         </div>
       </div>
@@ -262,7 +275,6 @@ export default function Home() {
             <div className="flex items-center gap-3 mb-6">
               <span
                 className="font-black tracking-widest uppercase text-xs"
-                style={{ color: ACCENT }}
               >
                 01
               </span>
@@ -274,7 +286,6 @@ export default function Home() {
 
             <p
               className="font-black text-xs tracking-widest uppercase mb-5"
-              style={{ color: ACCENT }}
             >
               This week — come get STUFF'D here ↓
             </p>
@@ -304,11 +315,11 @@ export default function Home() {
                     >
                       <span
                         style={{ fontFamily: "'Permanent Marker', cursive" }}
-                        className="text-white text-sm"
+                        className={idx === 0 ? "text-[#1A1A1A] text-sm" : "text-white text-sm"}
                       >
                         {sched.day}
                       </span>
-                      <span className="font-black text-white text-xs tracking-widest uppercase">
+                      <span className={`font-black text-xs tracking-widest uppercase ${idx === 0 ? "text-[#1A1A1A]" : "text-white"}`}>
                         {sched.hours}
                       </span>
                     </div>
@@ -349,11 +360,11 @@ export default function Home() {
                     >
                       <span
                         style={{ fontFamily: "'Permanent Marker', cursive" }}
-                        className="text-white text-base"
+                        className={idx === 0 ? "text-[#1A1A1A] text-base" : "text-white text-base"}
                       >
                         {sched.day}
                       </span>
-                      <span className="font-black text-white text-xs tracking-widest uppercase">
+                      <span className={`font-black text-xs tracking-widest uppercase ${idx === 0 ? "text-[#1A1A1A]" : "text-white"}`}>
                         {sched.hours}
                       </span>
                     </div>
@@ -377,7 +388,6 @@ export default function Home() {
               <div className="flex items-center gap-3 mb-5">
                 <span
                   className="font-black tracking-widest uppercase text-xs"
-                  style={{ color: ACCENT }}
                 >
                   02
                 </span>
@@ -409,7 +419,7 @@ export default function Home() {
                           style={{ background: `${ACCENT}ee` }}
                         >
                           <span
-                            className="text-white font-black"
+                            className="text-[#1A1A1A] font-black"
                             style={{
                               fontFamily: "'Bebas Neue', sans-serif",
                               fontSize: "3.5rem",
@@ -451,7 +461,7 @@ export default function Home() {
                           <button
                             data-testid={`btn-increase-${item}`}
                             onClick={() => updateQuantity(item, 1)}
-                            className="w-8 h-8 border-2 text-white font-black text-base flex items-center justify-center active:scale-90 transition-transform"
+                            className="w-8 h-8 border-2 text-[#1A1A1A] font-black text-base flex items-center justify-center active:scale-90 transition-transform"
                             style={{
                               background: ACCENT,
                               borderColor: ACCENT_DK,
@@ -491,7 +501,6 @@ export default function Home() {
               <div className="px-4 py-4">
                 <p
                   className="font-black tracking-widest text-xs uppercase leading-snug"
-                  style={{ color: ACCENT }}
                 >
                   Ready to order?
                 </p>
@@ -506,7 +515,6 @@ export default function Home() {
             <div className="flex items-center gap-3 mb-5">
               <span
                 className="font-black tracking-widest uppercase text-xs"
-                style={{ color: ACCENT }}
               >
                 03
               </span>
@@ -597,21 +605,29 @@ export default function Home() {
                   truck upon collection.
                 </p>
 
+                {ordersDisabled && (
+                  <p className="mt-4 border-2 border-[#1A1A1A] px-4 py-3 text-sm font-bold text-center tracking-wide uppercase bg-[#1A1A1A] text-[#FBFBF9]">
+                    Orders closed for today — see you next time!
+                  </p>
+                )}
                 <button
                   data-testid="btn-place-order"
-                  onClick={() => setShowModal(true)}
-                  className="mt-4 w-full text-white border-2 p-4 font-black uppercase tracking-widest active:scale-[0.98] transition-transform"
+                  onClick={() => !ordersDisabled && setShowModal(true)}
+                  disabled={ordersDisabled}
+                  className="mt-4 w-full text-[#1A1A1A] border-2 p-4 font-black uppercase tracking-widest transition-transform"
                   style={{
                     fontFamily: "'Bebas Neue', sans-serif",
                     fontSize: "1.25rem",
                     letterSpacing: "0.15em",
-                    background: ACCENT,
-                    borderColor: ACCENT_DK,
+                    background: ordersDisabled ? "#9ca3af" : ACCENT,
+                    borderColor: ordersDisabled ? "#6b7280" : ACCENT_DK,
+                    cursor: ordersDisabled ? "not-allowed" : "pointer",
+                    opacity: ordersDisabled ? 0.6 : 1,
                   }}
                 >
-                  Place WhatsApp Order
-                  {total > 0 && (
-                    <span className="ml-3 text-white/70 text-sm font-black">
+                  {ordersDisabled ? "Orders Closed" : "Place WhatsApp Order"}
+                  {!ordersDisabled && total > 0 && (
+                    <span className="ml-3 text-[#1A1A1A]/60 text-sm font-black">
                       · R{total}
                     </span>
                   )}
@@ -627,7 +643,6 @@ export default function Home() {
           <div className="flex items-center gap-3 mb-5 px-4 lg:px-0">
             <span
               className="font-black tracking-widest uppercase text-xs"
-              style={{ color: ACCENT }}
             >
               04
             </span>
@@ -717,7 +732,6 @@ export default function Home() {
           <div className="flex items-center gap-3 mb-5">
             <span
               className="font-black tracking-widest uppercase text-xs"
-              style={{ color: ACCENT }}
             >
               05
             </span>
@@ -738,7 +752,7 @@ export default function Home() {
                   style={{ background: ACCENT }}
                 >
                   <span
-                    className="text-white font-black text-xs"
+                    className="text-[#1A1A1A] font-black text-xs"
                     style={{ fontFamily: "'Bebas Neue', sans-serif" }}
                   >
                     S'D
@@ -825,7 +839,7 @@ export default function Home() {
                   style={{ background: ACCENT }}
                 >
                   <span
-                    className="flex items-center justify-center h-full text-[7px] font-black text-white"
+                    className="flex items-center justify-center h-full text-[7px] font-black text-[#1A1A1A]"
                     style={{ fontFamily: "'Bebas Neue', sans-serif" }}
                   >
                     S'D
@@ -949,7 +963,7 @@ export default function Home() {
           >
             <DialogHeader>
               <DialogTitle
-                className="font-black uppercase tracking-wide text-white leading-tight"
+                className="font-black uppercase tracking-wide text-[#1A1A1A] leading-tight"
                 style={{
                   fontFamily: "'Bebas Neue', sans-serif",
                   fontSize: "1.5rem",
@@ -981,7 +995,7 @@ export default function Home() {
             <button
               data-testid="btn-whatsapp-send"
               onClick={handleWhatsAppRedirect}
-              className="mt-4 w-full text-white border-2 p-4 font-black uppercase tracking-widest active:scale-[0.98] transition-transform"
+              className="mt-4 w-full text-[#1A1A1A] border-2 p-4 font-black uppercase tracking-widest active:scale-[0.98] transition-transform"
               style={{
                 fontFamily: "'Bebas Neue', sans-serif",
                 fontSize: "1.1rem",
