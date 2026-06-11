@@ -68,9 +68,8 @@ const menuPricingObject: Record<
 const TICKER_TEXT =
   "STUFF'D BAGELS · CAPE TOWN'S FIRST STUFFED BAGEL · EVERY BITE PACKED RIGHT · ORDER ON WHATSAPP · ";
 
-// Golden baked-bagel colour
-const ACCENT = "#C8900F";
-const ACCENT_DK = "#A06808";
+const ACCENT = "#f2f6d0";
+const ACCENT_DK = "#d6daa8";
 
 function BagelPin({
   date,
@@ -874,7 +873,7 @@ export default function Home() {
           <div className="flex flex-col items-center sm:items-start gap-3">
             <div
               className="font-black text-xs tracking-widest uppercase mb-1"
-              style={{ color: "#C8900F" }}
+              style={{ color: "#f2f6d0" }}
             >
               Get In Touch
             </div>
@@ -899,7 +898,7 @@ export default function Home() {
           <div className="flex flex-col items-center sm:items-start gap-3">
             <div
               className="font-black text-xs tracking-widest uppercase mb-1"
-              style={{ color: "#C8900F" }}
+              style={{ color: "#f2f6d0" }}
             >
               Follow Us
             </div>
@@ -934,7 +933,7 @@ export default function Home() {
             © 2026 Stuff'd Bagels · Cape Town
           </div>
           <div className="flex gap-1.5">
-            <div className="w-2 h-2" style={{ background: "#C8900F" }} />
+            <div className="w-2 h-2" style={{ background: "#f2f6d0" }} />
             <div className="w-2 h-2 bg-[#FBFBF9]/20" />
             <div className="w-2 h-2 bg-[#FBFBF9]/10" />
           </div>
