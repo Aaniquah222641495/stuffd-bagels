@@ -71,9 +71,6 @@ const TICKER_TEXT =
 const ACCENT = "#f2f6d0";
 const ACCENT_DK = "#d6daa8";
 
-// Dates (YYYY-MM-DD, SAST) on which online ordering is closed
-const CLOSED_DATES: string[] = [];
-
 function BagelPin({
   date,
   active = false,
@@ -129,6 +126,19 @@ export default function Home() {
   const [notes, setNotes] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [displayTotal, setDisplayTotal] = useState(0);
+  const [availability, setAvailability] = useState<{
+    ordersEnabled: boolean;
+    closedToday: boolean;
+    closedMessage: string;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/availability")
+      .then((r) => r.json())
+      .then(setAvailability)
+      .catch(() => {});
+  }, []);
+
   const slideImages = [
     "/pizza-bagel.jpeg",
     "/jalapeno-bagel.jpeg",
@@ -193,12 +203,9 @@ export default function Home() {
 
   const itemCount = Object.values(quantities).reduce((a, b) => a + b, 0);
 
-  const todaySAST = new Date(
-    new Date().toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg" }),
-  )
-    .toISOString()
-    .slice(0, 10);
-  const ordersDisabled = CLOSED_DATES.includes(todaySAST);
+  const ordersDisabled =
+    availability !== null &&
+    (!availability.ordersEnabled || availability.closedToday);
 
   return (
     <div
@@ -607,7 +614,7 @@ export default function Home() {
 
                 {ordersDisabled && (
                   <p className="mt-4 border-2 border-[#1A1A1A] px-4 py-3 text-sm font-bold text-center tracking-wide uppercase bg-[#1A1A1A] text-[#FBFBF9]">
-                    Orders closed for today — see you next time!
+                    {availability?.closedMessage || "Orders closed for today — see you next time!"}
                   </p>
                 )}
                 <button
