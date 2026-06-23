@@ -15,29 +15,25 @@ import {
 
 const BUSINESS_PHONE = "27724111011";
 
-const scheduleArray = [
-  {
-    day: "Saturday",
-    date: "14",
-    subtitle: "JUNE 14TH–15TH",
-    hours: "10AM – 9PM",
-    venue: "Newlands Cricket Ground",
-  },
-  {
-    day: "Sunday",
-    date: "15",
-    subtitle: "JUNE 15TH",
-    hours: "11AM – 7PM",
-    venue: "Newlands Cricket Ground",
-  },
-  {
-    day: "Saturday",
-    date: "21",
-    subtitle: "JUNE 21ST–22ND",
-    hours: "10AM – 9PM",
-    venue: "Green Point Urban Park",
-  },
-];
+interface ScheduleEvent {
+  id: string;
+  eventDate: string;
+  hours: string;
+  venue: string;
+  subtitle: string;
+}
+
+function eventToCard(e: ScheduleEvent) {
+  const d = new Date(e.eventDate + "T00:00:00");
+  return {
+    id: e.id,
+    day: d.toLocaleDateString("en-ZA", { weekday: "long" }),
+    date: String(d.getDate()),
+    subtitle: e.subtitle,
+    hours: e.hours,
+    venue: e.venue,
+  };
+}
 
 const menuPricingObject: Record<
   string,
@@ -114,15 +110,15 @@ function BagelPin({
 }
 
 export default function Home() {
-  const uniqueVenues = Array.from(new Set(scheduleArray.map((s) => s.venue)));
   const heroImages = Object.values(menuPricingObject).map((v) => v.image);
 
   const [quantities, setQuantities] = useState<Record<string, number>>(() =>
     Object.fromEntries(Object.keys(menuPricingObject).map((k) => [k, 0])),
   );
+  const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([]);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [venue, setVenue] = useState(uniqueVenues[0] || "");
+  const [venue, setVenue] = useState("");
   const [notes, setNotes] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [displayTotal, setDisplayTotal] = useState(0);
@@ -136,6 +132,13 @@ export default function Home() {
     fetch("/api/availability")
       .then((r) => r.json())
       .then(setAvailability)
+      .catch(() => {});
+    fetch("/api/events")
+      .then((r) => r.json())
+      .then((rows: ScheduleEvent[]) => {
+        setScheduleEvents(rows);
+        if (rows.length > 0) setVenue(rows[0].venue);
+      })
       .catch(() => {});
   }, []);
 
@@ -202,6 +205,8 @@ export default function Home() {
   };
 
   const itemCount = Object.values(quantities).reduce((a, b) => a + b, 0);
+  const scheduleCards = scheduleEvents.map(eventToCard);
+  const uniqueVenues = Array.from(new Set(scheduleCards.map((s) => s.venue)));
 
   const ordersDisabled =
     availability !== null &&
@@ -306,9 +311,9 @@ export default function Home() {
                     "repeating-linear-gradient(to bottom,#1A1A1A 0,#1A1A1A 5px,transparent 5px,transparent 12px)",
                 }}
               />
-              {scheduleArray.map((sched, idx) => (
+              {scheduleCards.map((sched, idx) => (
                 <div
-                  key={idx}
+                  key={sched.id}
                   className="relative flex items-start gap-4 mb-8 last:mb-0"
                   data-testid={`schedule-card-${idx}`}
                 >
@@ -353,9 +358,9 @@ export default function Home() {
                     "repeating-linear-gradient(to right,#1A1A1A 0,#1A1A1A 6px,transparent 6px,transparent 14px)",
                 }}
               />
-              {scheduleArray.map((sched, idx) => (
+              {scheduleCards.map((sched, idx) => (
                 <div
-                  key={idx}
+                  key={sched.id}
                   className="flex-1 flex flex-col items-center gap-3 z-10"
                   data-testid={`schedule-card-${idx}`}
                 >

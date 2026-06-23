@@ -10,6 +10,17 @@ interface Availability {
   closedToday: boolean;
 }
 
+interface ScheduleEvent {
+  id: string;
+  eventDate: string;
+  hours: string;
+  venue: string;
+  subtitle: string;
+  sortOrder: number;
+}
+
+const BLANK_EVENT = { eventDate: "", hours: "", venue: "", subtitle: "" };
+
 function apiUrl(path: string) {
   return `${BASE}/api${path}`;
 }
@@ -21,10 +32,21 @@ export default function Admin() {
   const [draft, setDraft] = useState("");
   const [authed, setAuthed] = useState(false);
   const [data, setData] = useState<Availability | null>(null);
+  const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   const [newDate, setNewDate] = useState("");
+  const [newEvent, setNewEvent] = useState(BLANK_EVENT);
+  const [eventError, setEventError] = useState("");
+  const [addingEvent, setAddingEvent] = useState(false);
+
+  const loadEvents = useCallback(async (pw: string) => {
+    const res = await fetch(apiUrl("/admin/events"), {
+      headers: { "x-admin-password": pw },
+    });
+    if (res.ok) setScheduleEvents(await res.json());
+  }, []);
 
   const load = useCallback(async (pw: string) => {
     setError("");
@@ -44,7 +66,8 @@ export default function Admin() {
     setData(json);
     setAuthed(true);
     sessionStorage.setItem("admin_pw", pw);
-  }, []);
+    await loadEvents(pw);
+  }, [loadEvents]);
 
   useEffect(() => {
     if (password) load(password);
@@ -52,7 +75,8 @@ export default function Admin() {
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    await load(draft || password);
+    const pw = draft || password;
+    await load(pw);
     if (draft) setPassword(draft);
   }
 
@@ -84,16 +108,48 @@ export default function Admin() {
     }
   }
 
-  function addDate() {
+  function addClosedDate() {
     if (!newDate || !data) return;
     if (data.closedDates.includes(newDate)) return;
     setData({ ...data, closedDates: [...data.closedDates, newDate].sort() });
     setNewDate("");
   }
 
-  function removeDate(d: string) {
+  function removeClosedDate(d: string) {
     if (!data) return;
     setData({ ...data, closedDates: data.closedDates.filter((x) => x !== d) });
+  }
+
+  async function addEvent() {
+    setEventError("");
+    if (!newEvent.eventDate || !newEvent.hours || !newEvent.venue || !newEvent.subtitle) {
+      setEventError("Fill in all fields.");
+      return;
+    }
+    setAddingEvent(true);
+    const res = await fetch(apiUrl("/admin/events"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-password": password,
+      },
+      body: JSON.stringify(newEvent),
+    });
+    setAddingEvent(false);
+    if (res.ok) {
+      setNewEvent(BLANK_EVENT);
+      await loadEvents(password);
+    } else {
+      setEventError("Failed to add event.");
+    }
+  }
+
+  async function deleteEvent(id: string) {
+    const res = await fetch(apiUrl(`/admin/events/${id}`), {
+      method: "DELETE",
+      headers: { "x-admin-password": password },
+    });
+    if (res.ok) await loadEvents(password);
   }
 
   const inputCls =
@@ -145,9 +201,7 @@ export default function Admin() {
   if (!data) {
     return (
       <div className="min-h-screen bg-[#FBFBF9] flex items-center justify-center">
-        <p className="text-sm tracking-widest uppercase text-[#1A1A1A]/40">
-          Loading…
-        </p>
+        <p className="text-sm tracking-widest uppercase text-[#1A1A1A]/40">Loading…</p>
       </div>
     );
   }
@@ -182,13 +236,9 @@ export default function Admin() {
 
       <div className="max-w-2xl mx-auto px-6 py-10 space-y-10">
 
-        {/* Orders toggle */}
+        {/* ── 01 Order Status ───────────────────────────────── */}
         <section>
-          <div className="flex items-center gap-3 mb-6">
-            <span className="font-black tracking-widest text-xs uppercase" style={{ color: ACCENT }}>01</span>
-            <h2 className="font-black tracking-widest uppercase text-sm">Order Status</h2>
-            <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
-          </div>
+          <SectionHead num="01" label="Order Status" />
           <button
             onClick={() => setData({ ...data, ordersEnabled: !data.ordersEnabled })}
             className={`${btnCls} flex items-center gap-3 ${
@@ -202,20 +252,18 @@ export default function Admin() {
                 data.ordersEnabled ? "bg-green-400" : "bg-white/60"
               }`}
             />
-            {data.ordersEnabled ? "Orders Open — click to close" : "Orders Closed — click to open"}
+            {data.ordersEnabled
+              ? "Orders Open — click to close"
+              : "Orders Closed — click to open"}
           </button>
           <p className="text-xs text-[#1A1A1A]/40 mt-2 tracking-wide">
             When closed, the order form is replaced with your closed message.
           </p>
         </section>
 
-        {/* Closed message */}
+        {/* ── 02 Closed Message ─────────────────────────────── */}
         <section>
-          <div className="flex items-center gap-3 mb-6">
-            <span className="font-black tracking-widest text-xs uppercase" style={{ color: ACCENT }}>02</span>
-            <h2 className="font-black tracking-widest uppercase text-sm">Closed Message</h2>
-            <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
-          </div>
+          <SectionHead num="02" label="Closed Message" />
           <textarea
             rows={3}
             className={inputCls}
@@ -228,14 +276,9 @@ export default function Admin() {
           </p>
         </section>
 
-        {/* Closed dates */}
+        {/* ── 03 Closed Dates ───────────────────────────────── */}
         <section>
-          <div className="flex items-center gap-3 mb-6">
-            <span className="font-black tracking-widest text-xs uppercase" style={{ color: ACCENT }}>03</span>
-            <h2 className="font-black tracking-widest uppercase text-sm">Closed Dates</h2>
-            <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
-          </div>
-
+          <SectionHead num="03" label="Closed Dates" />
           <div className="flex gap-2 mb-4">
             <input
               type="date"
@@ -243,28 +286,19 @@ export default function Admin() {
               value={newDate}
               onChange={(e) => setNewDate(e.target.value)}
             />
-            <button
-              onClick={addDate}
-              className={`${btnCls} bg-[#1A1A1A] text-white`}
-            >
+            <button onClick={addClosedDate} className={`${btnCls} bg-[#1A1A1A] text-white`}>
               Add
             </button>
           </div>
-
           {data.closedDates.length === 0 ? (
-            <p className="text-xs text-[#1A1A1A]/40 tracking-wide italic">
-              No closed dates set.
-            </p>
+            <p className="text-xs text-[#1A1A1A]/40 italic tracking-wide">No closed dates set.</p>
           ) : (
             <div className="space-y-2">
               {data.closedDates.map((d) => (
-                <div
-                  key={d}
-                  className="flex items-center justify-between border-2 border-[#1A1A1A] px-4 py-2"
-                >
+                <div key={d} className="flex items-center justify-between border-2 border-[#1A1A1A] px-4 py-2">
                   <span className="font-bold text-sm">{d}</span>
                   <button
-                    onClick={() => removeDate(d)}
+                    onClick={() => removeClosedDate(d)}
                     className="text-xs tracking-widest uppercase font-black text-red-600 hover:text-red-800 transition-colors"
                   >
                     Remove
@@ -274,19 +308,19 @@ export default function Admin() {
             </div>
           )}
           <p className="text-xs text-[#1A1A1A]/40 mt-3 tracking-wide">
-            Orders are automatically blocked on these dates (SAST timezone).
+            Orders are blocked on these specific dates (SAST timezone).
           </p>
         </section>
 
-        {/* Save */}
-        <div className="flex items-center gap-4 pt-2 border-t-2 border-[#1A1A1A]">
+        {/* ── Save availability ─────────────────────────────── */}
+        <div className="flex items-center gap-4 border-t-2 border-[#1A1A1A] pt-6">
           <button
             onClick={save}
             disabled={saving}
             className={`${btnCls} text-white`}
             style={{ background: ACCENT, borderColor: ACCENT }}
           >
-            {saving ? "Saving…" : "Save Changes"}
+            {saving ? "Saving…" : "Save Availability"}
           </button>
           {saveMsg && (
             <span className={`text-sm font-bold ${saveMsg.startsWith("Saved") ? "text-green-700" : "text-red-600"}`}>
@@ -295,7 +329,127 @@ export default function Admin() {
           )}
         </div>
 
+        {/* ── 04 Weekend Events ─────────────────────────────── */}
+        <section className="border-t-2 border-[#1A1A1A] pt-10">
+          <SectionHead num="04" label="Weekend Events & Locations" />
+          <p className="text-xs text-[#1A1A1A]/40 mb-6 tracking-wide">
+            Add upcoming events — they appear on the home page schedule. Changes take effect immediately.
+          </p>
+
+          {/* Add new event form */}
+          <div className="border-2 border-[#1A1A1A] p-5 mb-6 space-y-3">
+            <div className="font-black text-xs tracking-widest uppercase mb-4" style={{ color: ACCENT }}>
+              Add New Event
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] font-black tracking-widest uppercase text-[#1A1A1A]/50 mb-1">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  className={inputCls}
+                  value={newEvent.eventDate}
+                  onChange={(e) => setNewEvent({ ...newEvent, eventDate: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black tracking-widest uppercase text-[#1A1A1A]/50 mb-1">
+                  Hours
+                </label>
+                <input
+                  type="text"
+                  placeholder="10AM – 9PM"
+                  className={inputCls}
+                  value={newEvent.hours}
+                  onChange={(e) => setNewEvent({ ...newEvent, hours: e.target.value })}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] font-black tracking-widest uppercase text-[#1A1A1A]/50 mb-1">
+                Venue / Location
+              </label>
+              <input
+                type="text"
+                placeholder="Green Point Urban Park"
+                className={inputCls}
+                value={newEvent.venue}
+                onChange={(e) => setNewEvent({ ...newEvent, venue: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black tracking-widest uppercase text-[#1A1A1A]/50 mb-1">
+                Display Label
+              </label>
+              <input
+                type="text"
+                placeholder="JUNE 28TH–29TH"
+                className={inputCls}
+                value={newEvent.subtitle}
+                onChange={(e) => setNewEvent({ ...newEvent, subtitle: e.target.value })}
+              />
+              <p className="text-[10px] text-[#1A1A1A]/40 mt-1">
+                Short label shown under the venue on the home page (e.g. "JUNE 28TH–29TH")
+              </p>
+            </div>
+            {eventError && (
+              <p className="text-red-600 text-xs font-medium">{eventError}</p>
+            )}
+            <button
+              onClick={addEvent}
+              disabled={addingEvent}
+              className={`${btnCls} text-white mt-2`}
+              style={{ background: ACCENT, borderColor: ACCENT }}
+            >
+              {addingEvent ? "Adding…" : "Add Event"}
+            </button>
+          </div>
+
+          {/* Existing events list */}
+          {scheduleEvents.length === 0 ? (
+            <p className="text-xs text-[#1A1A1A]/40 italic tracking-wide">
+              No events scheduled yet.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {scheduleEvents.map((ev) => {
+                const d = new Date(ev.eventDate + "T00:00:00");
+                const dayName = d.toLocaleDateString("en-ZA", { weekday: "long" });
+                const displayDate = d.toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" });
+                return (
+                  <div key={ev.id} className="flex items-start justify-between border-2 border-[#1A1A1A] px-4 py-3">
+                    <div>
+                      <div className="font-black text-sm">{dayName}, {displayDate}</div>
+                      <div className="text-xs text-[#1A1A1A]/60 font-medium mt-0.5">{ev.venue}</div>
+                      <div className="text-xs text-[#1A1A1A]/40 mt-0.5">{ev.hours} · {ev.subtitle}</div>
+                    </div>
+                    <button
+                      onClick={() => deleteEvent(ev.id)}
+                      className="text-xs tracking-widest uppercase font-black text-red-600 hover:text-red-800 transition-colors ml-4 shrink-0"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
       </div>
+    </div>
+  );
+}
+
+function SectionHead({ num, label }: { num: string; label: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-6">
+      <span className="font-black tracking-widest text-xs uppercase" style={{ color: ACCENT }}>
+        {num}
+      </span>
+      <h2 className="font-black tracking-widest uppercase text-sm">{label}</h2>
+      <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
     </div>
   );
 }
