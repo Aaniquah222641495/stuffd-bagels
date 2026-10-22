@@ -1,0 +1,4 @@
+# The home page is prerendered (index.html). Anything that isn't a real file gets the
+# prerendered 404 page with a real 404 status. (Same as before for /api and /admin: the
+# API isn't deployed on Netlify, see README.)
+/*   /404.html   404
