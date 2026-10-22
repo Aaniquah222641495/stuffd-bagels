@@ -1,0 +1,27 @@
+# STUFF'D Bagels
+
+> Cape Town's first stuffed bagel. Fresh, handmade stuffed bagels sold at pop-ups at markets, events and cricket grounds across Cape Town every weekend. Order on WhatsApp, collect at the venue, pay with card (Yoco) or cash.
+
+Slogan: "Every bite packed right." Cape Town, South Africa. Est. 2026. Street food, pop-up, handmade. No tables, no reservations.
+
+## Menu (ZAR)
+- Pizza Bagel: R75 (tomato, mozzarella, basil)
+- Jalapeno Bagel: R70 (spicy, cream cheese, pickled)
+- Cheesy Bagel: R65 (triple cheese, chive)
+- Plain Bagel: R45 (classic, butter, sea salt)
+
+## How ordering works
+- Pick your bagels on the website, then send the ready-made order message on WhatsApp.
+- Collect at the venue on your pickup date.
+- Pay at the truck with Yoco (card) or cash. No online payment.
+- Private events: message on WhatsApp for a custom quote.
+
+## Contact
+- WhatsApp / phone: +27 72 411 1011
+- Email: stuffd.bagels@gmail.com
+- Instagram: https://instagram.com/stuffd.bagels
+- TikTok: https://tiktok.com/@stuffd.bagels
+
+## Pages
+- [Home, menu and ordering](https://stuffdbagels.netlify.app/)
+- [Menu and prices (plain text)](https://stuffdbagels.netlify.app/pricing.md)
