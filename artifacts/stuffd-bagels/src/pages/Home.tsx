@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { menuPricingObject, FAQ } from "@/content";
 
 const BUSINESS_PHONE = "27724111011";
 
@@ -35,31 +36,6 @@ function eventToCard(e: ScheduleEvent) {
   };
 }
 
-const menuPricingObject: Record<
-  string,
-  { price: number; image: string; desc: string }
-> = {
-  "Pizza Bagel": {
-    price: 75,
-    image: "/pizza-bagel.jpeg",
-    desc: "Tomato · Mozz · Basil",
-  },
-  "Jalapeno Bagel": {
-    price: 70,
-    image: "/jalapeno-bagel.jpeg",
-    desc: "Spicy · Cream Cheese · Pickled",
-  },
-  "Cheesy Bagel": {
-    price: 65,
-    image: "/cheesy-bagel.jpeg",
-    desc: "Triple Cheese · Chive",
-  },
-  "Plain Bagel": {
-    price: 45,
-    image: "/plain-bagel.jpeg",
-    desc: "Classic · Butter · Sea Salt",
-  },
-};
 
 const TICKER_TEXT =
   "STUFF'D BAGELS · CAPE TOWN'S FIRST STUFFED BAGEL · EVERY BITE PACKED RIGHT · ORDER ON WHATSAPP · ";
@@ -256,23 +232,26 @@ export default function Home() {
             Cape Town · Est. 2026
           </p>
           <div className="w-full">
-            <h1
-              className="leading-none tracking-tighter text-[#1A1A1A] m-0"
-              style={{
-                fontFamily: "'Bebas Neue', sans-serif",
-                fontSize: "clamp(5rem,22vw,9rem)",
-                textShadow: "0 1px 0 rgba(255,255,255,0.15)",
-              }}
-            >
-              STUFF'D
-            </h1>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
-              <span className="font-black tracking-[0.35em] text-[10px] text-[#1A1A1A] uppercase">
-                Bagels
+            {/* One H1 for "STUFF'D Bagels" so search engines read the full name (same look as before). */}
+            <h1 className="m-0 font-normal text-base">
+              <span
+                className="block leading-none tracking-tighter text-[#1A1A1A]"
+                style={{
+                  fontFamily: "'Bebas Neue', sans-serif",
+                  fontSize: "clamp(5rem,22vw,9rem)",
+                  textShadow: "0 1px 0 rgba(255,255,255,0.15)",
+                }}
+              >
+                STUFF'D
+              </span>{" "}
+              <span className="flex items-center gap-2 mt-1">
+                <span aria-hidden="true" className="flex-1 h-[2px] bg-[#1A1A1A]" />
+                <span className="font-black tracking-[0.35em] text-[10px] text-[#1A1A1A] uppercase leading-normal">
+                  Bagels
+                </span>
+                <span aria-hidden="true" className="flex-1 h-[2px] bg-[#1A1A1A]" />
               </span>
-              <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
-            </div>
+            </h1>
             <p className="font-black tracking-widest text-[10px] uppercase text-[#1A1A1A]/70 mt-3">
               Every bite packed right.
             </p>
@@ -792,23 +771,7 @@ export default function Home() {
             </div>
 
             <div className="px-3 py-4 space-y-5">
-              {[
-                {
-                  q: "Where do I collect my order?",
-                  a: "At the venue on your pickup date 📍 Look for the STUFF'D setup — you won't miss us!",
-                  time: "10:42",
-                },
-                {
-                  q: "How do I pay? There's no checkout here 🤔",
-                  a: "Pay at the truck with Yoco (tap your card) or cash. No online payment ever needed 🙌",
-                  time: "10:44",
-                },
-                {
-                  q: "Can I book you guys for a private event?",
-                  a: "Absolutely! Drop us a WhatsApp below and we'll put together a custom quote for you 🥯",
-                  time: "10:47",
-                },
-              ].map((msg, i) => (
+              {FAQ.map((msg, i) => (
                 <div key={i} className="space-y-1.5">
                   <div className="text-center text-[10px] text-[#8E8E93] font-medium">
                     {msg.time}
