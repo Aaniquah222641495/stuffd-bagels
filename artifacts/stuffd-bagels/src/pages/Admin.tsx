@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 
-const ACCENT = "#C8900F";
+const ACCENT = "var(--sb-blue)";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 interface Availability {
@@ -153,13 +153,13 @@ export default function Admin() {
   }
 
   const inputCls =
-    "w-full border-2 border-[#1A1A1A] px-3 py-2 text-sm font-medium bg-[#FBFBF9] focus:outline-none focus:border-[#C8900F]";
+    "w-full border-2 border-ink px-3 py-2 text-sm font-medium bg-paper focus:outline-none focus:border-blue";
   const btnCls =
-    "border-2 border-[#1A1A1A] px-4 py-2 font-black text-xs tracking-widest uppercase transition-colors";
+    "border-2 border-ink px-4 py-2 font-black text-xs tracking-widest uppercase transition-colors";
 
   if (!authed) {
     return (
-      <div className="min-h-screen bg-[#FBFBF9] flex items-center justify-center px-4">
+      <div className="min-h-screen bg-paper flex items-center justify-center px-4">
         <div className="w-full max-w-sm">
           <div className="mb-8 text-center">
             <img src="/logo.png" alt="logo" className="h-16 w-16 mx-auto mb-4 object-contain" />
@@ -169,7 +169,7 @@ export default function Admin() {
             >
               Admin
             </div>
-            <div className="text-xs tracking-widest uppercase text-[#1A1A1A]/40 mt-1">
+            <div className="text-xs tracking-widest uppercase text-ink/40 mt-1">
               Stuff'd Bagels
             </div>
           </div>
@@ -200,18 +200,18 @@ export default function Admin() {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-[#FBFBF9] flex items-center justify-center">
-        <p className="text-sm tracking-widest uppercase text-[#1A1A1A]/40">Loading…</p>
+      <div className="min-h-screen bg-paper flex items-center justify-center">
+        <p className="text-sm tracking-widest uppercase text-ink/40">Loading…</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#FBFBF9]">
+    <div className="min-h-screen bg-paper">
       {/* Header */}
       <div
-        className="border-b-2 border-[#1A1A1A] px-6 py-4 flex items-center justify-between"
-        style={{ background: "#1A1A1A" }}
+        className="border-b-2 border-ink px-6 py-4 flex items-center justify-between"
+        style={{ background: "var(--sb-ink)" }}
       >
         <div className="flex items-center gap-3">
           <img src="/logo.png" alt="logo" className="h-8 w-8 object-contain invert" />
@@ -243,7 +243,7 @@ export default function Admin() {
             onClick={() => setData({ ...data, ordersEnabled: !data.ordersEnabled })}
             className={`${btnCls} flex items-center gap-3 ${
               data.ordersEnabled
-                ? "bg-[#1A1A1A] text-white border-[#1A1A1A]"
+                ? "bg-ink text-white border-ink"
                 : "bg-red-600 text-white border-red-600"
             }`}
           >
@@ -256,7 +256,7 @@ export default function Admin() {
               ? "Orders Open — click to close"
               : "Orders Closed — click to open"}
           </button>
-          <p className="text-xs text-[#1A1A1A]/40 mt-2 tracking-wide">
+          <p className="text-xs text-ink/40 mt-2 tracking-wide">
             When closed, the order form is replaced with your closed message.
           </p>
         </section>
@@ -271,7 +271,7 @@ export default function Admin() {
             onChange={(e) => setData({ ...data, closedMessage: e.target.value })}
             placeholder="We're closed today — check back soon!"
           />
-          <p className="text-xs text-[#1A1A1A]/40 mt-2 tracking-wide">
+          <p className="text-xs text-ink/40 mt-2 tracking-wide">
             Shown on the home page when orders are off or on a closed date.
           </p>
         </section>
@@ -286,16 +286,16 @@ export default function Admin() {
               value={newDate}
               onChange={(e) => setNewDate(e.target.value)}
             />
-            <button onClick={addClosedDate} className={`${btnCls} bg-[#1A1A1A] text-white`}>
+            <button onClick={addClosedDate} className={`${btnCls} bg-ink text-white`}>
               Add
             </button>
           </div>
           {data.closedDates.length === 0 ? (
-            <p className="text-xs text-[#1A1A1A]/40 italic tracking-wide">No closed dates set.</p>
+            <p className="text-xs text-ink/40 italic tracking-wide">No closed dates set.</p>
           ) : (
             <div className="space-y-2">
               {data.closedDates.map((d) => (
-                <div key={d} className="flex items-center justify-between border-2 border-[#1A1A1A] px-4 py-2">
+                <div key={d} className="flex items-center justify-between border-2 border-ink px-4 py-2">
                   <span className="font-bold text-sm">{d}</span>
                   <button
                     onClick={() => removeClosedDate(d)}
@@ -307,13 +307,13 @@ export default function Admin() {
               ))}
             </div>
           )}
-          <p className="text-xs text-[#1A1A1A]/40 mt-3 tracking-wide">
+          <p className="text-xs text-ink/40 mt-3 tracking-wide">
             Orders are blocked on these specific dates (SAST timezone).
           </p>
         </section>
 
         {/* ── Save availability ─────────────────────────────── */}
-        <div className="flex items-center gap-4 border-t-2 border-[#1A1A1A] pt-6">
+        <div className="flex items-center gap-4 border-t-2 border-ink pt-6">
           <button
             onClick={save}
             disabled={saving}
@@ -330,20 +330,20 @@ export default function Admin() {
         </div>
 
         {/* ── 04 Weekend Events ─────────────────────────────── */}
-        <section className="border-t-2 border-[#1A1A1A] pt-10">
+        <section className="border-t-2 border-ink pt-10">
           <SectionHead num="04" label="Weekend Events & Locations" />
-          <p className="text-xs text-[#1A1A1A]/40 mb-6 tracking-wide">
+          <p className="text-xs text-ink/40 mb-6 tracking-wide">
             Add upcoming events — they appear on the home page schedule. Changes take effect immediately.
           </p>
 
           {/* Add new event form */}
-          <div className="border-2 border-[#1A1A1A] p-5 mb-6 space-y-3">
+          <div className="border-2 border-ink p-5 mb-6 space-y-3">
             <div className="font-black text-xs tracking-widest uppercase mb-4" style={{ color: ACCENT }}>
               Add New Event
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[10px] font-black tracking-widest uppercase text-[#1A1A1A]/50 mb-1">
+                <label className="block text-[10px] font-black tracking-widest uppercase text-ink/50 mb-1">
                   Date
                 </label>
                 <input
@@ -354,7 +354,7 @@ export default function Admin() {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-black tracking-widest uppercase text-[#1A1A1A]/50 mb-1">
+                <label className="block text-[10px] font-black tracking-widest uppercase text-ink/50 mb-1">
                   Hours
                 </label>
                 <input
@@ -367,7 +367,7 @@ export default function Admin() {
               </div>
             </div>
             <div>
-              <label className="block text-[10px] font-black tracking-widest uppercase text-[#1A1A1A]/50 mb-1">
+              <label className="block text-[10px] font-black tracking-widest uppercase text-ink/50 mb-1">
                 Venue / Location
               </label>
               <input
@@ -379,7 +379,7 @@ export default function Admin() {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-black tracking-widest uppercase text-[#1A1A1A]/50 mb-1">
+              <label className="block text-[10px] font-black tracking-widest uppercase text-ink/50 mb-1">
                 Display Label
               </label>
               <input
@@ -389,7 +389,7 @@ export default function Admin() {
                 value={newEvent.subtitle}
                 onChange={(e) => setNewEvent({ ...newEvent, subtitle: e.target.value })}
               />
-              <p className="text-[10px] text-[#1A1A1A]/40 mt-1">
+              <p className="text-[10px] text-ink/40 mt-1">
                 Short label shown under the venue on the home page (e.g. "JUNE 28TH–29TH")
               </p>
             </div>
@@ -408,7 +408,7 @@ export default function Admin() {
 
           {/* Existing events list */}
           {scheduleEvents.length === 0 ? (
-            <p className="text-xs text-[#1A1A1A]/40 italic tracking-wide">
+            <p className="text-xs text-ink/40 italic tracking-wide">
               No events scheduled yet.
             </p>
           ) : (
@@ -418,11 +418,11 @@ export default function Admin() {
                 const dayName = d.toLocaleDateString("en-ZA", { weekday: "long" });
                 const displayDate = d.toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" });
                 return (
-                  <div key={ev.id} className="flex items-start justify-between border-2 border-[#1A1A1A] px-4 py-3">
+                  <div key={ev.id} className="flex items-start justify-between border-2 border-ink px-4 py-3">
                     <div>
                       <div className="font-black text-sm">{dayName}, {displayDate}</div>
-                      <div className="text-xs text-[#1A1A1A]/60 font-medium mt-0.5">{ev.venue}</div>
-                      <div className="text-xs text-[#1A1A1A]/40 mt-0.5">{ev.hours} · {ev.subtitle}</div>
+                      <div className="text-xs text-ink/60 font-medium mt-0.5">{ev.venue}</div>
+                      <div className="text-xs text-ink/40 mt-0.5">{ev.hours} · {ev.subtitle}</div>
                     </div>
                     <button
                       onClick={() => deleteEvent(ev.id)}
@@ -449,7 +449,7 @@ function SectionHead({ num, label }: { num: string; label: string }) {
         {num}
       </span>
       <h2 className="font-black tracking-widest uppercase text-sm">{label}</h2>
-      <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
+      <div className="flex-1 h-[2px] bg-ink" />
     </div>
   );
 }

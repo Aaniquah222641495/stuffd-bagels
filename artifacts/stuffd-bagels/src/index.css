@@ -1,4 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Bebas+Neue&family=Inter:wght@400;700;900&display=swap');
+/* Fonts are self-hosted (Fontsource, latin subset). Licences: Bagel Fat One, Bebas Neue, Inter = OFL-1.1. */
+@import "@fontsource/bagel-fat-one/latin-400.css";
+@import "@fontsource/bebas-neue/latin-400.css";
+@import "@fontsource/inter/latin-400.css";
+@import "@fontsource/inter/latin-500.css";
+@import "@fontsource/inter/latin-700.css";
+@import "@fontsource/inter/latin-900.css";
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
@@ -57,6 +63,22 @@
   --color-sidebar-accent-border: var(--sidebar-accent-border);
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 
+  /* Brand tokens (values live in :root as --sb-*). Use these instead of hex codes in components. */
+  --color-ink: var(--sb-ink);
+  --color-paper: var(--sb-paper);
+  --color-blue: var(--sb-blue);
+  --color-blue-dk: var(--sb-blue-dk);
+  --color-sky: var(--sb-sky);
+  --color-photo: var(--sb-photo);
+  --color-chat-bg: var(--sb-chat-bg);
+  --color-chat-blue: var(--sb-chat-blue);
+  --color-chat-green: var(--sb-chat-green);
+  --color-chat-gray: var(--sb-chat-gray);
+  --color-chat-avatar: var(--sb-chat-avatar);
+  --color-chat-avatar-ink: var(--sb-chat-avatar-ink);
+  --color-disabled: var(--sb-disabled);
+  --color-disabled-border: var(--sb-disabled-border);
+
   --font-sans: var(--app-font-sans);
   --font-serif: var(--app-font-serif);
   --font-mono: var(--app-font-mono);
@@ -69,6 +91,26 @@
 
 /* LIGHT MODE */
 :root {
+  /* Brand tokens. Change the look here, not in components. */
+  /* 2026 rebrand: blue bubble STUFF'D (cart launch 2 Oct 2026). Approximate hexes from their Instagram. */
+  --sb-ink: #16245c;        /* navy: text, borders */
+  --sb-paper: #f7f8fc;      /* cool white: page background, like the white cart and boxes (founder 2026-10-26: cream read as yellow) */
+  --sb-blue: #2c48e6;       /* cobalt: brand blue, buttons, ticker (white text on it passes AA) */
+  --sb-blue-dk: #1c33b8;    /* cobalt pressed / borders */
+  --sb-sky: #c9d3ff;        /* pale cobalt: tape, labels on navy (founder 2026-10-26: no yellow) */
+  --sb-photo: #fdfdff;      /* card and polaroid white (cool, matches the page) */
+  --sb-tape: color-mix(in srgb, var(--sb-sky) 72%, transparent);
+  --sb-shadow: 0 14px 28px -14px color-mix(in srgb, var(--sb-ink) 55%, transparent);
+  --sb-shadow-soft: 0 1px 2px color-mix(in srgb, var(--sb-ink) 8%, transparent), 0 22px 44px -22px color-mix(in srgb, var(--sb-ink) 40%, transparent);
+  --sb-chat-bg: #f2f2f7;
+  --sb-chat-blue: #007aff;
+  --sb-chat-green: #34c759;
+  --sb-chat-gray: #8e8e93;
+  --sb-chat-avatar: #c7c7cc;
+  --sb-chat-avatar-ink: #3c3c43;
+  --sb-disabled: #9ca3af;
+  --sb-disabled-border: #6b7280;
+
   --button-outline: rgba(0,0,0, .10);
   --badge-outline: rgba(0,0,0, .05);
 
@@ -288,3 +330,155 @@
     inset: -1px;
   }
 }
+
+/* ── 2026 rebrand helpers ───────────────────────────────── */
+.font-bubble {
+  font-family: "Bagel Fat One", "Inter", sans-serif;
+  font-weight: 400;
+}
+.font-bebas {
+  font-family: "Bebas Neue", sans-serif;
+}
+
+/* Blue duotone, like their riso-style Instagram photos:
+   shadows go navy, highlights go soft cobalt. */
+.duotone {
+  /* position comes from the utility class (absolute / relative) */
+  isolation: isolate;
+  background: #8fa2ff;
+  overflow: hidden;
+}
+.duotone > img {
+  filter: grayscale(1) contrast(1.15) brightness(1.05);
+  mix-blend-mode: multiply;
+}
+.duotone::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--sb-ink);
+  mix-blend-mode: lighten;
+  pointer-events: none;
+}
+
+/* ── Scrapbook pieces (polaroids, tape, folder tabs), like their posters ──
+   In the components layer so Tailwind utilities (absolute, w-*, etc.) can override them. */
+@layer components {
+/* Sesame-seed speckle for the cobalt hero: a quiet bagel nod. Decorative only. */
+.sesame {
+  background-color: var(--sb-blue);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='%23ffffff' fill-opacity='0.13'%3E%3Cellipse cx='14' cy='18' rx='2.2' ry='4.4' transform='rotate(35 14 18)'/%3E%3Cellipse cx='62' cy='9' rx='2.2' ry='4.4' transform='rotate(-20 62 9)'/%3E%3Cellipse cx='98' cy='34' rx='2.2' ry='4.4' transform='rotate(70 98 34)'/%3E%3Cellipse cx='38' cy='56' rx='2.2' ry='4.4' transform='rotate(-55 38 56)'/%3E%3Cellipse cx='84' cy='76' rx='2.2' ry='4.4' transform='rotate(15 84 76)'/%3E%3Cellipse cx='18' cy='96' rx='2.2' ry='4.4' transform='rotate(-80 18 96)'/%3E%3Cellipse cx='56' cy='108' rx='2.2' ry='4.4' transform='rotate(45 56 108)'/%3E%3Cellipse cx='110' cy='104' rx='2.2' ry='4.4' transform='rotate(-30 110 104)'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 120px 120px;
+}
+.polaroid {
+  position: relative;
+  background: var(--sb-photo);
+  padding: 10px 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--sb-ink) 14%, transparent);
+  box-shadow: var(--sb-shadow);
+  rotate: var(--tilt, 0deg);
+  transition: rotate 0.5s cubic-bezier(0.16, 1, 0.3, 1), scale 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.polaroid > img,
+.polaroid .polaroid-photo {
+  display: block;
+  width: 100%;
+  object-fit: cover;
+  background: color-mix(in srgb, var(--sb-ink) 8%, var(--sb-paper));
+}
+@media (hover: hover) {
+  .polaroid.lift:hover { rotate: 0deg; scale: 1.03; z-index: 5; }
+}
+.tape::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  width: 92px;
+  height: 26px;
+  translate: -50% 0;
+  rotate: var(--tape-tilt, -4deg);
+  background: var(--sb-tape);
+  border-left: 2px dotted color-mix(in srgb, var(--sb-photo) 70%, transparent);
+  border-right: 2px dotted color-mix(in srgb, var(--sb-photo) 70%, transparent);
+  z-index: 2;
+  pointer-events: none;
+}
+.folder-tab {
+  border-radius: 12px 12px 0 0;
+  border: 2px solid var(--sb-ink);
+  border-bottom: 0;
+}
+.scribble-underline {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12' preserveAspectRatio='none'%3E%3Cpath d='M2 8c30-6 60-6 92-2s70 4 104-3' fill='none' stroke='%232c48e6' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 100% 0.32em;
+  padding-bottom: 0.18em;
+}
+}
+
+/* ── Motion. Only runs when the visitor has not asked for reduced motion. ── */
+@keyframes hero-pop {
+  0%   { opacity: 0; transform: translateY(18px) scale(0.94); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes drop-in {
+  0%   { opacity: 0; transform: translateY(-40px) rotate(-8deg); }
+  100% { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-pop { animation: hero-pop 0.7s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: var(--d, 0ms); }
+  .hero-drop { animation: drop-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: var(--d, 0ms); }
+}
+/* Scroll reveal: Home adds .motion-ok to <html> after mount, so the prerendered page is fully visible without JavaScript. */
+.motion-ok .reveal {
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: var(--d, 0ms);
+}
+.motion-ok .reveal:not(.is-in) {
+  opacity: 0;
+  transform: translateY(28px) rotate(var(--from-tilt, 0deg));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track { animation: none; }
+  .typing-dot { animation: none !important; opacity: 0.7; }
+  .polaroid { transition: none; }
+}
+
+/* ── 2026-10-26 premium pass: quieter surfaces, more bagels ── */
+.shadow-soft { box-shadow: var(--sb-shadow-soft); }
+.eyebrow {
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+.text-balance { text-wrap: balance; }
+
+/* Bagel belt: a slow strip of round bagel photos. Two copies of the list so the loop is seamless. */
+@keyframes belt { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.belt-track { display: flex; width: max-content; }
+@keyframes settle { from { transform: scale(1.07); } to { transform: none; } }
+@keyframes spin-slow { to { rotate: 360deg; } }
+@media (prefers-reduced-motion: no-preference) {
+  .belt-track { animation: belt 48s linear infinite; }
+  .belt:hover .belt-track { animation-play-state: paused; }
+  .hero-settle { animation: settle 1.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .spin-slow { animation: spin-slow 40s linear infinite; }
+}
+
+/* Market trail: dashed cobalt line between bagel pins. Draws in when the section is revealed. */
+.trail-x {
+  background: repeating-linear-gradient(to right, var(--sb-blue) 0 10px, transparent 10px 20px);
+  transform-origin: left center;
+}
+.trail-y {
+  background: repeating-linear-gradient(to bottom, var(--sb-blue) 0 10px, transparent 10px 20px);
+  transform-origin: center top;
+}
+.motion-ok .reveal .trail-x,
+.motion-ok .reveal .trail-y { transition: transform 1.4s cubic-bezier(0.65, 0, 0.35, 1) 0.25s; }
+.motion-ok .reveal:not(.is-in) .trail-x { transform: scaleX(0); }
+.motion-ok .reveal:not(.is-in) .trail-y { transform: scaleY(0); }
