@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -29,16 +29,18 @@ function eventToCard(e: MarketEvent) {
   const en = parseDay(e.end);
   const sameDay = e.start === e.end;
   const sameMonth = s.getMonth() === en.getMonth();
-  const range = sameDay
-    ? `${s.getDate()} ${MONTHS[s.getMonth()]}`
+  const days = sameDay
+    ? `${s.getDate()}`
     : sameMonth
-      ? `${s.getDate()}–${en.getDate()} ${MONTHS[s.getMonth()]}`
-      : `${s.getDate()} ${MONTHS[s.getMonth()]} – ${en.getDate()} ${MONTHS[en.getMonth()]}`;
+      ? `${s.getDate()}-${en.getDate()}`
+      : `${s.getDate()} ${MONTHS[s.getMonth()]} - ${en.getDate()} ${MONTHS[en.getMonth()]}`;
+  const weekday = (d: Date) => d.toLocaleDateString("en-ZA", { weekday: "short" });
   return {
     id: e.id,
-    day: s.toLocaleDateString("en-ZA", { weekday: "long" }),
-    date: String(s.getDate()),
-    range,
+    month: MONTHS[s.getMonth()],
+    days,
+    crossMonth: !sameMonth,
+    when: sameDay ? s.toLocaleDateString("en-ZA", { weekday: "long" }) : `${weekday(s)} to ${weekday(en)}`,
     name: e.name,
     venue: e.venue,
   };
@@ -53,16 +55,19 @@ const BLUE_DK = "var(--sb-blue-dk)";
 /** Hand-drawn style star, like the doodles on their posters. Decorative only. */
 function Star({
   className = "",
-  fill = "var(--sb-highlight)",
+  fill = "var(--sb-photo)",
+  style,
 }: {
   className?: string;
   fill?: string;
+  style?: CSSProperties;
 }) {
   return (
     <svg
       aria-hidden="true"
       viewBox="0 0 48 48"
       className={className}
+      style={style}
       fill={fill}
       stroke="var(--sb-ink)"
       strokeWidth="2.5"
@@ -73,62 +78,156 @@ function Star({
   );
 }
 
-function SectionHead({ n, title }: { n: string; title: string }) {
+/** Taped polaroid photo. `tilt` is the resting angle in degrees. */
+function Polaroid({
+  src,
+  alt,
+  tilt = 0,
+  aspect = "4/5",
+  caption,
+  className = "",
+  eager = false,
+  width,
+  height,
+}: {
+  src: string;
+  alt: string;
+  tilt?: number;
+  aspect?: string;
+  caption?: string;
+  className?: string;
+  eager?: boolean;
+  width: number;
+  height: number;
+}) {
   return (
-    <div className="flex items-center gap-3 mb-5">
-      <span
-        className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-white font-black text-xs"
-        style={{ background: BLUE }}
-      >
-        {n}
-      </span>
-      <h2 className="font-bubble text-2xl lg:text-3xl text-ink leading-none">
-        {title}
+    <figure
+      className={`polaroid tape lift m-0 ${className}`}
+      style={{ "--tilt": `${tilt}deg`, "--tape-tilt": `${tilt > 0 ? -5 : 4}deg` } as CSSProperties}
+    >
+      <img
+        src={src}
+        alt={alt}
+        width={width}
+        height={height}
+        loading={eager ? "eager" : "lazy"}
+        decoding="async"
+        {...(eager ? { fetchPriority: "high" as const } : {})}
+        style={{ aspectRatio: aspect }}
+      />
+      {caption && (
+        <figcaption className="font-marker text-ink text-sm sm:text-base text-center pt-2 leading-tight">
+          {caption}
+        </figcaption>
+      )}
+    </figure>
+  );
+}
+
+function SectionHead({ title, note, id }: { title: string; note?: string; id?: string }) {
+  return (
+    <div className="reveal mb-7 flex flex-wrap items-end gap-x-4 gap-y-1">
+      <h2 id={id} className="font-bubble text-[2.1rem] sm:text-5xl text-blue leading-[1.05] m-0">
+        <span className="scribble-underline">{title}</span>
       </h2>
-      <div className="flex-1 h-[2px] bg-ink" />
+      {note && <p className="font-marker text-ink text-base sm:text-lg -rotate-2 m-0 pb-1">{note}</p>}
     </div>
   );
 }
 
-function BagelPin({
-  date,
-  active = false,
+function Stepper({
+  label,
+  qty,
+  onDec,
+  onInc,
+  testid,
 }: {
-  date: string;
-  active?: boolean;
+  label: string;
+  qty: number;
+  onDec: () => void;
+  onInc: () => void;
+  testid: string;
 }) {
   return (
-    <div className="relative" style={{ width: 54, height: 54 }}>
-      <img
-        src="/bagel-pin.png"
-        alt=""
-        width={108}
-        height={108}
-        decoding="async"
-        className="w-full h-full object-contain"
-        style={{
-          filter: active
-            ? "drop-shadow(0 2px 8px rgba(44,72,230,0.6))"
-            : "grayscale(0.3) brightness(0.88)",
-        }}
-      />
-      <div
-        className="absolute inset-0 flex items-center justify-center"
-        style={{ paddingBottom: "2px" }}
+    <div className="flex items-center gap-1">
+      <button
+        data-testid={`btn-decrease-${testid}`}
+        onClick={onDec}
+        aria-label={`Remove one ${label}`}
+        className="w-11 h-11 rounded-full border-2 border-ink font-black text-lg flex items-center justify-center active:scale-90 transition-transform bg-photo hover:bg-ink hover:text-paper"
       >
-        <span
-          className="font-bebas text-white leading-none"
-          style={{
-            fontSize: "0.95rem",
-            textShadow: "0 1px 3px rgba(0,0,0,0.8), 0 0 6px rgba(0,0,0,0.6)",
-          }}
-        >
-          {date}
-        </span>
-      </div>
+        −
+      </button>
+      <span className="font-black text-base w-6 text-center tabular-nums" aria-live="polite">
+        {qty}
+      </span>
+      <button
+        data-testid={`btn-increase-${testid}`}
+        onClick={onInc}
+        aria-label={`Add one ${label}`}
+        className="w-11 h-11 rounded-full border-2 text-white font-black text-lg flex items-center justify-center active:scale-90 transition-transform"
+        style={{ background: BLUE, borderColor: "var(--sb-ink)", boxShadow: "0 3px 0 var(--sb-ink)" }}
+      >
+        +
+      </button>
     </div>
   );
 }
+
+/** Scroll reveal for `.reveal` elements. Skipped entirely when reduced motion is on. */
+function useScrollReveal() {
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!("IntersectionObserver" in window)) return;
+    const els = Array.from(document.querySelectorAll<HTMLElement>(".reveal"));
+    // Anything already on screen stays visible, so nothing flickers on load.
+    els.forEach((el) => {
+      if (el.getBoundingClientRect().top < window.innerHeight) el.classList.add("is-in");
+    });
+    document.documentElement.classList.add("motion-ok");
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((en) => {
+          if (en.isIntersecting) {
+            en.target.classList.add("is-in");
+            io.unobserve(en.target);
+          }
+        });
+      },
+      { rootMargin: "0px 0px -8% 0px", threshold: 0.12 },
+    );
+    els.forEach((el) => !el.classList.contains("is-in") && io.observe(el));
+    return () => {
+      io.disconnect();
+      document.documentElement.classList.remove("motion-ok");
+    };
+  }, []);
+}
+
+function Reveal({
+  children,
+  className = "",
+  delay = 0,
+  fromTilt = 0,
+  as: Tag = "div",
+}: {
+  children: ReactNode;
+  className?: string;
+  delay?: number;
+  fromTilt?: number;
+  as?: "div" | "section" | "li";
+}) {
+  return (
+    <Tag
+      className={`reveal ${className}`}
+      style={{ "--d": `${delay}ms`, "--from-tilt": `${fromTilt}deg` } as CSSProperties}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+const MENU_TILTS = [-1.6, 1.2, -0.8, 1.8];
 
 export default function Home() {
   const [quantities, setQuantities] = useState<Record<string, number>>(() =>
@@ -146,11 +245,15 @@ export default function Home() {
   const [notes, setNotes] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [displayTotal, setDisplayTotal] = useState(0);
+  const [detailsInView, setDetailsInView] = useState(false);
+  const detailsRef = useRef<HTMLDivElement>(null);
   const [availability, setAvailability] = useState<{
     ordersEnabled: boolean;
     closedToday: boolean;
     closedMessage: string;
   } | null>(null);
+
+  useScrollReveal();
 
   useEffect(() => {
     const upcoming = upcomingEvents();
@@ -162,20 +265,15 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
-  const slideImages = [
-    "/pizza-bagel.jpeg",
-    "/jalapeno-bagel.jpeg",
-    "/cheesy-bagel.jpeg",
-    "/plain-bagel.jpeg",
-  ];
-  const [slideIndex, setSlideIndex] = useState(0);
-
+  // Hide the mobile order bar once the details form is on screen.
   useEffect(() => {
-    const id = setInterval(
-      () => setSlideIndex((i) => (i + 1) % slideImages.length),
-      3000,
-    );
-    return () => clearInterval(id);
+    const el = detailsRef.current;
+    if (!el || !("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver(([en]) => setDetailsInView(en.isIntersecting), {
+      threshold: 0.05,
+    });
+    io.observe(el);
+    return () => io.disconnect();
   }, []);
 
   const total =
@@ -212,12 +310,12 @@ export default function Home() {
     let orderLines = "";
     Object.entries(quantities).forEach(([item, qty]) => {
       if (qty > 0)
-        orderLines += `${item} x${qty} — R${qty * menuPricingObject[item].price}\n`;
+        orderLines += `${item} x${qty} - R${qty * menuPricingObject[item].price}\n`;
     });
     Object.entries(toppingQty).forEach(([t, qty]) => {
-      if (qty > 0) orderLines += `${t} x${qty} — R${qty * TOPPINGS[t]}\n`;
+      if (qty > 0) orderLines += `${t} x${qty} - R${qty * TOPPINGS[t]}\n`;
     });
-    const message = `NEW ORDER — STUFF'D BAGELS\n\nPickup: ${venue}\nName: ${name}\nPhone: ${phone}\n\nOrder:\n${orderLines}\nTotal: R${total}\n\nNotes: ${notes || "None"}\n\nSent via stuffdbagels.co.za`;
+    const message = `NEW ORDER - STUFF'D BAGELS\n\nPickup: ${venue}\nName: ${name}\nPhone: ${phone}\n\nOrder:\n${orderLines}\nTotal: R${total}\n\nNotes: ${notes || "None"}\n\nSent via stuffdbagels.co.za`;
     window.open(
       `https://wa.me/${BUSINESS_PHONE}?text=${encodeURIComponent(message)}`,
       "_blank",
@@ -245,10 +343,10 @@ export default function Home() {
     (!availability.ordersEnabled || availability.closedToday);
 
   return (
-    <div className="bg-paper min-h-screen text-ink overflow-x-hidden">
+    <div className="dot-paper min-h-screen text-ink overflow-x-hidden">
       {/* STICKY TICKER */}
       <div
-        className="sticky top-0 z-50 overflow-hidden border-b-2 border-ink"
+        className="sticky top-0 z-40 overflow-hidden border-b-2 border-ink"
         style={{ background: BLUE }}
       >
         <div aria-hidden="true" className="ticker-track whitespace-nowrap py-2.5 text-white font-black text-xs tracking-widest uppercase">
@@ -256,314 +354,256 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ─── HERO ─────────────────────────────────────────── */}
-      <header
-        className="border-b-2 border-ink relative overflow-hidden"
-        style={{ minHeight: "clamp(420px, 62vh, 640px)" }}
-      >
-        <div className="duotone absolute inset-0">
-          <img
-            src="/hero-bagel.jpeg"
-            alt=""
-            className="w-full h-full object-cover object-center"
-          />
-        </div>
-        {/* Soft navy scrim so the cream text stays readable */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(to bottom, color-mix(in srgb, var(--sb-ink) 15%, transparent), color-mix(in srgb, var(--sb-ink) 45%, transparent))",
-          }}
-        />
-
-        <Star className="absolute w-10 h-10 top-8 left-[8%] -rotate-12" />
-        <Star className="absolute w-6 h-6 top-24 right-[12%] rotate-12 hidden sm:block" fill="var(--sb-paper)" />
-        <Star className="absolute w-14 h-14 bottom-16 right-[7%] rotate-6 hidden lg:block" />
-
-        <div
-          className="relative px-5 py-10 max-w-4xl mx-auto flex flex-col items-center justify-center text-center gap-6"
-          style={{ minHeight: "clamp(420px, 62vh, 640px)" }}
-        >
-          <p className="font-black tracking-[0.35em] text-[10px] uppercase text-paper">
-            Cape Town's first stuffed bagel
-          </p>
-          {/* The client's logo on a cream sticker. The H1 text stays for search engines and screen readers. */}
-          <h1 className="m-0 w-full flex justify-center">
-            <span
-              className="block rounded-[2rem] border-2 border-ink bg-paper px-5 py-4 sm:px-8 sm:py-6 -rotate-2"
-              style={{ boxShadow: "0 6px 0 var(--sb-ink)", width: "min(92%, 620px)" }}
-            >
+      {/* ─── HERO: logo left, scrapbook collage right ─────────── */}
+      <header className="relative border-b-2 border-ink">
+        <div className="max-w-6xl mx-auto px-4 lg:px-10 pt-10 pb-14 lg:pt-16 lg:pb-20 grid gap-12 lg:gap-8 lg:grid-cols-[1.05fr_1fr] items-center">
+          <div className="flex flex-col items-start gap-5 text-left">
+            <p className="hero-pop font-black tracking-[0.3em] text-[11px] uppercase text-blue m-0">
+              Cape Town's first stuffed bagel
+            </p>
+            {/* The client's logo. The H1 text stays for search engines and screen readers. */}
+            <h1 className="hero-pop m-0 w-full" style={{ "--d": "80ms" } as CSSProperties}>
               <img
                 src="/logo-blue.svg"
                 alt="STUFF'D Bagels"
                 width={967}
                 height={369}
-                className="block w-full h-auto"
+                className="block w-full max-w-[560px] h-auto"
               />
-            </span>
-          </h1>
-          <p className="font-marker text-paper text-lg lg:text-xl -rotate-2">
-            Every bite packed right.
-          </p>
-          <a
-            href="#order"
-            className="inline-flex items-center gap-2 rounded-full border-2 border-ink bg-paper text-ink px-7 py-3 font-black uppercase tracking-widest text-sm transition-transform hover:-translate-y-0.5 active:scale-95"
-            style={{ boxShadow: "0 4px 0 var(--sb-ink)" }}
-          >
-            get <span className="font-bubble text-base normal-case tracking-normal">STUFF'D</span>
-          </a>
+            </h1>
+            <p
+              className="hero-pop font-marker text-ink text-xl lg:text-2xl -rotate-2 m-0"
+              style={{ "--d": "180ms" } as CSSProperties}
+            >
+              Every bite packed right.
+            </p>
+            <div
+              className="hero-pop flex flex-wrap items-center gap-x-6 gap-y-3 pt-1"
+              style={{ "--d": "260ms" } as CSSProperties}
+            >
+              <a
+                href="#order"
+                className="inline-flex items-center gap-2 rounded-full border-2 border-ink text-white px-8 py-3.5 font-black uppercase tracking-widest text-sm transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                style={{ background: BLUE, boxShadow: "0 5px 0 var(--sb-ink)" }}
+              >
+                get <span className="font-bubble text-lg normal-case tracking-normal">STUFF'D</span>
+              </a>
+              <a href="#where" className="font-bold text-sm underline underline-offset-4 decoration-2 decoration-blue hover:text-blue">
+                Where's the cart this week?
+              </a>
+            </div>
+          </div>
+
+          {/* Collage */}
+          <div className="relative mx-auto w-full max-w-[460px] h-[400px] sm:h-[470px]" aria-label="Photos from @stuffd.bagels" role="group">
+            <Polaroid
+              src="/ig/cart.jpg"
+              alt="The blue STUFF'D Bagels cart at a market"
+              width={506}
+              height={900}
+              aspect="3/4"
+              tilt={-6}
+              eager
+              caption="the cart's here"
+              className="hero-drop absolute left-0 top-2 w-[54%]"
+            />
+            <Polaroid
+              src="/ig/jalapeno-poster.jpg"
+              alt="Holding a jalapeno stuffed bagel, blue duotone photo"
+              width={719}
+              height={900}
+              aspect="4/5"
+              tilt={5}
+              eager
+              className="hero-drop absolute right-0 top-0 w-[52%]"
+            />
+            <Polaroid
+              src="/ig/chic.jpg"
+              alt="A customer biting into a STUFF'D bagel at a market"
+              width={393}
+              height={700}
+              aspect="1/1"
+              tilt={-2}
+              caption="market day"
+              className="hero-drop absolute right-[10%] bottom-0 w-[42%]"
+            />
+            <Star className="hero-pop absolute w-12 h-12 -top-4 left-[46%] rotate-12" fill="var(--sb-blue)" style={{ "--d": "500ms" } as CSSProperties} />
+            <Star className="hero-pop absolute w-9 h-9 bottom-10 left-[6%] -rotate-12" style={{ "--d": "620ms" } as CSSProperties} />
+          </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 lg:px-10 py-10">
-        <div className="space-y-12">
-          {/* ─── 01 WHERE WE AT ──────────────────────────────── */}
-          <section>
-            <SectionHead n="01" title="Where We At" />
+      <main className="max-w-6xl mx-auto px-4 lg:px-10 py-14 lg:py-20">
+        {/* ─── WHERE WE AT: folder-tab cards like their "Upcoming markets" post ── */}
+        <section aria-labelledby="where" className="scroll-mt-16">
+          <SectionHead id="where" title="Where We At" note="more markets, more bagels" />
 
-            <p className="font-black text-xs tracking-widest uppercase mb-5">
-              More markets, more bagels. Come get STUFF'D here ↓
+          {scheduleCards.length === 0 && (
+            <p className="rounded-2xl border-2 border-ink bg-photo px-4 py-4 text-sm font-bold">
+              New dates coming soon. Follow{" "}
+              <a className="underline" href="https://instagram.com/stuffd.bagels" target="_blank" rel="noopener noreferrer">
+                @stuffd.bagels
+              </a>{" "}
+              for the next market.
             </p>
+          )}
 
-            {scheduleCards.length === 0 && (
-              <p className="rounded-2xl border-2 border-ink bg-white px-4 py-4 text-sm font-bold">
-                New dates coming soon. Follow{" "}
-                <a className="underline" href="https://instagram.com/stuffd.bagels" target="_blank" rel="noopener noreferrer">
-                  @stuffd.bagels
-                </a>{" "}
-                for the next market.
-              </p>
-            )}
-
-            {/* Mobile: vertical timeline */}
-            <div className="lg:hidden relative pl-8">
-              {scheduleCards.length > 1 && (
-                <div
-                  className="absolute left-[25px] top-7 bottom-7 w-[2px]"
-                  style={{
-                    background:
-                      "repeating-linear-gradient(to bottom,var(--sb-ink) 0,var(--sb-ink) 5px,transparent 5px,transparent 12px)",
-                  }}
-                />
-              )}
-              {scheduleCards.map((sched, idx) => (
-                <div
-                  key={sched.id}
-                  className="relative flex items-start gap-4 mb-8 last:mb-0"
-                  data-testid={`schedule-card-${idx}`}
-                >
-                  <div className="shrink-0 -ml-8 z-10 mt-1">
-                    <BagelPin date={sched.date} active={idx === 0} />
-                  </div>
-                  <div className="flex-1 rounded-2xl border-2 border-ink overflow-hidden">
+          <ol className="list-none p-0 m-0 grid gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
+            {scheduleCards.map((sched, idx) => {
+              const next = idx === 0;
+              return (
+                <Reveal as="li" key={sched.id} delay={idx * 90}>
+                  <div data-testid={`schedule-card-${idx}`} className="h-full flex flex-col">
                     <div
-                      className="px-3 py-2 flex items-center justify-between border-b-2 border-ink text-white"
-                      style={{ background: idx === 0 ? BLUE : "var(--sb-ink)" }}
+                      className="folder-tab self-start px-4 pt-1.5 pb-1 font-marker text-sm"
+                      style={{ background: next ? BLUE : "var(--sb-photo)", color: next ? "white" : "var(--sb-ink)" }}
                     >
-                      <span className="font-marker text-sm">{sched.day}</span>
-                      <span className="font-black text-xs tracking-widest uppercase">
-                        {sched.range}
-                      </span>
+                      {next ? "Next up" : sched.month}
                     </div>
-                    <div className="px-3 py-3 bg-white">
-                      <div className="font-black text-[10px] tracking-widest uppercase text-ink/75">
-                        {sched.name}
-                      </div>
-                      <div className="font-bold text-sm mt-0.5">{sched.venue}</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Desktop: horizontal cards */}
-            <div className="hidden lg:flex gap-5 relative">
-              {scheduleCards.length > 1 && (
-                <div
-                  className="absolute top-[26px] left-[27px] right-[27px] h-[2px] z-0"
-                  style={{
-                    background:
-                      "repeating-linear-gradient(to right,var(--sb-ink) 0,var(--sb-ink) 6px,transparent 6px,transparent 14px)",
-                  }}
-                />
-              )}
-              {scheduleCards.map((sched, idx) => (
-                <div
-                  key={sched.id}
-                  className="flex-1 flex flex-col items-center gap-3 z-10"
-                  data-testid={`schedule-card-${idx}`}
-                >
-                  <BagelPin date={sched.date} active={idx === 0} />
-                  <div className="w-full rounded-2xl border-2 border-ink overflow-hidden">
                     <div
-                      className="px-4 py-2.5 flex items-center justify-between border-b-2 border-ink text-white"
-                      style={{ background: idx === 0 ? BLUE : "var(--sb-ink)" }}
+                      className="flex-1 rounded-b-2xl rounded-tr-2xl border-2 border-ink px-4 py-4 flex flex-col gap-1"
+                      style={{
+                        background: next ? BLUE : "var(--sb-photo)",
+                        color: next ? "white" : "var(--sb-ink)",
+                        boxShadow: "var(--sb-shadow)",
+                      }}
                     >
-                      <span className="font-marker text-base">{sched.day}</span>
-                      <span className="font-black text-xs tracking-widest uppercase">
-                        {sched.range}
-                      </span>
-                    </div>
-                    <div className="px-4 py-4 bg-white">
-                      <div className="font-black text-[10px] tracking-widest uppercase text-ink/75">
-                        {sched.name}
+                      <div className="flex items-baseline gap-2">
+                        <span className={`font-bubble leading-none ${sched.crossMonth ? "text-3xl" : "text-4xl"}`}>{sched.days}</span>
+                        {!sched.crossMonth && <span className="font-black uppercase tracking-widest text-xs">{sched.month}</span>}
                       </div>
-                      <div className="font-bold text-sm mt-1">{sched.venue}</div>
+                      <div className="text-sm font-medium opacity-90">{sched.when}</div>
+                      <div className="mt-2 font-black text-base leading-snug">{sched.name}</div>
+                      <div className="text-sm font-medium opacity-90">{sched.venue}</div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </section>
+                </Reveal>
+              );
+            })}
+          </ol>
+        </section>
 
-          {/* ─── 02 ORDER UP + checkout ──────────────────────── */}
-          <div className="space-y-8" id="order">
-            <section>
-              <SectionHead n="02" title="Order Up" />
+        {/* ─── ORDER UP ──────────────────────────────────── */}
+        <div className="mt-20 lg:mt-28 scroll-mt-16" id="order">
+          <section aria-labelledby="order-heading">
+            <SectionHead id="order-heading" title="Order Up" note="pick your bagels" />
 
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                {Object.entries(menuPricingObject).map(([item, info]) => (
-                  <div
-                    key={item}
-                    className="rounded-2xl border-2 border-ink flex flex-col overflow-hidden bg-white"
+            <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
+              {Object.entries(menuPricingObject).map(([item, info], idx) => (
+                <Reveal key={item} delay={idx * 80} fromTilt={MENU_TILTS[idx % 4] * 3}>
+                  <article
+                    className="polaroid tape h-full flex flex-col"
+                    style={{ "--tilt": `${MENU_TILTS[idx % 4]}deg` } as CSSProperties}
                     data-testid={`menu-item-${item}`}
                   >
-                    <div
-                      className="relative overflow-hidden border-b-2 border-ink"
-                      style={{ aspectRatio: "1/1" }}
-                    >
+                    <div className="relative">
                       <img
                         src={info.image}
                         alt={item}
-                        className="w-full h-full object-cover"
+                        width={900}
+                        height={1200}
+                        loading="lazy"
+                        decoding="async"
+                        className="polaroid-photo"
+                        style={{ aspectRatio: "4/3" }}
                       />
+                      <span
+                        className="price-sticker absolute z-10 -top-3 -right-3 w-16 h-16 rounded-full border-2 border-ink flex items-center justify-center font-bebas text-2xl text-white"
+                        style={{ background: BLUE }}
+                      >
+                        R{info.price}
+                      </span>
                       {quantities[item] > 0 && (
                         <div
                           className="absolute inset-0 flex items-center justify-center"
-                          style={{ background: "color-mix(in srgb, var(--sb-blue) 88%, transparent)" }}
+                          style={{ background: "color-mix(in srgb, var(--sb-blue) 82%, transparent)" }}
+                          aria-hidden="true"
                         >
-                          <span
-                            className="font-bubble text-white"
-                            style={{ fontSize: "3.5rem", lineHeight: 1 }}
-                          >
+                          <span className="font-bubble text-white" style={{ fontSize: "4rem", lineHeight: 1 }}>
                             {quantities[item]}
                           </span>
                         </div>
                       )}
                     </div>
-                    <div className="flex flex-col flex-1 p-2.5 gap-2">
+                    <div className="flex flex-col flex-1 pt-3 px-1 gap-3">
                       <div>
-                        <div className="font-black uppercase text-xs leading-tight">
-                          {item}
-                        </div>
-                        <div className="text-ink/75 text-[11px] font-medium mt-0.5 leading-snug">
-                          {info.desc}
-                        </div>
+                        <h3 className="font-bubble text-2xl leading-tight m-0 text-ink">{item.replace(" Bagel", "")}</h3>
+                        <p className="text-ink/75 text-sm font-medium mt-1 leading-snug m-0">{info.desc}</p>
                       </div>
                       <div className="flex items-center justify-between mt-auto">
-                        <div className="font-bebas text-xl">R{info.price}</div>
-                        <div className="flex items-center gap-0.5">
-                          <button
-                            data-testid={`btn-decrease-${item}`}
-                            onClick={() => updateQuantity(item, -1)}
-                            aria-label={`Remove one ${item}`}
-                            className="w-8 h-8 rounded-full border-2 border-ink font-black text-base flex items-center justify-center active:scale-90 transition-transform bg-white hover:bg-ink hover:text-white"
-                          >
-                            −
-                          </button>
-                          <span className="font-black text-sm w-5 text-center tabular-nums">
-                            {quantities[item]}
-                          </span>
-                          <button
-                            data-testid={`btn-increase-${item}`}
-                            onClick={() => updateQuantity(item, 1)}
-                            aria-label={`Add one ${item}`}
-                            className="w-8 h-8 rounded-full border-2 text-white font-black text-base flex items-center justify-center active:scale-90 transition-transform"
-                            style={{ background: BLUE, borderColor: BLUE_DK }}
-                          >
-                            +
-                          </button>
-                        </div>
+                        <span className="font-marker text-sm text-ink/80">how many?</span>
+                        <Stepper
+                          label={item}
+                          qty={quantities[item]}
+                          testid={item}
+                          onDec={() => updateQuantity(item, -1)}
+                          onInc={() => updateQuantity(item, 1)}
+                        />
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  </article>
+                </Reveal>
+              ))}
+            </div>
 
-              <div className="mt-3 rounded-2xl border-2 border-ink bg-white px-3 py-2.5 grid gap-2 sm:grid-cols-[auto_1fr_1fr] sm:items-center sm:gap-x-8">
-                <span className="font-black text-xs tracking-widest uppercase">
-                  Add toppings <span className="text-ink/75 normal-case tracking-normal font-bold">(+R5 each)</span>
+            <Reveal className="mt-10">
+              <div
+                className="rounded-2xl border-2 border-dashed border-ink bg-photo px-4 py-3 grid gap-3 sm:grid-cols-[auto_1fr_1fr] sm:items-center sm:gap-x-8"
+              >
+                <span className="font-bubble text-xl text-blue">
+                  Add toppings <span className="font-sans font-bold text-sm text-ink/75">(+R5 each)</span>
                 </span>
                 {Object.entries(TOPPINGS).map(([t, price]) => (
                   <div key={t} className="flex items-center justify-between gap-2" data-testid={`topping-${t}`}>
                     <span className="text-sm font-bold">
                       {t} <span className="font-bebas text-lg text-ink/75 ml-1">+R{price}</span>
                     </span>
-                    <div className="flex items-center gap-0.5">
-                      <button
-                        data-testid={`btn-decrease-${t}`}
-                        onClick={() => updateTopping(t, -1)}
-                        aria-label={`Remove one ${t}`}
-                        className="w-8 h-8 rounded-full border-2 border-ink font-black text-base flex items-center justify-center active:scale-90 transition-transform bg-white hover:bg-ink hover:text-white"
-                      >
-                        −
-                      </button>
-                      <span className="font-black text-sm w-5 text-center tabular-nums">{toppingQty[t]}</span>
-                      <button
-                        data-testid={`btn-increase-${t}`}
-                        onClick={() => updateTopping(t, 1)}
-                        aria-label={`Add one ${t}`}
-                        className="w-8 h-8 rounded-full border-2 text-white font-black text-base flex items-center justify-center active:scale-90 transition-transform"
-                        style={{ background: BLUE, borderColor: BLUE_DK }}
-                      >
-                        +
-                      </button>
-                    </div>
+                    <Stepper
+                      label={t}
+                      qty={toppingQty[t]}
+                      testid={t}
+                      onDec={() => updateTopping(t, -1)}
+                      onInc={() => updateTopping(t, 1)}
+                    />
                   </div>
                 ))}
               </div>
 
-              <div className="mt-4 rounded-2xl border-2 border-ink bg-ink text-paper p-4 flex items-center justify-between">
+              <div className="mt-4 rounded-2xl border-2 border-ink bg-ink text-paper px-5 py-4 flex items-center justify-between">
                 <span className="font-black tracking-widest text-sm uppercase">
                   {itemCount > 0
-                    ? `${itemCount} item${itemCount !== 1 ? "s" : ""}`
+                    ? `${itemCount} bagel${itemCount !== 1 ? "s" : ""}`
                     : "Your order"}
                 </span>
                 <span className="font-bebas text-3xl">R{displayTotal}</span>
               </div>
-            </section>
+            </Reveal>
+          </section>
 
-            {/* MASCOT STRIP */}
-            <div className="rounded-2xl border-2 border-ink flex items-center overflow-hidden bg-white">
-              <img
-                src="/mascot.png"
-                alt="STUFF'D mascot"
-                className="w-28 shrink-0 -mb-1"
-              />
-              <div className="px-4 py-4">
-                <p className="font-bubble text-lg leading-snug">Ready to order?</p>
-                <p className="text-ink/70 font-medium text-xs leading-snug mt-1">
-                  Fill in your details below and we'll WhatsApp your order
-                  straight to the kitchen.
-                </p>
-              </div>
-            </div>
+          {/* ─── YOUR DETAILS ───────────────────────────── */}
+          <div ref={detailsRef} id="details" className="mt-20 lg:mt-24 scroll-mt-16">
+            <SectionHead title="Your Details" note="we'll WhatsApp it to the kitchen" />
 
-            {/* 03 YOUR DETAILS */}
-            <SectionHead n="03" title="Your Details" />
-
-            <div className="lg:flex lg:gap-8 lg:items-start">
-              <div className="hidden lg:block lg:w-1/2 shrink-0">
+            <div className="lg:grid lg:grid-cols-2 lg:gap-12 lg:items-center">
+              <Reveal className="hidden lg:block" fromTilt={-4}>
                 <img
                   src="/mascot-drop.png"
-                  alt="STUFF'D Bagels mascot"
-                  className="w-full object-contain"
+                  alt=""
+                  width={600}
+                  height={600}
+                  loading="lazy"
+                  className="w-full max-w-md mx-auto object-contain"
                 />
-              </div>
+              </Reveal>
 
-              <section className="lg:w-1/2">
-                <div className="rounded-2xl border-2 border-ink divide-y-2 divide-ink bg-white overflow-hidden">
+              <section aria-label="Your details">
+                <div className="lg:hidden flex items-center gap-3 mb-5">
+                  <img src="/mascot.png" alt="" width={640} height={640} loading="lazy" className="w-24 h-24 object-contain shrink-0" />
+                  <p className="font-medium text-sm leading-snug m-0">
+                    Fill this in and we'll build your WhatsApp order. You just hit send.
+                  </p>
+                </div>
+                <div className="rounded-2xl border-2 border-ink divide-y-2 divide-ink bg-photo overflow-hidden" style={{ boxShadow: "var(--sb-shadow)" }}>
                   {[
                     {
                       label: "Name",
@@ -572,6 +612,7 @@ export default function Home() {
                       value: name,
                       set: setName,
                       id: "input-name",
+                      auto: "name",
                     },
                     {
                       label: "Phone",
@@ -580,12 +621,13 @@ export default function Home() {
                       value: phone,
                       set: setPhone,
                       id: "input-phone",
+                      auto: "tel",
                     },
                   ].map((f) => (
                     <div key={f.label} className="flex flex-col">
                       <label
                         htmlFor={f.id}
-                        className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-ink/75"
+                        className="font-black text-[11px] tracking-widest uppercase px-4 pt-3 pb-1 text-ink/75"
                       >
                         {f.label}
                       </label>
@@ -593,17 +635,18 @@ export default function Home() {
                         id={f.id}
                         data-testid={f.id}
                         type={f.type}
+                        autoComplete={f.auto}
                         placeholder={f.placeholder}
                         value={f.value}
                         onChange={(e) => f.set(e.target.value)}
-                        className="px-4 pb-3 bg-transparent font-bold text-base outline-none placeholder:text-ink/35"
+                        className="px-4 pb-3 bg-transparent font-bold text-base outline-none placeholder:text-ink/45 focus-visible:bg-sky/30"
                       />
                     </div>
                   ))}
                   <div className="flex flex-col">
                     <label
                       htmlFor="select-venue"
-                      className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-ink/75"
+                      className="font-black text-[11px] tracking-widest uppercase px-4 pt-3 pb-1 text-ink/75"
                     >
                       Pickup Location
                     </label>
@@ -612,7 +655,7 @@ export default function Home() {
                       data-testid="select-venue"
                       value={venue}
                       onChange={(e) => setVenue(e.target.value)}
-                      className="px-4 pb-3 bg-transparent font-bold text-base outline-none appearance-none"
+                      className="px-4 pb-3 bg-transparent font-bold text-base outline-none appearance-none focus-visible:bg-sky/30"
                     >
                       {uniqueVenues.map((v) => (
                         <option key={v} value={v}>
@@ -624,7 +667,7 @@ export default function Home() {
                   <div className="flex flex-col">
                     <label
                       htmlFor="textarea-notes"
-                      className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-ink/75"
+                      className="font-black text-[11px] tracking-widest uppercase px-4 pt-3 pb-1 text-ink/75"
                     >
                       Notes
                     </label>
@@ -635,12 +678,12 @@ export default function Home() {
                       rows={2}
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      className="px-4 pb-3 bg-transparent font-bold text-base outline-none resize-none placeholder:text-ink/35"
+                      className="px-4 pb-3 bg-transparent font-bold text-base outline-none resize-none placeholder:text-ink/45 focus-visible:bg-sky/30"
                     />
                   </div>
                 </div>
 
-                <p className="text-xs font-medium mt-3 text-ink/70 leading-relaxed px-1">
+                <p className="text-sm font-medium mt-3 text-ink/75 leading-relaxed px-1">
                   No payment online. Tap your card (Yoco) or pay cash at the
                   cart when you collect.
                 </p>
@@ -654,20 +697,20 @@ export default function Home() {
                   data-testid="btn-place-order"
                   onClick={() => !ordersDisabled && setShowModal(true)}
                   disabled={ordersDisabled}
-                  className="mt-4 w-full rounded-full text-white border-2 p-4 uppercase tracking-widest transition-transform active:scale-[0.98] font-bebas"
+                  className="mt-4 w-full rounded-full text-white border-2 p-4 uppercase tracking-widest transition-transform hover:-translate-y-0.5 active:translate-y-0.5 font-bebas"
                   style={{
-                    fontSize: "1.35rem",
+                    fontSize: "1.4rem",
                     letterSpacing: "0.12em",
                     background: ordersDisabled ? "var(--sb-disabled)" : BLUE,
                     borderColor: ordersDisabled ? "var(--sb-disabled-border)" : "var(--sb-ink)",
-                    boxShadow: ordersDisabled ? "none" : "0 4px 0 var(--sb-ink)",
+                    boxShadow: ordersDisabled ? "none" : "0 5px 0 var(--sb-ink)",
                     cursor: ordersDisabled ? "not-allowed" : "pointer",
                     opacity: ordersDisabled ? 0.6 : 1,
                   }}
                 >
                   {ordersDisabled ? "Orders Closed" : "Get STUFF'D on WhatsApp"}
                   {!ordersDisabled && total > 0 && (
-                    <span className="ml-3 text-white/80 text-base">· R{total}</span>
+                    <span className="ml-3 text-white/85 text-base">· R{total}</span>
                   )}
                 </button>
               </section>
@@ -675,171 +718,144 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ─── 04 ABOUT ── */}
-        <section className="mt-12">
-          <SectionHead n="04" title="About Us" />
-          <div className="rounded-2xl border-2 border-ink overflow-hidden lg:flex lg:flex-row bg-white">
-            {/* Slideshow in a cream frame (food stays in real colour) */}
-            <div className="lg:w-1/2 shrink-0 p-3 bg-paper border-b-2 lg:border-b-0 lg:border-r-2 border-ink">
+        {/* ─── ABOUT: scrapbook spread ── */}
+        <section aria-labelledby="about" className="mt-24 lg:mt-32">
+          <SectionHead id="about" title="About Us" />
+          <div className="grid gap-12 lg:grid-cols-[1fr_1.1fr] lg:items-center">
+            <Reveal fromTilt={2}>
               <div
-                className="relative overflow-hidden rounded-xl border-2 border-ink"
-                style={{ aspectRatio: "16/9" }}
+                className="relative rounded-2xl border-2 border-ink px-6 py-7 sm:px-8 sm:py-9 text-white -rotate-1"
+                style={{ background: BLUE, boxShadow: "0 8px 0 var(--sb-ink)" }}
               >
-                {slideImages.map((src, i) => (
-                  <img
-                    key={src}
-                    src={src}
-                    alt=""
-                    className="absolute inset-0 w-full h-full object-cover"
-                    style={{
-                      opacity: i === slideIndex ? 1 : 0,
-                      transition: "opacity 0.8s ease-in-out",
-                    }}
-                  />
-                ))}
-                <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2 z-10">
-                  {slideImages.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setSlideIndex(i)}
-                      className="w-2.5 h-2.5 rounded-full border border-white transition-all"
-                      style={{
-                        background: i === slideIndex ? "white" : "transparent",
-                      }}
-                      aria-label={`Slide ${i + 1}`}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="lg:flex lg:flex-col lg:justify-between flex-1">
-              <div className="border-b-2 border-ink px-5 py-5" style={{ background: BLUE }}>
-                <p className="font-bubble text-white leading-tight text-2xl">
-                  Cape Town's first stuffed bagel. Born on the street. Built
-                  different.
+                <Star className="absolute w-11 h-11 -top-5 -right-4 rotate-12" />
+                <p className="font-bubble leading-tight text-[1.75rem] sm:text-4xl m-0">
+                  Born on the street. Built different.
                 </p>
-              </div>
-              <div className="px-5 py-5 space-y-3 flex-1">
-                <p className="font-medium text-sm text-ink leading-relaxed">
+                <p className="font-medium text-base leading-relaxed mt-5 mb-0 max-w-[60ch]">
                   STUFF'D started with one question: why does Cape Town not have
                   a proper stuffed bagel? We took the classic New York bagel,
                   packed it with bold fillings, and brought it to the streets of
                   the Mother City.
                 </p>
-                <p className="font-medium text-sm text-ink/75 leading-relaxed">
+                <p className="font-medium text-base leading-relaxed mt-3 mb-0 text-white/90 max-w-[60ch]">
                   Find the cart at markets and festivals across Cape Town. No
-                  tables, no reservations. Just fresh bagels, fast. More
-                  markets, more bagels.
+                  tables, no reservations. Just fresh bagels, fast.
                 </p>
-                <div className="flex gap-2 pt-1 flex-wrap">
-                  {["Street Food", "Cape Town", "Markets", "Handmade"].map(
-                    (tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-full border-2 border-ink px-3 py-0.5 font-black text-[10px] tracking-widest uppercase"
-                      >
-                        {tag}
-                      </span>
-                    ),
-                  )}
-                </div>
+                <p className="font-marker text-white text-lg mt-5 mb-0">STUFF'D, served on repeat.</p>
               </div>
+            </Reveal>
+
+            <div className="grid grid-cols-2 gap-x-5 gap-y-9 sm:gap-x-8 px-2">
+              <Reveal fromTilt={-6}>
+                <Polaroid src="/ig/boxes.jpg" alt="Pizza and jalapeno stuffed bagels in takeaway boxes" width={769} height={900} aspect="1/1" tilt={-3} />
+              </Reveal>
+              <Reveal delay={90} fromTilt={6} className="mt-8">
+                <Polaroid src="/ig/unboxing.jpg" alt="Opening a STUFF'D takeaway box" width={450} height={800} aspect="4/5" tilt={3} caption="the unboxing" />
+              </Reveal>
+              <Reveal delay={60} fromTilt={4} className="-mt-6">
+                <Polaroid src="/ig/stripes.jpg" alt="A garlic stuffed bagel in its box" width={730} height={900} aspect="4/5" tilt={2} />
+              </Reveal>
+              <Reveal delay={150} fromTilt={-5}>
+                <Polaroid src="/ig/friends.jpg" alt="Friends sharing STUFF'D bagels on a couch" width={720} height={405} aspect="1/1" tilt={-2.5} caption="bring the crew" />
+              </Reveal>
             </div>
           </div>
         </section>
 
-        {/* ─── 05 FAQ — chat style, capped width on desktop ──── */}
-        <section className="mt-12 lg:max-w-2xl lg:mx-auto">
-          <SectionHead n="05" title="Got Questions?" />
+        {/* ─── FAQ: chat style ──── */}
+        <section aria-labelledby="faq" className="mt-24 lg:mt-32 lg:max-w-2xl lg:mx-auto">
+          <SectionHead id="faq" title="Got Questions?" />
 
-          <div
-            className="rounded-2xl border-2 border-ink overflow-hidden"
-            style={{ background: "var(--sb-chat-bg)" }}
-          >
-            <div className="flex items-center gap-3 px-4 py-3 border-b-2 border-ink bg-white">
-              <div className="relative">
-                <div
-                  className="w-9 h-9 rounded-full border-2 border-ink overflow-hidden flex items-center justify-center"
-                  style={{ background: BLUE }}
-                >
-                  <span className="font-bubble text-white text-xs">S'D</span>
+          <Reveal>
+            <div
+              className="rounded-2xl border-2 border-ink overflow-hidden"
+              style={{ background: "var(--sb-chat-bg)", boxShadow: "var(--sb-shadow)" }}
+            >
+              <div className="flex items-center gap-3 px-4 py-3 border-b-2 border-ink bg-photo">
+                <div className="relative">
+                  <div
+                    className="w-9 h-9 rounded-full border-2 border-ink overflow-hidden flex items-center justify-center"
+                    style={{ background: BLUE }}
+                  >
+                    <span className="font-bubble text-white text-xs">S'D</span>
+                  </div>
+                  <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-chat-green border border-white" />
                 </div>
-                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-chat-green border border-white" />
+                <div className="flex-1 min-w-0">
+                  <div className="font-black text-sm text-ink">STUFF'D Bagels</div>
+                  <div className="text-[11px] text-ink/75 font-medium">Chat to us on WhatsApp</div>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-black text-sm text-ink">STUFF'D Bagels</div>
-                <div className="text-[10px] text-ink/75 font-medium">Chat to us on WhatsApp</div>
+
+              <div className="px-3 py-4 space-y-5">
+                {FAQ.map((msg, i) => (
+                  <div key={i} className="space-y-1.5">
+                    <div className="text-center text-[11px] text-ink/75 font-medium">
+                      {msg.time}
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <div className="w-6 h-6 rounded-full bg-chat-avatar border border-ink/10 shrink-0 flex items-center justify-center mb-0.5">
+                        <span className="text-[8px] font-black text-chat-avatar-ink">
+                          YOU
+                        </span>
+                      </div>
+                      <div
+                        className="max-w-[78%] px-3 py-2 text-sm font-medium text-ink leading-snug"
+                        style={{
+                          background: "white",
+                          borderRadius: "18px 18px 18px 4px",
+                          boxShadow: "0 1px 1px rgba(0,0,0,0.08)",
+                        }}
+                      >
+                        {msg.q}
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <div
+                        className="max-w-[78%] px-3 py-2 text-sm font-medium text-white leading-snug"
+                        style={{
+                          background: BLUE,
+                          borderRadius: "18px 18px 4px 18px",
+                        }}
+                      >
+                        {msg.a}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="flex items-end gap-2">
+                  <div
+                    className="w-6 h-6 rounded-full shrink-0 overflow-hidden border border-ink/10 flex items-center justify-center"
+                    style={{ background: BLUE }}
+                  >
+                    <span className="font-bubble text-[7px] text-white">S'D</span>
+                  </div>
+                  <div
+                    className="px-4 py-3 flex gap-1 items-center"
+                    style={{
+                      background: "white",
+                      borderRadius: "18px 18px 18px 4px",
+                      boxShadow: "0 1px 1px rgba(0,0,0,0.08)",
+                    }}
+                  >
+                    {[0, 0.2, 0.4].map((delay, i) => (
+                      <div
+                        key={i}
+                        className="typing-dot w-2 h-2 rounded-full bg-chat-gray"
+                        style={{ animation: `bounce 1.2s ${delay}s infinite` }}
+                      />
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
-
-            <div className="px-3 py-4 space-y-5">
-              {FAQ.map((msg, i) => (
-                <div key={i} className="space-y-1.5">
-                  <div className="text-center text-[10px] text-ink/75 font-medium">
-                    {msg.time}
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <div className="w-6 h-6 rounded-full bg-chat-avatar border border-ink/10 shrink-0 flex items-center justify-center mb-0.5">
-                      <span className="text-[8px] font-black text-chat-avatar-ink">
-                        YOU
-                      </span>
-                    </div>
-                    <div
-                      className="max-w-[72%] px-3 py-2 text-sm font-medium text-ink leading-snug"
-                      style={{
-                        background: "white",
-                        borderRadius: "18px 18px 18px 4px",
-                        boxShadow: "0 1px 1px rgba(0,0,0,0.08)",
-                      }}
-                    >
-                      {msg.q}
-                    </div>
-                  </div>
-                  <div className="flex justify-end">
-                    <div
-                      className="max-w-[72%] px-3 py-2 text-sm font-medium text-white leading-snug"
-                      style={{
-                        background: BLUE,
-                        borderRadius: "18px 18px 4px 18px",
-                      }}
-                    >
-                      {msg.a}
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              <div className="flex items-end gap-2">
-                <div
-                  className="w-6 h-6 rounded-full shrink-0 overflow-hidden border border-ink/10 flex items-center justify-center"
-                  style={{ background: BLUE }}
-                >
-                  <span className="font-bubble text-[7px] text-white">S'D</span>
-                </div>
-                <div
-                  className="px-4 py-3 flex gap-1 items-center"
-                  style={{
-                    background: "white",
-                    borderRadius: "18px 18px 18px 4px",
-                    boxShadow: "0 1px 1px rgba(0,0,0,0.08)",
-                  }}
-                >
-                  {[0, 0.2, 0.4].map((delay, i) => (
-                    <div
-                      key={i}
-                      className="w-2 h-2 rounded-full bg-chat-gray"
-                      style={{ animation: `bounce 1.2s ${delay}s infinite` }}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
+          </Reveal>
         </section>
       </main>
 
       {/* FOOTER — full width */}
-      <footer className="border-t-2 border-ink bg-ink text-paper relative overflow-hidden">
+      <footer className="border-t-2 border-ink bg-ink text-paper relative overflow-hidden pb-20 lg:pb-0">
         <div className="max-w-6xl mx-auto px-6 lg:px-10 py-12 grid grid-cols-1 sm:grid-cols-3 gap-10 items-center">
           <div className="flex flex-col items-center sm:items-start gap-2">
             <img
@@ -850,13 +866,13 @@ export default function Home() {
               loading="lazy"
               className="w-56 h-auto"
             />
-            <p className="font-marker text-highlight text-base mt-2">
+            <p className="font-marker text-sky text-base mt-2 text-center sm:text-left">
               When hunger calls, it&apos;s time to get STUFF&apos;D.
             </p>
           </div>
 
           <div className="flex flex-col items-center sm:items-start gap-3">
-            <div className="font-black text-xs tracking-widest uppercase mb-1 text-highlight">
+            <div className="font-black text-xs tracking-widest uppercase mb-1 text-sky">
               Get In Touch
             </div>
             <a href="tel:+27724111011" className="text-paper/85 hover:text-white text-sm transition-colors">
@@ -869,7 +885,7 @@ export default function Home() {
           </div>
 
           <div className="flex flex-col items-center sm:items-start gap-3">
-            <div className="font-black text-xs tracking-widest uppercase mb-1 text-highlight">
+            <div className="font-black text-xs tracking-widest uppercase mb-1 text-sky">
               Follow Us
             </div>
             <a
@@ -911,6 +927,24 @@ export default function Home() {
           </a>
         </div>
       </footer>
+
+      {/* MOBILE ORDER BAR: shows once something is picked, hides when the form is on screen */}
+      {itemCount > 0 && !detailsInView && !ordersDisabled && (
+        <div className="lg:hidden fixed inset-x-3 bottom-3 z-30">
+          <a
+            href="#details"
+            className="flex items-center justify-between rounded-full border-2 border-ink text-white pl-5 pr-2 py-2"
+            style={{ background: BLUE, boxShadow: "0 5px 0 var(--sb-ink)" }}
+          >
+            <span className="font-black text-sm tracking-widest uppercase">
+              {itemCount} bagel{itemCount !== 1 ? "s" : ""} · R{total}
+            </span>
+            <span className="rounded-full bg-photo text-ink font-black text-sm uppercase tracking-widest px-4 py-2">
+              Checkout
+            </span>
+          </a>
+        </div>
+      )}
 
       {/* MODAL */}
       <Dialog open={showModal} onOpenChange={setShowModal}>

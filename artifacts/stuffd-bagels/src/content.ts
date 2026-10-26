@@ -37,7 +37,7 @@ export const TOPPINGS: Record<string, number> = {
 export const FAQ = [
   {
     q: "Where do I collect my order?",
-    a: "At the venue on your pickup date 📍 Look for the STUFF'D setup — you won't miss us!",
+    a: "At the venue on your pickup date 📍 Look for the STUFF'D cart. You won't miss us!",
     time: "10:42",
   },
   {

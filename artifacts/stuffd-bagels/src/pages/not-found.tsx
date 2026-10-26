@@ -6,7 +6,7 @@ export default function NotFound() {
       <div className="max-w-md w-full border-2 border-ink text-center">
         <p
           className="border-b-2 border-ink py-2.5 font-black text-xs tracking-widest uppercase"
-          style={{ background: "var(--sb-highlight)" }}
+          style={{ background: "var(--sb-blue)", color: "white" }}
         >
           Error 404
         </p>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 
-const ACCENT = "var(--sb-gold)";
+const ACCENT = "var(--sb-blue)";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 interface Availability {
@@ -153,7 +153,7 @@ export default function Admin() {
   }
 
   const inputCls =
-    "w-full border-2 border-ink px-3 py-2 text-sm font-medium bg-paper focus:outline-none focus:border-gold";
+    "w-full border-2 border-ink px-3 py-2 text-sm font-medium bg-paper focus:outline-none focus:border-blue";
   const btnCls =
     "border-2 border-ink px-4 py-2 font-black text-xs tracking-widest uppercase transition-colors";
 

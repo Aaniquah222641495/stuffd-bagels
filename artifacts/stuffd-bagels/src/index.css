@@ -69,9 +69,8 @@
   --color-paper: var(--sb-paper);
   --color-blue: var(--sb-blue);
   --color-blue-dk: var(--sb-blue-dk);
-  --color-highlight: var(--sb-highlight);
-  --color-highlight-dk: var(--sb-highlight-dk);
-  --color-gold: var(--sb-gold);
+  --color-sky: var(--sb-sky);
+  --color-photo: var(--sb-photo);
   --color-chat-bg: var(--sb-chat-bg);
   --color-chat-blue: var(--sb-chat-blue);
   --color-chat-green: var(--sb-chat-green);
@@ -99,9 +98,10 @@
   --sb-paper: #f4f1de;      /* cream: page background */
   --sb-blue: #2c48e6;       /* cobalt: brand blue, buttons, ticker (white text on it passes AA) */
   --sb-blue-dk: #1c33b8;    /* cobalt pressed / borders */
-  --sb-highlight: #f5c842;  /* yellow star accent */
-  --sb-highlight-dk: #d9a91c;
-  --sb-gold: #c8900f;
+  --sb-sky: #c9d3ff;        /* pale cobalt: tape, labels on navy (founder 2026-10-26: no yellow) */
+  --sb-photo: #fdfcf6;      /* polaroid frame white */
+  --sb-tape: color-mix(in srgb, var(--sb-sky) 72%, transparent);
+  --sb-shadow: 0 14px 28px -14px color-mix(in srgb, var(--sb-ink) 55%, transparent);
   --sb-chat-bg: #f2f2f7;
   --sb-chat-blue: #007aff;
   --sb-chat-green: #34c759;
@@ -364,6 +364,91 @@
   pointer-events: none;
 }
 
+/* ── Scrapbook pieces (polaroids, tape, folder tabs), like their posters ──
+   In the components layer so Tailwind utilities (absolute, w-*, etc.) can override them. */
+@layer components {
+.dot-paper {
+  background-color: var(--sb-paper);
+  background-image: radial-gradient(color-mix(in srgb, var(--sb-blue) 16%, transparent) 1.2px, transparent 1.3px);
+  background-size: 22px 22px;
+}
+.polaroid {
+  position: relative;
+  background: var(--sb-photo);
+  padding: 10px 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--sb-ink) 14%, transparent);
+  box-shadow: var(--sb-shadow);
+  rotate: var(--tilt, 0deg);
+  transition: rotate 0.5s cubic-bezier(0.16, 1, 0.3, 1), scale 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.polaroid > img,
+.polaroid .polaroid-photo {
+  display: block;
+  width: 100%;
+  object-fit: cover;
+  background: color-mix(in srgb, var(--sb-ink) 8%, var(--sb-paper));
+}
+@media (hover: hover) {
+  .polaroid.lift:hover { rotate: 0deg; scale: 1.03; z-index: 5; }
+}
+.tape::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  width: 92px;
+  height: 26px;
+  translate: -50% 0;
+  rotate: var(--tape-tilt, -4deg);
+  background: var(--sb-tape);
+  border-left: 2px dotted color-mix(in srgb, var(--sb-photo) 70%, transparent);
+  border-right: 2px dotted color-mix(in srgb, var(--sb-photo) 70%, transparent);
+  z-index: 2;
+  pointer-events: none;
+}
+.folder-tab {
+  border-radius: 12px 12px 0 0;
+  border: 2px solid var(--sb-ink);
+  border-bottom: 0;
+}
+.price-sticker {
+  rotate: 8deg;
+  box-shadow: 0 3px 0 var(--sb-ink);
+}
+.scribble-underline {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12' preserveAspectRatio='none'%3E%3Cpath d='M2 8c30-6 60-6 92-2s70 4 104-3' fill='none' stroke='%232c48e6' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 100% 0.32em;
+  padding-bottom: 0.18em;
+}
+}
+
+/* ── Motion. Only runs when the visitor has not asked for reduced motion. ── */
+@keyframes hero-pop {
+  0%   { opacity: 0; transform: translateY(18px) scale(0.94); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes drop-in {
+  0%   { opacity: 0; transform: translateY(-40px) rotate(-8deg); }
+  100% { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-pop { animation: hero-pop 0.7s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: var(--d, 0ms); }
+  .hero-drop { animation: drop-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: var(--d, 0ms); }
+}
+/* Scroll reveal: Home adds .motion-ok to <html> after mount, so the prerendered page is fully visible without JavaScript. */
+.motion-ok .reveal {
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: var(--d, 0ms);
+}
+.motion-ok .reveal:not(.is-in) {
+  opacity: 0;
+  transform: translateY(28px) rotate(var(--from-tilt, 0deg));
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ticker-track { animation: none; }
+  .typing-dot { animation: none !important; opacity: 0.7; }
+  .polaroid { transition: none; }
 }
