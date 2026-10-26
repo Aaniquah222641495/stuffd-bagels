@@ -40,8 +40,8 @@ function eventToCard(e: ScheduleEvent) {
 const TICKER_TEXT =
   "STUFF'D BAGELS · CAPE TOWN'S FIRST STUFFED BAGEL · EVERY BITE PACKED RIGHT · ORDER ON WHATSAPP · ";
 
-const ACCENT = "#f2f6d0";
-const ACCENT_DK = "#d6daa8";
+const ACCENT = "var(--sb-highlight)";
+const ACCENT_DK = "var(--sb-highlight-dk)";
 
 function BagelPin({
   date,
@@ -190,22 +190,22 @@ export default function Home() {
 
   return (
     <div
-      className="bg-[#FBFBF9] min-h-screen text-[#1A1A1A] overflow-x-hidden"
+      className="bg-paper min-h-screen text-ink overflow-x-hidden"
       style={{ "--accent": ACCENT } as React.CSSProperties}
     >
       {/* STICKY TICKER */}
       <div
-        className="sticky top-0 z-50 overflow-hidden border-b-2 border-[#1A1A1A]"
+        className="sticky top-0 z-50 overflow-hidden border-b-2 border-ink"
         style={{ background: ACCENT }}
       >
-        <div className="ticker-track whitespace-nowrap py-2.5 text-[#1A1A1A] font-black text-xs tracking-widest uppercase">
+        <div className="ticker-track whitespace-nowrap py-2.5 text-ink font-black text-xs tracking-widest uppercase">
           {TICKER_TEXT.repeat(6)}
         </div>
       </div>
 
       {/* ─── HERO ─────────────────────────────────────────── */}
       <header
-        className="border-b-2 border-[#1A1A1A] relative overflow-hidden"
+        className="border-b-2 border-ink relative overflow-hidden"
         style={{ minHeight: "clamp(320px, 45vh, 560px)" }}
       >
         {/* Full-bleed background photo */}
@@ -228,14 +228,14 @@ export default function Home() {
           className="relative px-5 pt-8 pb-8 max-w-4xl mx-auto flex flex-col items-center justify-between text-center"
           style={{ minHeight: "clamp(320px, 45vh, 560px)" }}
         >
-          <p className="font-black tracking-[0.35em] text-[10px] uppercase text-[#1A1A1A]/60 mb-1">
+          <p className="font-black tracking-[0.35em] text-[10px] uppercase text-ink/60 mb-1">
             Cape Town · Est. 2026
           </p>
           <div className="w-full">
             {/* One H1 for "STUFF'D Bagels" so search engines read the full name (same look as before). */}
             <h1 className="m-0 font-normal text-base">
               <span
-                className="block leading-none tracking-tighter text-[#1A1A1A]"
+                className="block leading-none tracking-tighter text-ink"
                 style={{
                   fontFamily: "'Bebas Neue', sans-serif",
                   fontSize: "clamp(5rem,22vw,9rem)",
@@ -245,14 +245,14 @@ export default function Home() {
                 STUFF'D
               </span>{" "}
               <span className="flex items-center gap-2 mt-1">
-                <span aria-hidden="true" className="flex-1 h-[2px] bg-[#1A1A1A]" />
-                <span className="font-black tracking-[0.35em] text-[10px] text-[#1A1A1A] uppercase leading-normal">
+                <span aria-hidden="true" className="flex-1 h-[2px] bg-ink" />
+                <span className="font-black tracking-[0.35em] text-[10px] text-ink uppercase leading-normal">
                   Bagels
                 </span>
-                <span aria-hidden="true" className="flex-1 h-[2px] bg-[#1A1A1A]" />
+                <span aria-hidden="true" className="flex-1 h-[2px] bg-ink" />
               </span>
             </h1>
-            <p className="font-black tracking-widest text-[10px] uppercase text-[#1A1A1A]/70 mt-3">
+            <p className="font-black tracking-widest text-[10px] uppercase text-ink/70 mt-3">
               Every bite packed right.
             </p>
           </div>
@@ -269,10 +269,10 @@ export default function Home() {
               >
                 01
               </span>
-              <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">
+              <h2 className="font-black tracking-widest uppercase text-base text-ink">
                 Where We At
               </h2>
-              <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
+              <div className="flex-1 h-[2px] bg-ink" />
             </div>
 
             <p
@@ -287,7 +287,7 @@ export default function Home() {
                 className="absolute left-[25px] top-7 bottom-7 w-[2px]"
                 style={{
                   background:
-                    "repeating-linear-gradient(to bottom,#1A1A1A 0,#1A1A1A 5px,transparent 5px,transparent 12px)",
+                    "repeating-linear-gradient(to bottom,var(--sb-ink) 0,var(--sb-ink) 5px,transparent 5px,transparent 12px)",
                 }}
               />
               {scheduleCards.map((sched, idx) => (
@@ -299,23 +299,23 @@ export default function Home() {
                   <div className="shrink-0 -ml-8 z-10 mt-1">
                     <BagelPin date={sched.date} active={idx === 0} />
                   </div>
-                  <div className="flex-1 border-2 border-[#1A1A1A] overflow-hidden">
+                  <div className="flex-1 border-2 border-ink overflow-hidden">
                     <div
-                      className="px-3 py-2 flex items-center justify-between border-b-2 border-[#1A1A1A]"
-                      style={{ background: idx === 0 ? ACCENT : "#1A1A1A" }}
+                      className="px-3 py-2 flex items-center justify-between border-b-2 border-ink"
+                      style={{ background: idx === 0 ? ACCENT : "var(--sb-ink)" }}
                     >
                       <span
                         style={{ fontFamily: "'Permanent Marker', cursive" }}
-                        className={idx === 0 ? "text-[#1A1A1A] text-sm" : "text-white text-sm"}
+                        className={idx === 0 ? "text-ink text-sm" : "text-white text-sm"}
                       >
                         {sched.day}
                       </span>
-                      <span className={`font-black text-xs tracking-widest uppercase ${idx === 0 ? "text-[#1A1A1A]" : "text-white"}`}>
+                      <span className={`font-black text-xs tracking-widest uppercase ${idx === 0 ? "text-ink" : "text-white"}`}>
                         {sched.hours}
                       </span>
                     </div>
-                    <div className="px-3 py-3 bg-[#FBFBF9]">
-                      <div className="font-black text-[10px] tracking-widest uppercase text-[#1A1A1A]/40">
+                    <div className="px-3 py-3 bg-paper">
+                      <div className="font-black text-[10px] tracking-widest uppercase text-ink/40">
                         {sched.subtitle}
                       </div>
                       <div className="font-bold text-sm mt-0.5">
@@ -334,7 +334,7 @@ export default function Home() {
                 className="absolute top-[26px] left-[27px] right-[27px] h-[2px] z-0"
                 style={{
                   background:
-                    "repeating-linear-gradient(to right,#1A1A1A 0,#1A1A1A 6px,transparent 6px,transparent 14px)",
+                    "repeating-linear-gradient(to right,var(--sb-ink) 0,var(--sb-ink) 6px,transparent 6px,transparent 14px)",
                 }}
               />
               {scheduleCards.map((sched, idx) => (
@@ -344,23 +344,23 @@ export default function Home() {
                   data-testid={`schedule-card-${idx}`}
                 >
                   <BagelPin date={sched.date} active={idx === 0} />
-                  <div className="w-full border-2 border-[#1A1A1A] overflow-hidden">
+                  <div className="w-full border-2 border-ink overflow-hidden">
                     <div
-                      className="px-4 py-2.5 flex items-center justify-between border-b-2 border-[#1A1A1A]"
-                      style={{ background: idx === 0 ? ACCENT : "#1A1A1A" }}
+                      className="px-4 py-2.5 flex items-center justify-between border-b-2 border-ink"
+                      style={{ background: idx === 0 ? ACCENT : "var(--sb-ink)" }}
                     >
                       <span
                         style={{ fontFamily: "'Permanent Marker', cursive" }}
-                        className={idx === 0 ? "text-[#1A1A1A] text-base" : "text-white text-base"}
+                        className={idx === 0 ? "text-ink text-base" : "text-white text-base"}
                       >
                         {sched.day}
                       </span>
-                      <span className={`font-black text-xs tracking-widest uppercase ${idx === 0 ? "text-[#1A1A1A]" : "text-white"}`}>
+                      <span className={`font-black text-xs tracking-widest uppercase ${idx === 0 ? "text-ink" : "text-white"}`}>
                         {sched.hours}
                       </span>
                     </div>
-                    <div className="px-4 py-4 bg-[#FBFBF9]">
-                      <div className="font-black text-[10px] tracking-widest uppercase text-[#1A1A1A]/40">
+                    <div className="px-4 py-4 bg-paper">
+                      <div className="font-black text-[10px] tracking-widest uppercase text-ink/40">
                         {sched.subtitle}
                       </div>
                       <div className="font-bold text-sm mt-1">
@@ -382,21 +382,21 @@ export default function Home() {
                 >
                   02
                 </span>
-                <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">
+                <h2 className="font-black tracking-widest uppercase text-base text-ink">
                   Order Up
                 </h2>
-                <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
+                <div className="flex-1 h-[2px] bg-ink" />
               </div>
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {Object.entries(menuPricingObject).map(([item, info]) => (
                   <div
                     key={item}
-                    className="border-2 border-[#1A1A1A] flex flex-col overflow-hidden bg-[#FBFBF9]"
+                    className="border-2 border-ink flex flex-col overflow-hidden bg-paper"
                     data-testid={`menu-item-${item}`}
                   >
                     <div
-                      className="relative overflow-hidden border-b-2 border-[#1A1A1A]"
+                      className="relative overflow-hidden border-b-2 border-ink"
                       style={{ aspectRatio: "1/1" }}
                     >
                       <img
@@ -407,10 +407,10 @@ export default function Home() {
                       {quantities[item] > 0 && (
                         <div
                           className="absolute inset-0 flex items-center justify-center"
-                          style={{ background: `${ACCENT}ee` }}
+                          style={{ background: "color-mix(in srgb, var(--sb-highlight) 93%, transparent)" }}
                         >
                           <span
-                            className="text-[#1A1A1A] font-black"
+                            className="text-ink font-black"
                             style={{
                               fontFamily: "'Bebas Neue', sans-serif",
                               fontSize: "3.5rem",
@@ -427,7 +427,7 @@ export default function Home() {
                         <div className="font-black uppercase text-xs leading-tight">
                           {item}
                         </div>
-                        <div className="text-[#1A1A1A]/45 text-[10px] font-medium mt-0.5 leading-snug">
+                        <div className="text-ink/45 text-[10px] font-medium mt-0.5 leading-snug">
                           {info.desc}
                         </div>
                       </div>
@@ -442,7 +442,7 @@ export default function Home() {
                           <button
                             data-testid={`btn-decrease-${item}`}
                             onClick={() => updateQuantity(item, -1)}
-                            className="w-8 h-8 border-2 border-[#1A1A1A] font-black text-base flex items-center justify-center active:scale-90 transition-transform bg-[#FBFBF9] hover:bg-[#1A1A1A] hover:text-white"
+                            className="w-8 h-8 border-2 border-ink font-black text-base flex items-center justify-center active:scale-90 transition-transform bg-paper hover:bg-ink hover:text-white"
                           >
                             −
                           </button>
@@ -452,7 +452,7 @@ export default function Home() {
                           <button
                             data-testid={`btn-increase-${item}`}
                             onClick={() => updateQuantity(item, 1)}
-                            className="w-8 h-8 border-2 text-[#1A1A1A] font-black text-base flex items-center justify-center active:scale-90 transition-transform"
+                            className="w-8 h-8 border-2 text-ink font-black text-base flex items-center justify-center active:scale-90 transition-transform"
                             style={{
                               background: ACCENT,
                               borderColor: ACCENT_DK,
@@ -467,7 +467,7 @@ export default function Home() {
                 ))}
               </div>
 
-              <div className="mt-4 border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#FBFBF9] p-4 flex items-center justify-between">
+              <div className="mt-4 border-2 border-ink bg-ink text-paper p-4 flex items-center justify-between">
                 <span className="font-black tracking-widest text-sm uppercase">
                   {itemCount > 0
                     ? `${itemCount} item${itemCount !== 1 ? "s" : ""}`
@@ -483,7 +483,7 @@ export default function Home() {
             </section>
 
             {/* MASCOT STRIP */}
-            <div className="border-2 border-[#1A1A1A] flex items-center overflow-hidden bg-white">
+            <div className="border-2 border-ink flex items-center overflow-hidden bg-white">
               <img
                 src="/mascot.png"
                 alt="STUFF'D mascot"
@@ -495,7 +495,7 @@ export default function Home() {
                 >
                   Ready to order?
                 </p>
-                <p className="text-[#1A1A1A]/60 font-medium text-xs leading-snug mt-1">
+                <p className="text-ink/60 font-medium text-xs leading-snug mt-1">
                   Fill in your details below and we'll WhatsApp your order
                   straight to the kitchen.
                 </p>
@@ -509,10 +509,10 @@ export default function Home() {
               >
                 03
               </span>
-              <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">
+              <h2 className="font-black tracking-widest uppercase text-base text-ink">
                 Your Details
               </h2>
-              <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
+              <div className="flex-1 h-[2px] bg-ink" />
             </div>
 
             <div className="lg:flex lg:gap-8 lg:items-start">
@@ -526,7 +526,7 @@ export default function Home() {
               </div>
 
               <section className="lg:w-1/2">
-                <div className="border-2 border-[#1A1A1A] divide-y-2 divide-[#1A1A1A]">
+                <div className="border-2 border-ink divide-y-2 divide-ink">
                   {[
                     {
                       label: "Name",
@@ -546,7 +546,7 @@ export default function Home() {
                     },
                   ].map((f) => (
                     <div key={f.label} className="flex flex-col">
-                      <label className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-[#1A1A1A]/40">
+                      <label className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-ink/40">
                         {f.label}
                       </label>
                       <input
@@ -555,12 +555,12 @@ export default function Home() {
                         placeholder={f.placeholder}
                         value={f.value}
                         onChange={(e) => f.set(e.target.value)}
-                        className="px-4 pb-3 bg-transparent font-bold text-base outline-none placeholder:text-[#1A1A1A]/25"
+                        className="px-4 pb-3 bg-transparent font-bold text-base outline-none placeholder:text-ink/25"
                       />
                     </div>
                   ))}
                   <div className="flex flex-col">
-                    <label className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-[#1A1A1A]/40">
+                    <label className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-ink/40">
                       Pickup Location
                     </label>
                     <select
@@ -577,7 +577,7 @@ export default function Home() {
                     </select>
                   </div>
                   <div className="flex flex-col">
-                    <label className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-[#1A1A1A]/40">
+                    <label className="font-black text-[10px] tracking-widest uppercase px-4 pt-3 pb-1 text-ink/40">
                       Notes
                     </label>
                     <textarea
@@ -586,18 +586,18 @@ export default function Home() {
                       rows={2}
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      className="px-4 pb-3 bg-transparent font-bold text-base outline-none resize-none placeholder:text-[#1A1A1A]/25"
+                      className="px-4 pb-3 bg-transparent font-bold text-base outline-none resize-none placeholder:text-ink/25"
                     />
                   </div>
                 </div>
 
-                <p className="text-xs font-medium mt-3 text-[#1A1A1A]/50 leading-relaxed px-1">
+                <p className="text-xs font-medium mt-3 text-ink/50 leading-relaxed px-1">
                   No payment online. Swipe your card (Yoco) or pay cash at the
                   truck upon collection.
                 </p>
 
                 {ordersDisabled && (
-                  <p className="mt-4 border-2 border-[#1A1A1A] px-4 py-3 text-sm font-bold text-center tracking-wide uppercase bg-[#1A1A1A] text-[#FBFBF9]">
+                  <p className="mt-4 border-2 border-ink px-4 py-3 text-sm font-bold text-center tracking-wide uppercase bg-ink text-paper">
                     {availability?.closedMessage || "Orders closed for today — see you next time!"}
                   </p>
                 )}
@@ -605,20 +605,20 @@ export default function Home() {
                   data-testid="btn-place-order"
                   onClick={() => !ordersDisabled && setShowModal(true)}
                   disabled={ordersDisabled}
-                  className="mt-4 w-full text-[#1A1A1A] border-2 p-4 font-black uppercase tracking-widest transition-transform"
+                  className="mt-4 w-full text-ink border-2 p-4 font-black uppercase tracking-widest transition-transform"
                   style={{
                     fontFamily: "'Bebas Neue', sans-serif",
                     fontSize: "1.25rem",
                     letterSpacing: "0.15em",
-                    background: ordersDisabled ? "#9ca3af" : ACCENT,
-                    borderColor: ordersDisabled ? "#6b7280" : ACCENT_DK,
+                    background: ordersDisabled ? "var(--sb-disabled)" : ACCENT,
+                    borderColor: ordersDisabled ? "var(--sb-disabled-border)" : ACCENT_DK,
                     cursor: ordersDisabled ? "not-allowed" : "pointer",
                     opacity: ordersDisabled ? 0.6 : 1,
                   }}
                 >
                   {ordersDisabled ? "Orders Closed" : "Place WhatsApp Order"}
                   {!ordersDisabled && total > 0 && (
-                    <span className="ml-3 text-[#1A1A1A]/60 text-sm font-black">
+                    <span className="ml-3 text-ink/60 text-sm font-black">
                       · R{total}
                     </span>
                   )}
@@ -637,15 +637,15 @@ export default function Home() {
             >
               04
             </span>
-            <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">
+            <h2 className="font-black tracking-widest uppercase text-base text-ink">
               About Us
             </h2>
-            <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
+            <div className="flex-1 h-[2px] bg-ink" />
           </div>
-          <div className="border-t-2 border-b-2 lg:border-2 border-[#1A1A1A] overflow-hidden lg:flex lg:flex-row">
+          <div className="border-t-2 border-b-2 lg:border-2 border-ink overflow-hidden lg:flex lg:flex-row">
             {/* Slideshow — left half on desktop */}
             <div
-              className="relative overflow-hidden border-b-2 lg:border-b-0 lg:border-r-2 border-[#1A1A1A] lg:w-1/2 shrink-0"
+              className="relative overflow-hidden border-b-2 lg:border-b-0 lg:border-r-2 border-ink lg:w-1/2 shrink-0"
               style={{ aspectRatio: "16/9" }}
             >
               {slideImages.map((src, i) => (
@@ -668,7 +668,7 @@ export default function Home() {
                     onClick={() => setSlideIndex(i)}
                     className="w-2 h-2 border border-white transition-all"
                     style={{
-                      background: i === slideIndex ? "#fff" : "transparent",
+                      background: i === slideIndex ? "white" : "transparent",
                     }}
                     aria-label={`Slide ${i + 1}`}
                   />
@@ -677,7 +677,7 @@ export default function Home() {
             </div>
             {/* Text — right half on desktop */}
             <div className="lg:flex lg:flex-col lg:justify-between">
-              <div className="border-b-2 border-[#1A1A1A] px-5 py-4 bg-[#1A1A1A]">
+              <div className="border-b-2 border-ink px-5 py-4 bg-ink">
                 <p
                   className="font-black text-white leading-snug"
                   style={{
@@ -689,14 +689,14 @@ export default function Home() {
                   different.
                 </p>
               </div>
-              <div className="px-5 py-4 space-y-3 bg-[#FBFBF9] flex-1">
-                <p className="font-medium text-sm text-[#1A1A1A] leading-relaxed">
+              <div className="px-5 py-4 space-y-3 bg-paper flex-1">
+                <p className="font-medium text-sm text-ink leading-relaxed">
                   STUFF'D started with one question: why does Cape Town not have
                   a proper stuffed bagel? We took the classic New York bagel,
                   packed it with bold fillings, and brought it to the streets of
                   the Mother City.
                 </p>
-                <p className="font-medium text-sm text-[#1A1A1A]/60 leading-relaxed">
+                <p className="font-medium text-sm text-ink/60 leading-relaxed">
                   We pop up at markets, events, and cricket grounds across Cape
                   Town every weekend. No tables, no reservations — just fresh
                   bagels, fast.
@@ -706,7 +706,7 @@ export default function Home() {
                     (tag) => (
                       <span
                         key={tag}
-                        className="border-2 border-[#1A1A1A] px-2 py-0.5 font-black text-[10px] tracking-widest uppercase"
+                        className="border-2 border-ink px-2 py-0.5 font-black text-[10px] tracking-widest uppercase"
                       >
                         {tag}
                       </span>
@@ -726,36 +726,36 @@ export default function Home() {
             >
               05
             </span>
-            <h2 className="font-black tracking-widest uppercase text-base text-[#1A1A1A]">
+            <h2 className="font-black tracking-widest uppercase text-base text-ink">
               Got Questions?
             </h2>
-            <div className="flex-1 h-[2px] bg-[#1A1A1A]" />
+            <div className="flex-1 h-[2px] bg-ink" />
           </div>
 
           <div
-            className="border-2 border-[#1A1A1A] overflow-hidden"
-            style={{ background: "#F2F2F7" }}
+            className="border-2 border-ink overflow-hidden"
+            style={{ background: "var(--sb-chat-bg)" }}
           >
-            <div className="flex items-center gap-3 px-4 py-3 border-b-2 border-[#1A1A1A] bg-white">
+            <div className="flex items-center gap-3 px-4 py-3 border-b-2 border-ink bg-white">
               <div className="relative">
                 <div
-                  className="w-9 h-9 rounded-full border-2 border-[#1A1A1A] overflow-hidden flex items-center justify-center"
+                  className="w-9 h-9 rounded-full border-2 border-ink overflow-hidden flex items-center justify-center"
                   style={{ background: ACCENT }}
                 >
                   <span
-                    className="text-[#1A1A1A] font-black text-xs"
+                    className="text-ink font-black text-xs"
                     style={{ fontFamily: "'Bebas Neue', sans-serif" }}
                   >
                     S'D
                   </span>
                 </div>
-                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-[#34C759] border border-white" />
+                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-chat-green border border-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-black text-sm text-[#1A1A1A]">
+                <div className="font-black text-sm text-ink">
                   STUFF'D Bagels
                 </div>
-                <div className="text-[10px] text-[#34C759] font-medium">
+                <div className="text-[10px] text-chat-green font-medium">
                   Active now
                 </div>
               </div>
@@ -763,7 +763,7 @@ export default function Home() {
                 {[3, 5, 7, 9].map((h) => (
                   <div
                     key={h}
-                    className="w-[3px] bg-[#1A1A1A] rounded-sm"
+                    className="w-[3px] bg-ink rounded-sm"
                     style={{ height: h }}
                   />
                 ))}
@@ -773,19 +773,19 @@ export default function Home() {
             <div className="px-3 py-4 space-y-5">
               {FAQ.map((msg, i) => (
                 <div key={i} className="space-y-1.5">
-                  <div className="text-center text-[10px] text-[#8E8E93] font-medium">
+                  <div className="text-center text-[10px] text-chat-gray font-medium">
                     {msg.time}
                   </div>
                   <div className="flex items-end gap-2">
-                    <div className="w-6 h-6 rounded-full bg-[#C7C7CC] border border-[#1A1A1A]/10 shrink-0 flex items-center justify-center mb-0.5">
-                      <span className="text-[8px] font-black text-[#3C3C43]">
+                    <div className="w-6 h-6 rounded-full bg-chat-avatar border border-ink/10 shrink-0 flex items-center justify-center mb-0.5">
+                      <span className="text-[8px] font-black text-chat-avatar-ink">
                         YOU
                       </span>
                     </div>
                     <div
-                      className="max-w-[72%] px-3 py-2 text-sm font-medium text-[#1A1A1A] leading-snug"
+                      className="max-w-[72%] px-3 py-2 text-sm font-medium text-ink leading-snug"
                       style={{
-                        background: "#FFFFFF",
+                        background: "white",
                         borderRadius: "18px 18px 18px 4px",
                         boxShadow: "0 1px 1px rgba(0,0,0,0.08)",
                       }}
@@ -797,7 +797,7 @@ export default function Home() {
                     <div
                       className="max-w-[72%] px-3 py-2 text-sm font-medium text-white leading-snug"
                       style={{
-                        background: "#007AFF",
+                        background: "var(--sb-chat-blue)",
                         borderRadius: "18px 18px 4px 18px",
                         boxShadow: "0 1px 2px rgba(0,122,255,0.3)",
                       }}
@@ -810,11 +810,11 @@ export default function Home() {
 
               <div className="flex items-end gap-2">
                 <div
-                  className="w-6 h-6 rounded-full shrink-0 overflow-hidden border border-[#1A1A1A]/10"
+                  className="w-6 h-6 rounded-full shrink-0 overflow-hidden border border-ink/10"
                   style={{ background: ACCENT }}
                 >
                   <span
-                    className="flex items-center justify-center h-full text-[7px] font-black text-[#1A1A1A]"
+                    className="flex items-center justify-center h-full text-[7px] font-black text-ink"
                     style={{ fontFamily: "'Bebas Neue', sans-serif" }}
                   >
                     S'D
@@ -823,7 +823,7 @@ export default function Home() {
                 <div
                   className="px-4 py-3 flex gap-1 items-center"
                   style={{
-                    background: "#FFFFFF",
+                    background: "white",
                     borderRadius: "18px 18px 18px 4px",
                     boxShadow: "0 1px 1px rgba(0,0,0,0.08)",
                   }}
@@ -831,7 +831,7 @@ export default function Home() {
                   {[0, 0.2, 0.4].map((delay, i) => (
                     <div
                       key={i}
-                      className="w-2 h-2 rounded-full bg-[#8E8E93]"
+                      className="w-2 h-2 rounded-full bg-chat-gray"
                       style={{ animation: `bounce 1.2s ${delay}s infinite` }}
                     />
                   ))}
@@ -843,7 +843,7 @@ export default function Home() {
       </div>
 
       {/* FOOTER — full width */}
-      <footer className="border-t-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#FBFBF9]">
+      <footer className="border-t-2 border-ink bg-ink text-paper">
         {/* Main footer body */}
         <div className="max-w-6xl mx-auto px-6 lg:px-10 py-12 grid grid-cols-1 sm:grid-cols-3 gap-10 items-center">
           {/* Logo block */}
@@ -853,7 +853,7 @@ export default function Home() {
               alt="Stuff'd Bagels logo"
               className="h-32 w-32 object-contain invert"
             />
-            <p className="text-[#FBFBF9]/50 text-xs tracking-widest uppercase font-medium leading-relaxed">
+            <p className="text-paper/50 text-xs tracking-widest uppercase font-medium leading-relaxed">
               Every bite packed right.
             </p>
           </div>
@@ -862,23 +862,23 @@ export default function Home() {
           <div className="flex flex-col items-center sm:items-start gap-3">
             <div
               className="font-black text-xs tracking-widest uppercase mb-1"
-              style={{ color: "#f2f6d0" }}
+              style={{ color: "var(--sb-highlight)" }}
             >
               Get In Touch
             </div>
             <a
               href="tel:+27724111011"
-              className="text-[#FBFBF9]/70 hover:text-white text-sm transition-colors"
+              className="text-paper/70 hover:text-white text-sm transition-colors"
             >
               +27 72 411 1011
             </a>
             <a
               href="mailto:stuffd.bagels@gmail.com"
-              className="text-[#FBFBF9]/70 hover:text-white text-sm transition-colors"
+              className="text-paper/70 hover:text-white text-sm transition-colors"
             >
               stuffd.bagels@gmail.com
             </a>
-            <div className="text-[#FBFBF9]/40 text-xs mt-1">
+            <div className="text-paper/40 text-xs mt-1">
               Cape Town, South Africa 🇿🇦
             </div>
           </div>
@@ -887,7 +887,7 @@ export default function Home() {
           <div className="flex flex-col items-center sm:items-start gap-3">
             <div
               className="font-black text-xs tracking-widest uppercase mb-1"
-              style={{ color: "#f2f6d0" }}
+              style={{ color: "var(--sb-highlight)" }}
             >
               Follow Us
             </div>
@@ -895,7 +895,7 @@ export default function Home() {
               href="https://instagram.com/stuffd.bagels"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 text-[#FBFBF9]/70 hover:text-white text-sm transition-colors"
+              className="flex items-center gap-2 text-paper/70 hover:text-white text-sm transition-colors"
             >
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
@@ -906,7 +906,7 @@ export default function Home() {
               href="https://tiktok.com/@stuffd.bagels"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 text-[#FBFBF9]/70 hover:text-white text-sm transition-colors"
+              className="flex items-center gap-2 text-paper/70 hover:text-white text-sm transition-colors"
             >
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.76a4.85 4.85 0 01-1.01-.07z" />
@@ -917,28 +917,28 @@ export default function Home() {
         </div>
 
         {/* Bottom bar */}
-        <div className="border-t border-[#FBFBF9]/10 py-4 px-6 lg:px-10 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div className="text-[#FBFBF9]/30 text-xs tracking-widest uppercase">
+        <div className="border-t border-paper/10 py-4 px-6 lg:px-10 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="text-paper/30 text-xs tracking-widest uppercase">
             © 2026 Stuff'd Bagels · Cape Town
           </div>
           <div className="flex gap-1.5">
-            <div className="w-2 h-2" style={{ background: "#f2f6d0" }} />
-            <div className="w-2 h-2 bg-[#FBFBF9]/20" />
-            <div className="w-2 h-2 bg-[#FBFBF9]/10" />
+            <div className="w-2 h-2" style={{ background: "var(--sb-highlight)" }} />
+            <div className="w-2 h-2 bg-paper/20" />
+            <div className="w-2 h-2 bg-paper/10" />
           </div>
         </div>
       </footer>
 
       {/* MODAL */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="border-2 border-[#1A1A1A] rounded-none bg-[#FBFBF9] max-w-[92vw] w-[400px] p-0 overflow-hidden">
+        <DialogContent className="border-2 border-ink rounded-none bg-paper max-w-[92vw] w-[400px] p-0 overflow-hidden">
           <div
-            className="p-5 border-b-2 border-[#1A1A1A]"
+            className="p-5 border-b-2 border-ink"
             style={{ background: ACCENT }}
           >
             <DialogHeader>
               <DialogTitle
-                className="font-black uppercase tracking-wide text-[#1A1A1A] leading-tight"
+                className="font-black uppercase tracking-wide text-ink leading-tight"
                 style={{
                   fontFamily: "'Bebas Neue', sans-serif",
                   fontSize: "1.5rem",
@@ -949,13 +949,13 @@ export default function Home() {
             </DialogHeader>
           </div>
           <div className="p-5">
-            <DialogDescription className="font-medium text-sm text-[#1A1A1A]/70 leading-relaxed">
+            <DialogDescription className="font-medium text-sm text-ink/70 leading-relaxed">
               We've built your order message for you. When WhatsApp opens, hit{" "}
-              <strong className="text-[#1A1A1A]">Send</strong> to log your order
+              <strong className="text-ink">Send</strong> to log your order
               with our kitchen.
             </DialogDescription>
             {total > 0 && (
-              <div className="mt-4 border-2 border-[#1A1A1A] p-3 bg-[#1A1A1A] text-[#FBFBF9] flex justify-between items-center">
+              <div className="mt-4 border-2 border-ink p-3 bg-ink text-paper flex justify-between items-center">
                 <span className="font-black text-xs tracking-widest uppercase">
                   Order Total
                 </span>
@@ -970,7 +970,7 @@ export default function Home() {
             <button
               data-testid="btn-whatsapp-send"
               onClick={handleWhatsAppRedirect}
-              className="mt-4 w-full text-[#1A1A1A] border-2 p-4 font-black uppercase tracking-widest active:scale-[0.98] transition-transform"
+              className="mt-4 w-full text-ink border-2 p-4 font-black uppercase tracking-widest active:scale-[0.98] transition-transform"
               style={{
                 fontFamily: "'Bebas Neue', sans-serif",
                 fontSize: "1.1rem",

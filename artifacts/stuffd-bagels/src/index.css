@@ -57,6 +57,21 @@
   --color-sidebar-accent-border: var(--sidebar-accent-border);
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 
+  /* Brand tokens (values live in :root as --sb-*). Use these instead of hex codes in components. */
+  --color-ink: var(--sb-ink);
+  --color-paper: var(--sb-paper);
+  --color-highlight: var(--sb-highlight);
+  --color-highlight-dk: var(--sb-highlight-dk);
+  --color-gold: var(--sb-gold);
+  --color-chat-bg: var(--sb-chat-bg);
+  --color-chat-blue: var(--sb-chat-blue);
+  --color-chat-green: var(--sb-chat-green);
+  --color-chat-gray: var(--sb-chat-gray);
+  --color-chat-avatar: var(--sb-chat-avatar);
+  --color-chat-avatar-ink: var(--sb-chat-avatar-ink);
+  --color-disabled: var(--sb-disabled);
+  --color-disabled-border: var(--sb-disabled-border);
+
   --font-sans: var(--app-font-sans);
   --font-serif: var(--app-font-serif);
   --font-mono: var(--app-font-mono);
@@ -69,6 +84,21 @@
 
 /* LIGHT MODE */
 :root {
+  /* Brand tokens. Change the look here, not in components. */
+  --sb-ink: #1a1a1a;
+  --sb-paper: #fbfbf9;
+  --sb-highlight: #f2f6d0;
+  --sb-highlight-dk: #d6daa8;
+  --sb-gold: #c8900f;
+  --sb-chat-bg: #f2f2f7;
+  --sb-chat-blue: #007aff;
+  --sb-chat-green: #34c759;
+  --sb-chat-gray: #8e8e93;
+  --sb-chat-avatar: #c7c7cc;
+  --sb-chat-avatar-ink: #3c3c43;
+  --sb-disabled: #9ca3af;
+  --sb-disabled-border: #6b7280;
+
   --button-outline: rgba(0,0,0, .10);
   --badge-outline: rgba(0,0,0, .05);
 
