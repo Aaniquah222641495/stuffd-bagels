@@ -1,6 +1,8 @@
 // Menu and FAQ, shared by the page (Home.tsx) and the search-engine data (seo.ts),
 // so prices and answers in structured data always match what visitors see.
 
+// Descriptions match the cart's menu board (Instagram, 2026). PRICES ARE UNCONFIRMED:
+// carried over from the old site; the client must confirm them (2026-10-26).
 export const menuPricingObject: Record<
   string,
   { price: number; image: string; desc: string }
@@ -8,22 +10,22 @@ export const menuPricingObject: Record<
   "Pizza Bagel": {
     price: 75,
     image: "/pizza-bagel.jpeg",
-    desc: "Tomato · Mozz · Basil",
+    desc: "Pepperoni · Cheese · Cream Cheese",
   },
   "Jalapeno Bagel": {
     price: 70,
     image: "/jalapeno-bagel.jpeg",
-    desc: "Spicy · Cream Cheese · Pickled",
+    desc: "Jalapeno · Cream Cheese",
   },
   "Cheesy Bagel": {
     price: 65,
     image: "/cheesy-bagel.jpeg",
-    desc: "Triple Cheese · Chive",
+    desc: "Cheese · Cream Cheese",
   },
   "Plain Bagel": {
     price: 45,
     image: "/plain-bagel.jpeg",
-    desc: "Classic · Butter · Sea Salt",
+    desc: "Classic · Cream Cheese",
   },
 };
 
@@ -35,7 +37,7 @@ export const FAQ = [
   },
   {
     q: "How do I pay? There's no checkout here 🤔",
-    a: "Pay at the truck with Yoco (tap your card) or cash. No online payment ever needed 🙌",
+    a: "Pay at the cart with Yoco (tap your card) or cash. No online payment ever needed 🙌",
     time: "10:44",
   },
   {
@@ -44,3 +46,29 @@ export const FAQ = [
     time: "10:47",
   },
 ];
+
+// Where we'll be. Static list we keep up to date (no admin needed).
+// Dates are YYYY-MM-DD. Events drop off the site automatically after their end date.
+// Source: @stuffd.bagels Instagram posts (checked 2026-10-24). No times are posted, so none are shown.
+export interface MarketEvent {
+  id: string;
+  name: string;
+  venue: string;
+  start: string;
+  end: string;
+}
+
+export const EVENTS: MarketEvent[] = [
+  { id: "royal-venue-oct", name: "Market weekend", venue: "Royal Venue, Schaapkraal", start: "2026-10-24", end: "2026-10-25" },
+  { id: "luxe-cape-club", name: "Luxe Cape Club", venue: "Sans Souci Grounds, Newlands", start: "2026-10-31", end: "2026-11-01" },
+  { id: "spring-lovers", name: "Spring Lovers Pop Up", venue: "18 Schaap Rd, Schaapkraal", start: "2026-11-01", end: "2026-11-01" },
+  { id: "mgm-26", name: "MGM '26", venue: "Venue to be announced", start: "2026-12-16", end: "2026-12-20" },
+];
+
+export function upcomingEvents(today = new Date()): MarketEvent[] {
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, "0");
+  const d = String(today.getDate()).padStart(2, "0");
+  const iso = `${y}-${m}-${d}`;
+  return EVENTS.filter((e) => e.end >= iso);
+}
