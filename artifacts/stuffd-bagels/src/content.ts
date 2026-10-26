@@ -8,22 +8,22 @@ export const menuPricingObject: Record<
 > = {
   "Pizza Bagel": {
     price: 85,
-    image: "/pizza-bagel.jpeg",
+    image: "/pizza-bagel.png",
     desc: "Pepperoni · Cheese · Cream Cheese",
   },
   "Jalapeno Bagel": {
     price: 70,
-    image: "/jalapeno-bagel.jpeg",
+    image: "/jalapeno-bagel.png",
     desc: "Jalapeno · Cheese · Cream Cheese",
   },
   "Cheesy Bagel": {
     price: 80,
-    image: "/cheesy-bagel.jpeg",
+    image: "/cheesy-bagel.png",
     desc: "Cheese · Cream Cheese",
   },
   "Plain Bagel": {
     price: 65,
-    image: "/plain-bagel.jpeg",
+    image: "/plain-bagel.png",
     desc: "Cream Cheese",
   },
 };

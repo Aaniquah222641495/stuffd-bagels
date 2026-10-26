@@ -80,22 +80,37 @@ const FEED = [
 const TICKER_TEXT =
   "STUFF'D BAGELS  ·  CAPE TOWN'S FIRST STUFFED BAGEL  ·  EVERY BITE PACKED RIGHT  ·  MORE MARKETS, MORE BAGELS  ·  ";
 
+/** Bagel cut-out: small AVIF first, transparent PNG fallback for older browsers. */
+function BagelImg({ src, className, ...rest }: React.ImgHTMLAttributes<HTMLImageElement> & { src: string }) {
+  const img = <img src={src} loading="lazy" decoding="async" className={className} {...rest} />;
+  if (!src.endsWith(".png")) return img;
+  return (
+    <picture className="contents">
+      <source srcSet={src.replace(/\.png$/, ".avif")} type="image/avif" />
+      {img}
+    </picture>
+  );
+}
+
 /** Round bagel photos for the moving strip under the hero. */
 const BELT = [
-  { src: "/pizza-bagel.jpeg", word: "Pizza" },
-  { src: "/jalapeno-bagel.jpeg", word: "Jalapeno" },
-  { src: "/cheesy-bagel.jpeg", word: "Cheesy" },
-  { src: "/plain-bagel.jpeg", word: "Plain" },
-  { src: "/ig/jalapeno-box.jpg", word: "Cream cheese" },
+  { src: "/pizza-bagel.png", word: "Pizza" },
+  { src: "/jalapeno-bagel.png", word: "Jalapeno" },
+  { src: "/cheesy-bagel.png", word: "Cheesy" },
+  { src: "/plain-bagel.png", word: "Plain" },
+  { src: "/bagel-cutout.webp", word: "Cream cheese" },
   { src: "/hero-bagel.jpeg", word: "Packed right" },
 ];
 
 const ABOUT_PHOTOS = [
   { src: "/ig/cart.jpg", alt: "The STUFF'D Bagels cart at a market, blue counter and cloud sign", caption: "find the cart", width: 506, height: 900 },
+  { src: "/ig/made-fresh.jpg", alt: "Bagels being stuffed by hand at the STUFF'D cart", caption: "made fresh", width: 506, height: 900, position: "50% 60%" },
   { src: "/ig/chic.jpg", alt: "A customer biting into a STUFF'D bagel at a market", caption: "market day", width: 393, height: 700, position: "50% 40%" },
-  { src: "/ig/boxes.jpg", alt: "Pizza and jalapeno bagels in STUFF'D takeaway boxes", caption: "packed right", width: 769, height: 900 },
+  { src: "/ig/box-of-four.jpg", alt: "A box of four stuffed bagels: cheesy, garlic and pizza", caption: "box of four", width: 675, height: 900 },
   { src: "/ig/unboxing.jpg", alt: "Opening a STUFF'D takeaway box", caption: "the unboxing", width: 450, height: 800, position: "50% 35%" },
+  { src: "/ig/merch.jpg", alt: "A STUFF'D team member holding a fresh pizza bagel", caption: "hot off the cart", width: 675, height: 900, position: "50% 70%" },
   { src: "/ig/friends.jpg", alt: "Friends sharing STUFF'D bagels on a couch", caption: "bring the crew", width: 720, height: 405 },
+  { src: "/ig/boxes.jpg", alt: "Pizza and jalapeno bagels in STUFF'D takeaway boxes", caption: "packed right", width: 769, height: 900 },
   { src: "/ig/jalapeno-poster.jpg", alt: "Holding a jalapeno stuffed bagel, blue duotone photo", caption: "the jalapeno", width: 719, height: 900 },
 ];
 
@@ -544,14 +559,16 @@ export default function Home() {
             <div key={copy} className="flex items-center gap-8 pr-8 sm:gap-12 sm:pr-12">
               {BELT.map((b) => (
                 <div key={b.word + copy} className="flex items-center gap-8 sm:gap-12 shrink-0">
-                  <img
+                  <BagelImg
                     src={b.src}
                     alt=""
                     width={120}
                     height={120}
-                    loading="lazy"
-                    decoding="async"
-                    className="w-20 h-20 sm:w-28 sm:h-28 rounded-full object-cover shadow-soft"
+                    className={
+                      b.src.endsWith(".png") || b.src.endsWith(".webp")
+                        ? "w-20 h-20 sm:w-28 sm:h-28 rounded-full object-contain bg-sky p-1.5 shadow-soft"
+                        : "w-20 h-20 sm:w-28 sm:h-28 rounded-full object-cover shadow-soft"
+                    }
                   />
                   <span className="font-bubble text-ink text-3xl sm:text-5xl whitespace-nowrap">{b.word}</span>
                 </div>
@@ -655,15 +672,13 @@ export default function Home() {
               {Object.entries(menuPricingObject).map(([item, info], idx) => (
                 <Reveal key={item} delay={idx * 80}>
                   <article className="group h-full flex flex-col" data-testid={`menu-item-${item}`}>
-                    <div className="relative overflow-hidden rounded-[22px] shadow-soft bg-ink/5">
-                      <img
+                    <div className="relative overflow-hidden rounded-[22px] shadow-soft bg-sky">
+                      <BagelImg
                         src={info.image}
                         alt={item}
-                        width={900}
-                        height={1200}
-                        loading="lazy"
-                        decoding="async"
-                        className="block w-full aspect-[4/5] object-cover transition-transform duration-700 ease-out group-hover:scale-[1.05]"
+                        width={640}
+                        height={640}
+                        className="block w-full aspect-[4/5] object-contain p-4 sm:p-6 drop-shadow-[0_14px_18px_rgba(22,36,92,0.28)] transition-transform duration-700 ease-out group-hover:scale-[1.05] group-hover:-rotate-3"
                       />
                       <span className="absolute top-3 right-3 rounded-full bg-photo text-ink font-bebas text-xl leading-none px-3 pt-1.5 pb-1 shadow-soft">
                         R{info.price}
@@ -766,16 +781,21 @@ export default function Home() {
                     </li>
                   ))}
                 </ol>
-                {/* Our mascot, mid-bite. */}
-                <img
-                  src="/mascot-bite.webp"
-                  alt=""
-                  width={640}
-                  height={640}
-                  loading="lazy"
-                  decoding="async"
-                  className="block w-48 sm:w-60 lg:w-80 mt-8 lg:mt-12 mx-auto lg:mx-0 object-contain"
-                />
+                {/* Our mascot, chomping: two quick bites, crumbs fly, repeat. CSS only, off for reduced motion. */}
+                <div className="mascot-chomp relative block w-48 sm:w-60 lg:w-80 mt-8 lg:mt-12 mx-auto lg:mx-0" aria-hidden="true">
+                  <img
+                    src="/mascot-bite.webp"
+                    alt=""
+                    width={640}
+                    height={640}
+                    loading="lazy"
+                    decoding="async"
+                    className="mascot-chomp__img block w-full object-contain"
+                  />
+                  {[0, 1, 2, 3, 4, 5].map((n) => (
+                    <span key={n} className={`mascot-chomp__crumb mascot-chomp__crumb--${n}`} />
+                  ))}
+                </div>
               </Reveal>
 
               <section aria-label="Your details">
@@ -910,7 +930,7 @@ export default function Home() {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-7 sm:gap-x-5 sm:gap-y-9 px-1">
               {ABOUT_PHOTOS.map((ph, i) => (
                 <Reveal key={ph.src} delay={i * 80} className={i % 3 === 1 ? "sm:translate-y-10" : ""}>
-                  <Polaroid {...ph} tilt={[-3, 2.5, -1.5, 3, -2.5, 1.5][i]} />
+                  <Polaroid {...ph} tilt={[-3, 2.5, -1.5, 3, -2.5, 1.5, 2, -2, 1][i % 9]} />
                 </Reveal>
               ))}
             </div>
@@ -921,15 +941,6 @@ export default function Home() {
         <section aria-labelledby="events" id="book" className={`${WRAP} pt-24 lg:pt-32 scroll-mt-12`}>
           <Reveal>
             <div className="relative overflow-hidden rounded-[28px] bg-ink text-white px-6 py-12 sm:px-12 lg:px-16 lg:py-16 grid gap-10 lg:grid-cols-[1.15fr_1fr] lg:items-center">
-              <img
-                src="/bagel-cutout.webp"
-                alt=""
-                aria-hidden="true"
-                width={440}
-                height={440}
-                loading="lazy"
-                className="spin-slow hidden lg:block pointer-events-none absolute -right-20 -bottom-24 w-80 opacity-95"
-              />
               <div className="relative">
                 <p className="eyebrow text-sky m-0 mb-3">05 · Events</p>
                 <h2 id="events" className="font-bubble text-[2.4rem] sm:text-6xl leading-[0.95] m-0 text-balance">
@@ -952,6 +963,14 @@ export default function Home() {
               </div>
               <div className="relative lg:pr-24">
                 <p className="eyebrow text-sky m-0 mb-4">What to send us</p>
+                <img
+                  src="/cart.svg"
+                  alt="The STUFF'D Bagels cart"
+                  width={520}
+                  height={460}
+                  loading="lazy"
+                  className="cart-bob block w-full max-w-[22rem] mx-auto mb-8"
+                />
                 <ol className="list-none p-0 m-0 border-t border-white/15">
                   {["The date and time", "The venue or area", "How many guests"].map((t, i) => (
                     <li key={t} className="flex items-baseline gap-4 py-4 border-b border-white/15">
