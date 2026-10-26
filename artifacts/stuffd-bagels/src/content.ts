@@ -1,32 +1,37 @@
 // Menu and FAQ, shared by the page (Home.tsx) and the search-engine data (seo.ts),
 // so prices and answers in structured data always match what visitors see.
 
-// Descriptions match the cart's menu board (Instagram, 2026). PRICES ARE UNCONFIRMED:
-// carried over from the old site; the client must confirm them (2026-10-26).
+// Client's confirmed printed menu (received 2026-10-25). Keep in step with pricing.md and llms.txt.
 export const menuPricingObject: Record<
   string,
   { price: number; image: string; desc: string }
 > = {
   "Pizza Bagel": {
-    price: 75,
+    price: 85,
     image: "/pizza-bagel.jpeg",
     desc: "Pepperoni · Cheese · Cream Cheese",
   },
   "Jalapeno Bagel": {
     price: 70,
     image: "/jalapeno-bagel.jpeg",
-    desc: "Jalapeno · Cream Cheese",
+    desc: "Jalapeno · Cheese · Cream Cheese",
   },
   "Cheesy Bagel": {
-    price: 65,
+    price: 80,
     image: "/cheesy-bagel.jpeg",
     desc: "Cheese · Cream Cheese",
   },
   "Plain Bagel": {
-    price: 45,
+    price: 65,
     image: "/plain-bagel.jpeg",
-    desc: "Classic · Cream Cheese",
+    desc: "Cream Cheese",
   },
+};
+
+// Add-on toppings from the printed menu: +R5 each, added to any bagel.
+export const TOPPINGS: Record<string, number> = {
+  "Extra Cheese": 5,
+  "Extra Jalapeno": 5,
 };
 
 export const FAQ = [

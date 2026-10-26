@@ -41,7 +41,7 @@ const business = {
   currenciesAccepted: "ZAR",
   paymentAccepted: "Cash, Credit Card",
   acceptsReservations: false,
-  priceRange: "R45 - R75",
+  priceRange: "R65 - R85",
   address: { "@type": "PostalAddress", addressLocality: "Cape Town", addressRegion: "Western Cape", addressCountry: "ZA" },
   areaServed: { "@type": "City", name: "Cape Town" },
   sameAs: ["https://instagram.com/stuffd.bagels", "https://tiktok.com/@stuffd.bagels"],

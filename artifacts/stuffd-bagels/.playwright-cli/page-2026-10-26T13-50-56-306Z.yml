@@ -1,0 +1,225 @@
+- generic [ref=f1e2]:
+  - generic [ref=f1e3]:
+    - generic [aria-hidden] [ref=f1e5]: STUFF'D BAGELS ★ CAPE TOWN'S FIRST STUFFED BAGEL ★ EVERY BITE PACKED RIGHT ★ MORE MARKETS, MORE BAGELS ★ STUFF'D BAGELS ★ CAPE TOWN'S FIRST STUFFED BAGEL ★ EVERY BITE PACKED RIGHT ★ MORE MARKETS, MORE BAGELS ★ STUFF'D BAGELS ★ CAPE TOWN'S FIRST STUFFED BAGEL ★ EVERY BITE PACKED RIGHT ★ MORE MARKETS, MORE BAGELS ★ STUFF'D BAGELS ★ CAPE TOWN'S FIRST STUFFED BAGEL ★ EVERY BITE PACKED RIGHT ★ MORE MARKETS, MORE BAGELS ★ STUFF'D BAGELS ★ CAPE TOWN'S FIRST STUFFED BAGEL ★ EVERY BITE PACKED RIGHT ★ MORE MARKETS, MORE BAGELS ★ STUFF'D BAGELS ★ CAPE TOWN'S FIRST STUFFED BAGEL ★ EVERY BITE PACKED RIGHT ★ MORE MARKETS, MORE BAGELS ★
+    - banner [ref=f1e6]:
+      - generic [ref=f1e11]:
+        - paragraph [ref=f1e12]: Cape Town's first stuffed bagel
+        - heading [level=1] [ref=f1e13]:
+          - img "STUFF'D Bagels" [ref=f1e15]
+        - paragraph [ref=f1e16]: Every bite packed right.
+        - link "get STUFF'D" [ref=f1e17] [cursor=pointer]:
+          - /url: "#order"
+          - text: get
+          - generic [ref=f1e18]: STUFF'D
+    - main [ref=f1e19]:
+      - generic [ref=f1e20]:
+        - generic [ref=f1e21]:
+          - generic [ref=f1e22]:
+            - generic [ref=f1e23]: "01"
+            - heading "Where We At" [level=2] [ref=f1e24]
+          - paragraph [ref=f1e26]: More markets, more bagels. Come get STUFF'D here ↓
+          - generic [ref=f1e27]:
+            - generic [ref=f1e29]:
+              - generic [ref=f1e30]: "31"
+              - generic [ref=f1e34]:
+                - generic [ref=f1e35]:
+                  - generic [ref=f1e36]: Saturday
+                  - generic [ref=f1e37]: 31 Oct – 1 Nov
+                - generic [ref=f1e38]:
+                  - generic [ref=f1e39]: Luxe Cape Club
+                  - generic [ref=f1e40]: Sans Souci Grounds, Newlands
+            - generic [ref=f1e41]:
+              - generic [ref=f1e42]: "1"
+              - generic [ref=f1e46]:
+                - generic [ref=f1e47]:
+                  - generic [ref=f1e48]: Sunday
+                  - generic [ref=f1e49]: 1 Nov
+                - generic [ref=f1e50]:
+                  - generic [ref=f1e51]: Spring Lovers Pop Up
+                  - generic [ref=f1e52]: 18 Schaap Rd, Schaapkraal
+            - generic [ref=f1e53]:
+              - generic [ref=f1e54]: "16"
+              - generic [ref=f1e58]:
+                - generic [ref=f1e59]:
+                  - generic [ref=f1e60]: Wednesday
+                  - generic [ref=f1e61]: 16–20 Dec
+                - generic [ref=f1e62]:
+                  - generic [ref=f1e63]: MGM '26
+                  - generic [ref=f1e64]: Venue to be announced
+        - generic [ref=f1e65]:
+          - generic [ref=f1e66]:
+            - generic [ref=f1e67]:
+              - generic [ref=f1e68]: "02"
+              - heading "Order Up" [level=2] [ref=f1e69]
+            - generic [ref=f1e71]:
+              - generic [ref=f1e72]:
+                - img "Pizza Bagel" [ref=f1e74]
+                - generic [ref=f1e75]:
+                  - generic [ref=f1e76]:
+                    - generic [ref=f1e77]: Pizza Bagel
+                    - generic [ref=f1e78]: Pepperoni · Cheese · Cream Cheese
+                  - generic [ref=f1e79]:
+                    - generic [ref=f1e80]: R85
+                    - generic [ref=f1e81]:
+                      - button "Remove one Pizza Bagel" [ref=f1e82]: −
+                      - generic [ref=f1e83]: "0"
+                      - button "Add one Pizza Bagel" [ref=f1e84]: +
+              - generic [ref=f1e85]:
+                - img "Jalapeno Bagel" [ref=f1e87]
+                - generic [ref=f1e88]:
+                  - generic [ref=f1e89]:
+                    - generic [ref=f1e90]: Jalapeno Bagel
+                    - generic [ref=f1e91]: Jalapeno · Cheese · Cream Cheese
+                  - generic [ref=f1e92]:
+                    - generic [ref=f1e93]: R70
+                    - generic [ref=f1e94]:
+                      - button "Remove one Jalapeno Bagel" [ref=f1e95]: −
+                      - generic [ref=f1e96]: "0"
+                      - button "Add one Jalapeno Bagel" [ref=f1e97]: +
+              - generic [ref=f1e98]:
+                - img "Cheesy Bagel" [ref=f1e100]
+                - generic [ref=f1e101]:
+                  - generic [ref=f1e102]:
+                    - generic [ref=f1e103]: Cheesy Bagel
+                    - generic [ref=f1e104]: Cheese · Cream Cheese
+                  - generic [ref=f1e105]:
+                    - generic [ref=f1e106]: R80
+                    - generic [ref=f1e107]:
+                      - button "Remove one Cheesy Bagel" [ref=f1e108]: −
+                      - generic [ref=f1e109]: "0"
+                      - button "Add one Cheesy Bagel" [ref=f1e110]: +
+              - generic [ref=f1e111]:
+                - img "Plain Bagel" [ref=f1e113]
+                - generic [ref=f1e114]:
+                  - generic [ref=f1e115]:
+                    - generic [ref=f1e116]: Plain Bagel
+                    - generic [ref=f1e117]: Cream Cheese
+                  - generic [ref=f1e118]:
+                    - generic [ref=f1e119]: R65
+                    - generic [ref=f1e120]:
+                      - button "Remove one Plain Bagel" [ref=f1e121]: −
+                      - generic [ref=f1e122]: "0"
+                      - button "Add one Plain Bagel" [ref=f1e123]: +
+            - generic [ref=f1e124]:
+              - generic [ref=f1e125]: Toppings
+              - generic [ref=f1e126]:
+                - generic [ref=f1e127]: Cheese
+                - generic [ref=f1e128]: +R5
+                - generic [ref=f1e129]:
+                  - button "Remove one Extra Cheese" [ref=f1e130]: −
+                  - generic [ref=f1e131]: "0"
+                  - button "Add one Extra Cheese" [ref=f1e132]: +
+              - generic [ref=f1e133]:
+                - generic [ref=f1e134]: Jalapeno
+                - generic [ref=f1e135]: +R5
+                - generic [ref=f1e136]:
+                  - button "Remove one Extra Jalapeno" [ref=f1e137]: −
+                  - generic [ref=f1e138]: "0"
+                  - button "Add one Extra Jalapeno" [ref=f1e139]: +
+            - generic [ref=f1e140]:
+              - generic [ref=f1e141]: Your order
+              - generic [ref=f1e142]: R0
+          - generic [ref=f1e143]:
+            - img "STUFF'D mascot" [ref=f1e144]
+            - generic [ref=f1e145]:
+              - paragraph [ref=f1e146]: Ready to order?
+              - paragraph [ref=f1e147]: Fill in your details below and we'll WhatsApp your order straight to the kitchen.
+          - generic [ref=f1e148]:
+            - generic [ref=f1e149]: "03"
+            - heading "Your Details" [level=2] [ref=f1e150]
+          - generic [ref=f1e153]:
+            - generic [ref=f1e154]:
+              - generic [ref=f1e155]:
+                - generic [ref=f1e156]: Name
+                - textbox "Name" [ref=f1e157]:
+                  - /placeholder: Your name
+              - generic [ref=f1e158]:
+                - generic [ref=f1e159]: Phone
+                - textbox "Phone" [ref=f1e160]:
+                  - /placeholder: 082 123 4567
+              - generic [ref=f1e161]:
+                - generic [ref=f1e162]: Pickup Location
+                - combobox "Pickup Location" [ref=f1e163]:
+                  - option "Sans Souci Grounds, Newlands" [selected]
+                  - option "18 Schaap Rd, Schaapkraal"
+                  - option "Venue to be announced"
+              - generic [ref=f1e164]:
+                - generic [ref=f1e165]: Notes
+                - textbox "Notes" [ref=f1e166]:
+                  - /placeholder: Any special requests?
+            - paragraph [ref=f1e167]: No payment online. Tap your card (Yoco) or pay cash at the cart when you collect.
+            - button "Get STUFF'D on WhatsApp" [ref=f1e168] [cursor=pointer]
+      - generic [ref=f1e169]:
+        - generic [ref=f1e170]:
+          - generic [ref=f1e171]: "04"
+          - heading "About Us" [level=2] [ref=f1e172]
+        - generic [ref=f1e174]:
+          - generic [ref=f1e177]:
+            - button "Slide 1" [ref=f1e178]
+            - button "Slide 2" [ref=f1e179]
+            - button "Slide 3" [ref=f1e180]
+            - button "Slide 4" [ref=f1e181]
+          - generic [ref=f1e182]:
+            - paragraph [ref=f1e184]: Cape Town's first stuffed bagel. Born on the street. Built different.
+            - generic [ref=f1e185]:
+              - paragraph [ref=f1e186]: "STUFF'D started with one question: why does Cape Town not have a proper stuffed bagel? We took the classic New York bagel, packed it with bold fillings, and brought it to the streets of the Mother City."
+              - paragraph [ref=f1e187]: Find the cart at markets and festivals across Cape Town. No tables, no reservations. Just fresh bagels, fast. More markets, more bagels.
+              - generic [ref=f1e188]:
+                - generic [ref=f1e189]: Street Food
+                - generic [ref=f1e190]: Cape Town
+                - generic [ref=f1e191]: Markets
+                - generic [ref=f1e192]: Handmade
+      - generic [ref=f1e193]:
+        - generic [ref=f1e194]:
+          - generic [ref=f1e195]: "05"
+          - heading "Got Questions?" [level=2] [ref=f1e196]
+        - generic [ref=f1e198]:
+          - generic [ref=f1e199]:
+            - generic [ref=f1e200]: S'D
+            - generic [ref=f1e204]:
+              - generic [ref=f1e205]: STUFF'D Bagels
+              - generic [ref=f1e206]: Chat to us on WhatsApp
+          - generic [ref=f1e207]:
+            - generic [ref=f1e208]:
+              - generic [ref=f1e209]: 10:42
+              - generic [ref=f1e210]:
+                - generic [ref=f1e211]: YOU
+                - generic [ref=f1e213]: Where do I collect my order?
+              - generic [ref=f1e214]: At the venue on your pickup date 📍 Look for the STUFF'D setup — you won't miss us!
+            - generic [ref=f1e216]:
+              - generic [ref=f1e217]: 10:44
+              - generic [ref=f1e218]:
+                - generic [ref=f1e219]: YOU
+                - generic [ref=f1e221]: How do I pay? There's no checkout here 🤔
+              - generic [ref=f1e222]: Pay at the cart with Yoco (tap your card) or cash. No online payment ever needed 🙌
+            - generic [ref=f1e224]:
+              - generic [ref=f1e225]: 10:47
+              - generic [ref=f1e226]:
+                - generic [ref=f1e227]: YOU
+                - generic [ref=f1e229]: Can I book you guys for a private event?
+              - generic [ref=f1e230]: Absolutely! Drop us a WhatsApp below and we'll put together a custom quote for you 🥯
+            - generic [ref=f1e232]: S'D
+    - contentinfo [ref=f1e239]:
+      - generic [ref=f1e240]:
+        - generic [ref=f1e241]:
+          - img "STUFF'D Bagels" [ref=f1e242]
+          - paragraph [ref=f1e243]: When hunger calls, it's time to get STUFF'D.
+        - generic [ref=f1e244]:
+          - generic [ref=f1e245]: Get In Touch
+          - link "+27 72 411 1011" [ref=f1e246] [cursor=pointer]:
+            - /url: tel:+27724111011
+          - link "stuffd.bagels@gmail.com" [ref=f1e247] [cursor=pointer]:
+            - /url: mailto:stuffd.bagels@gmail.com
+          - generic [ref=f1e248]: Cape Town, South Africa 🇿🇦
+        - generic [ref=f1e249]:
+          - generic [ref=f1e250]: Follow Us
+          - link "@stuffd.bagels" [ref=f1e251] [cursor=pointer]:
+            - /url: https://instagram.com/stuffd.bagels
+          - link "@stuffd.bagels" [ref=f1e254] [cursor=pointer]:
+            - /url: https://tiktok.com/@stuffd.bagels
+      - generic [ref=f1e257]:
+        - generic [ref=f1e258]: © 2026 Stuff'd Bagels · Cape Town
+        - link "Website by Digital Pantry" [ref=f1e259] [cursor=pointer]:
+          - /url: https://digitalpantry.co.za
+  - region "Notifications (F8)":
+    - list

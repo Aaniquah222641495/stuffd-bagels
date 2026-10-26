@@ -5,10 +5,11 @@
 Slogan: "Every bite packed right." Cape Town, South Africa. Est. 2026. Street food, pop-up, handmade. No tables, no reservations. More markets, more bagels.
 
 ## Menu (ZAR)
-- Pizza Bagel: R75 (pepperoni, cheese, cream cheese)
-- Jalapeno Bagel: R70 (jalapeno, cream cheese)
-- Cheesy Bagel: R65 (cheese, cream cheese)
-- Plain Bagel: R45 (classic, cream cheese)
+- Pizza Bagel: R85 (pepperoni, cheese, cream cheese)
+- Jalapeno Bagel: R70 (jalapeno, cheese, cream cheese)
+- Cheesy Bagel: R80 (cheese, cream cheese)
+- Plain Bagel: R65 (cream cheese)
+- Extra topping, cheese or jalapeno: +R5
 
 ## How ordering works
 - Pick your bagels on the website, then send the ready-made order message on WhatsApp.

@@ -9,6 +9,7 @@ import {
 import {
   menuPricingObject,
   FAQ,
+  TOPPINGS,
   EVENTS,
   upcomingEvents,
   type MarketEvent,
@@ -133,6 +134,9 @@ export default function Home() {
   const [quantities, setQuantities] = useState<Record<string, number>>(() =>
     Object.fromEntries(Object.keys(menuPricingObject).map((k) => [k, 0])),
   );
+  const [toppingQty, setToppingQty] = useState<Record<string, number>>(() =>
+    Object.fromEntries(Object.keys(TOPPINGS).map((k) => [k, 0])),
+  );
   // Start with the full list so the prerendered HTML matches the first client render,
   // then drop past events once the page is running in the browser.
   const [events, setEvents] = useState<MarketEvent[]>(EVENTS);
@@ -174,10 +178,15 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
-  const total = Object.entries(quantities).reduce(
-    (sum, [item, qty]) => sum + qty * menuPricingObject[item].price,
-    0,
-  );
+  const total =
+    Object.entries(quantities).reduce(
+      (sum, [item, qty]) => sum + qty * menuPricingObject[item].price,
+      0,
+    ) +
+    Object.entries(toppingQty).reduce(
+      (sum, [t, qty]) => sum + qty * TOPPINGS[t],
+      0,
+    );
 
   useEffect(() => {
     const diff = total - displayTotal;
@@ -205,6 +214,9 @@ export default function Home() {
       if (qty > 0)
         orderLines += `${item} x${qty} — R${qty * menuPricingObject[item].price}\n`;
     });
+    Object.entries(toppingQty).forEach(([t, qty]) => {
+      if (qty > 0) orderLines += `${t} x${qty} — R${qty * TOPPINGS[t]}\n`;
+    });
     const message = `NEW ORDER — STUFF'D BAGELS\n\nPickup: ${venue}\nName: ${name}\nPhone: ${phone}\n\nOrder:\n${orderLines}\nTotal: R${total}\n\nNotes: ${notes || "None"}\n\nSent via stuffdbagels.co.za`;
     window.open(
       `https://wa.me/${BUSINESS_PHONE}?text=${encodeURIComponent(message)}`,
@@ -218,6 +230,10 @@ export default function Home() {
       ...prev,
       [item]: Math.max(0, prev[item] + delta),
     }));
+  };
+
+  const updateTopping = (t: string, delta: number) => {
+    setToppingQty((prev) => ({ ...prev, [t]: Math.max(0, prev[t] + delta) }));
   };
 
   const itemCount = Object.values(quantities).reduce((a, b) => a + b, 0);
@@ -252,7 +268,7 @@ export default function Home() {
             className="w-full h-full object-cover object-center"
           />
         </div>
-        {/* Soft navy scrim so the cream wordmark stays readable */}
+        {/* Soft navy scrim so the cream text stays readable */}
         <div
           className="absolute inset-0"
           style={{
@@ -272,16 +288,19 @@ export default function Home() {
           <p className="font-black tracking-[0.35em] text-[10px] uppercase text-paper">
             Cape Town's first stuffed bagel
           </p>
-          {/* One H1 for "STUFF'D Bagels" so search engines read the full name. */}
-          <h1 className="m-0 font-normal text-base">
+          {/* The client's logo on a cream sticker. The H1 text stays for search engines and screen readers. */}
+          <h1 className="m-0 w-full flex justify-center">
             <span
-              className="block font-bubble wordmark leading-[0.9]"
-              style={{ fontSize: "clamp(4.25rem, 19vw, 10rem)" }}
+              className="block rounded-[2rem] border-2 border-ink bg-paper px-5 py-4 sm:px-8 sm:py-6 -rotate-2"
+              style={{ boxShadow: "0 6px 0 var(--sb-ink)", width: "min(92%, 620px)" }}
             >
-              STUFF'D
-            </span>{" "}
-            <span className="block font-black tracking-[0.6em] text-sm lg:text-base text-paper uppercase mt-4 pl-[0.6em]">
-              Bagels
+              <img
+                src="/logo-blue.svg"
+                alt="STUFF'D Bagels"
+                width={967}
+                height={369}
+                className="block w-full h-auto"
+              />
             </span>
           </h1>
           <p className="font-marker text-paper text-lg lg:text-xl -rotate-2">
@@ -467,6 +486,39 @@ export default function Home() {
                           </button>
                         </div>
                       </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-3 rounded-2xl border-2 border-ink bg-white px-3 py-2.5 grid gap-2 sm:grid-cols-[auto_1fr_1fr] sm:items-center sm:gap-x-8">
+                <span className="font-black text-xs tracking-widest uppercase">
+                  Add toppings <span className="text-ink/75 normal-case tracking-normal font-bold">(+R5 each)</span>
+                </span>
+                {Object.entries(TOPPINGS).map(([t, price]) => (
+                  <div key={t} className="flex items-center justify-between gap-2" data-testid={`topping-${t}`}>
+                    <span className="text-sm font-bold">
+                      {t} <span className="font-bebas text-lg text-ink/75 ml-1">+R{price}</span>
+                    </span>
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        data-testid={`btn-decrease-${t}`}
+                        onClick={() => updateTopping(t, -1)}
+                        aria-label={`Remove one ${t}`}
+                        className="w-8 h-8 rounded-full border-2 border-ink font-black text-base flex items-center justify-center active:scale-90 transition-transform bg-white hover:bg-ink hover:text-white"
+                      >
+                        −
+                      </button>
+                      <span className="font-black text-sm w-5 text-center tabular-nums">{toppingQty[t]}</span>
+                      <button
+                        data-testid={`btn-increase-${t}`}
+                        onClick={() => updateTopping(t, 1)}
+                        aria-label={`Add one ${t}`}
+                        className="w-8 h-8 rounded-full border-2 text-white font-black text-base flex items-center justify-center active:scale-90 transition-transform"
+                        style={{ background: BLUE, borderColor: BLUE_DK }}
+                      >
+                        +
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -790,8 +842,14 @@ export default function Home() {
       <footer className="border-t-2 border-ink bg-ink text-paper relative overflow-hidden">
         <div className="max-w-6xl mx-auto px-6 lg:px-10 py-12 grid grid-cols-1 sm:grid-cols-3 gap-10 items-center">
           <div className="flex flex-col items-center sm:items-start gap-2">
-            <div className="font-bubble text-5xl leading-none text-paper">STUFF'D</div>
-            <div className="font-black tracking-[0.6em] text-xs uppercase text-paper/80">Bagels</div>
+            <img
+              src="/logo-white.png"
+              alt="STUFF'D Bagels"
+              width={967}
+              height={369}
+              loading="lazy"
+              className="w-56 h-auto"
+            />
             <p className="font-marker text-highlight text-base mt-2">
               When hunger calls, it&apos;s time to get STUFF&apos;D.
             </p>
