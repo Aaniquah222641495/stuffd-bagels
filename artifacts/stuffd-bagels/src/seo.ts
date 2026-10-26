@@ -6,7 +6,7 @@ import { menuPricingObject, FAQ } from "./content";
 
 export const SITE_URL = "https://stuffdbagels.netlify.app";
 export const SITE_NAME = "STUFF'D Bagels";
-export const LAST_UPDATED = "2026-10-22";
+export const LAST_UPDATED = "2026-10-26";
 const OG_IMAGE = `${SITE_URL}/opengraph.jpg`;
 const PHONE = "+27724111011";
 const EMAIL = "stuffd.bagels@gmail.com";
@@ -30,10 +30,10 @@ const business = {
   name: SITE_NAME,
   slogan: "Every bite packed right.",
   description:
-    "Cape Town's first stuffed bagel. Fresh, handmade stuffed bagels at markets, events and cricket grounds across Cape Town every weekend. Order via WhatsApp, collect at the venue, pay with card (Yoco) or cash.",
+    "Cape Town's first stuffed bagel. Fresh, handmade stuffed bagels from our cart at markets and festivals across Cape Town. Order via WhatsApp, collect at the venue, pay with card (Yoco) or cash.",
   url: `${SITE_URL}/`,
   image: [OG_IMAGE, `${SITE_URL}/hero-bagel.jpeg`],
-  logo: `${SITE_URL}/logo.png`,
+  logo: `${SITE_URL}/logo-badge.png`,
   telephone: PHONE,
   email: EMAIL,
   servesCuisine: ["Bagels", "Street food"],
