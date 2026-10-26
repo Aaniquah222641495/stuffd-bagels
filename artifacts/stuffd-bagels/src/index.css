@@ -1,7 +1,6 @@
-/* Fonts are self-hosted (Fontsource, latin subset). Licences: Bagel Fat One, Bebas Neue, Inter = OFL-1.1; Permanent Marker = Apache-2.0. */
+/* Fonts are self-hosted (Fontsource, latin subset). Licences: Bagel Fat One, Bebas Neue, Inter = OFL-1.1. */
 @import "@fontsource/bagel-fat-one/latin-400.css";
 @import "@fontsource/bebas-neue/latin-400.css";
-@import "@fontsource/permanent-marker/latin-400.css";
 @import "@fontsource/inter/latin-400.css";
 @import "@fontsource/inter/latin-500.css";
 @import "@fontsource/inter/latin-700.css";
@@ -95,13 +94,14 @@
   /* Brand tokens. Change the look here, not in components. */
   /* 2026 rebrand: blue bubble STUFF'D (cart launch 2 Oct 2026). Approximate hexes from their Instagram. */
   --sb-ink: #16245c;        /* navy: text, borders */
-  --sb-paper: #f4f1de;      /* cream: page background */
+  --sb-paper: #f7f8fc;      /* cool white: page background, like the white cart and boxes (founder 2026-10-26: cream read as yellow) */
   --sb-blue: #2c48e6;       /* cobalt: brand blue, buttons, ticker (white text on it passes AA) */
   --sb-blue-dk: #1c33b8;    /* cobalt pressed / borders */
   --sb-sky: #c9d3ff;        /* pale cobalt: tape, labels on navy (founder 2026-10-26: no yellow) */
-  --sb-photo: #fdfcf6;      /* polaroid frame white */
+  --sb-photo: #fdfdff;      /* card and polaroid white (cool, matches the page) */
   --sb-tape: color-mix(in srgb, var(--sb-sky) 72%, transparent);
   --sb-shadow: 0 14px 28px -14px color-mix(in srgb, var(--sb-ink) 55%, transparent);
+  --sb-shadow-soft: 0 1px 2px color-mix(in srgb, var(--sb-ink) 8%, transparent), 0 22px 44px -22px color-mix(in srgb, var(--sb-ink) 40%, transparent);
   --sb-chat-bg: #f2f2f7;
   --sb-chat-blue: #007aff;
   --sb-chat-green: #34c759;
@@ -336,9 +336,6 @@
   font-family: "Bagel Fat One", "Inter", sans-serif;
   font-weight: 400;
 }
-.font-marker {
-  font-family: "Permanent Marker", cursive;
-}
 .font-bebas {
   font-family: "Bebas Neue", sans-serif;
 }
@@ -367,10 +364,11 @@
 /* ── Scrapbook pieces (polaroids, tape, folder tabs), like their posters ──
    In the components layer so Tailwind utilities (absolute, w-*, etc.) can override them. */
 @layer components {
-.dot-paper {
-  background-color: var(--sb-paper);
-  background-image: radial-gradient(color-mix(in srgb, var(--sb-blue) 16%, transparent) 1.2px, transparent 1.3px);
-  background-size: 22px 22px;
+/* Sesame-seed speckle for the cobalt hero: a quiet bagel nod. Decorative only. */
+.sesame {
+  background-color: var(--sb-blue);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='%23ffffff' fill-opacity='0.13'%3E%3Cellipse cx='14' cy='18' rx='2.2' ry='4.4' transform='rotate(35 14 18)'/%3E%3Cellipse cx='62' cy='9' rx='2.2' ry='4.4' transform='rotate(-20 62 9)'/%3E%3Cellipse cx='98' cy='34' rx='2.2' ry='4.4' transform='rotate(70 98 34)'/%3E%3Cellipse cx='38' cy='56' rx='2.2' ry='4.4' transform='rotate(-55 38 56)'/%3E%3Cellipse cx='84' cy='76' rx='2.2' ry='4.4' transform='rotate(15 84 76)'/%3E%3Cellipse cx='18' cy='96' rx='2.2' ry='4.4' transform='rotate(-80 18 96)'/%3E%3Cellipse cx='56' cy='108' rx='2.2' ry='4.4' transform='rotate(45 56 108)'/%3E%3Cellipse cx='110' cy='104' rx='2.2' ry='4.4' transform='rotate(-30 110 104)'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 120px 120px;
 }
 .polaroid {
   position: relative;
@@ -411,10 +409,6 @@
   border: 2px solid var(--sb-ink);
   border-bottom: 0;
 }
-.price-sticker {
-  rotate: 8deg;
-  box-shadow: 0 3px 0 var(--sb-ink);
-}
 .scribble-underline {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12' preserveAspectRatio='none'%3E%3Cpath d='M2 8c30-6 60-6 92-2s70 4 104-3' fill='none' stroke='%232c48e6' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
@@ -452,3 +446,39 @@
   .typing-dot { animation: none !important; opacity: 0.7; }
   .polaroid { transition: none; }
 }
+
+/* ── 2026-10-26 premium pass: quieter surfaces, more bagels ── */
+.shadow-soft { box-shadow: var(--sb-shadow-soft); }
+.eyebrow {
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+.text-balance { text-wrap: balance; }
+
+/* Bagel belt: a slow strip of round bagel photos. Two copies of the list so the loop is seamless. */
+@keyframes belt { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.belt-track { display: flex; width: max-content; }
+@keyframes settle { from { transform: scale(1.07); } to { transform: none; } }
+@keyframes spin-slow { to { rotate: 360deg; } }
+@media (prefers-reduced-motion: no-preference) {
+  .belt-track { animation: belt 48s linear infinite; }
+  .belt:hover .belt-track { animation-play-state: paused; }
+  .hero-settle { animation: settle 1.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .spin-slow { animation: spin-slow 40s linear infinite; }
+}
+
+/* Market trail: dashed cobalt line between bagel pins. Draws in when the section is revealed. */
+.trail-x {
+  background: repeating-linear-gradient(to right, var(--sb-blue) 0 10px, transparent 10px 20px);
+  transform-origin: left center;
+}
+.trail-y {
+  background: repeating-linear-gradient(to bottom, var(--sb-blue) 0 10px, transparent 10px 20px);
+  transform-origin: center top;
+}
+.motion-ok .reveal .trail-x,
+.motion-ok .reveal .trail-y { transition: transform 1.4s cubic-bezier(0.65, 0, 0.35, 1) 0.25s; }
+.motion-ok .reveal:not(.is-in) .trail-x { transform: scaleX(0); }
+.motion-ok .reveal:not(.is-in) .trail-y { transform: scaleY(0); }
