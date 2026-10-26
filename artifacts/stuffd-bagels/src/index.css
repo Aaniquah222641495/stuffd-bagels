@@ -1,4 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Bebas+Neue&family=Inter:wght@400;700;900&display=swap');
+/* Fonts are self-hosted (Fontsource, latin subset). Licences: Bagel Fat One, Bebas Neue, Inter = OFL-1.1; Permanent Marker = Apache-2.0. */
+@import "@fontsource/bagel-fat-one/latin-400.css";
+@import "@fontsource/bebas-neue/latin-400.css";
+@import "@fontsource/permanent-marker/latin-400.css";
+@import "@fontsource/inter/latin-400.css";
+@import "@fontsource/inter/latin-500.css";
+@import "@fontsource/inter/latin-700.css";
+@import "@fontsource/inter/latin-900.css";
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
@@ -60,6 +67,8 @@
   /* Brand tokens (values live in :root as --sb-*). Use these instead of hex codes in components. */
   --color-ink: var(--sb-ink);
   --color-paper: var(--sb-paper);
+  --color-blue: var(--sb-blue);
+  --color-blue-dk: var(--sb-blue-dk);
   --color-highlight: var(--sb-highlight);
   --color-highlight-dk: var(--sb-highlight-dk);
   --color-gold: var(--sb-gold);
@@ -85,10 +94,13 @@
 /* LIGHT MODE */
 :root {
   /* Brand tokens. Change the look here, not in components. */
-  --sb-ink: #1a1a1a;
-  --sb-paper: #fbfbf9;
-  --sb-highlight: #f2f6d0;
-  --sb-highlight-dk: #d6daa8;
+  /* 2026 rebrand: blue bubble STUFF'D (cart launch 2 Oct 2026). Approximate hexes from their Instagram. */
+  --sb-ink: #16245c;        /* navy: text, borders */
+  --sb-paper: #f4f1de;      /* cream: page background */
+  --sb-blue: #2c48e6;       /* cobalt: brand blue, buttons, ticker (white text on it passes AA) */
+  --sb-blue-dk: #1c33b8;    /* cobalt pressed / borders */
+  --sb-highlight: #f5c842;  /* yellow star accent */
+  --sb-highlight-dk: #d9a91c;
   --sb-gold: #c8900f;
   --sb-chat-bg: #f2f2f7;
   --sb-chat-blue: #007aff;
@@ -317,4 +329,50 @@
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
   }
+}
+
+/* ── 2026 rebrand helpers ───────────────────────────────── */
+.font-bubble {
+  font-family: "Bagel Fat One", "Inter", sans-serif;
+  font-weight: 400;
+}
+.font-marker {
+  font-family: "Permanent Marker", cursive;
+}
+.font-bebas {
+  font-family: "Bebas Neue", sans-serif;
+}
+
+/* Blue duotone, like their riso-style Instagram photos:
+   shadows go navy, highlights go soft cobalt. */
+.duotone {
+  /* position comes from the utility class (absolute / relative) */
+  isolation: isolate;
+  background: #8fa2ff;
+  overflow: hidden;
+}
+.duotone > img {
+  filter: grayscale(1) contrast(1.15) brightness(1.05);
+  mix-blend-mode: multiply;
+}
+.duotone::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--sb-ink);
+  mix-blend-mode: lighten;
+  pointer-events: none;
+}
+
+/* Bubble wordmark: cream letters with a chunky navy offset, like a sticker. */
+.wordmark {
+  color: var(--sb-paper);
+  text-shadow:
+    0 4px 0 var(--sb-ink),
+    0 8px 0 color-mix(in srgb, var(--sb-ink) 55%, transparent);
+  letter-spacing: -0.01em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track { animation: none; }
 }
