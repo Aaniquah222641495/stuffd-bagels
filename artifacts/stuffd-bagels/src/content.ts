@@ -47,7 +47,7 @@ export const FAQ = [
   },
   {
     q: "Can I book you guys for a private event?",
-    a: "Absolutely! Drop us a WhatsApp below and we'll put together a custom quote for you 🥯",
+    a: "Absolutely! Drop us a WhatsApp or email us at stuffd.bagels@gmail.com and we'll put together a custom quote for you 🥯",
     time: "10:47",
   },
 ];
