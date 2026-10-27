@@ -15,7 +15,7 @@ import {
   type MarketEvent,
 } from "@/content";
 
-const BUSINESS_PHONE = "27724111011";
+const BUSINESS_PHONE = "27833008472";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -1132,8 +1132,8 @@ export default function Home() {
 
           <div className="flex flex-col items-center sm:items-start gap-3">
             <div className="eyebrow mb-1 text-sky">Get in touch</div>
-            <a href="tel:+27724111011" className="text-paper/90 hover:text-white text-sm transition-colors">
-              +27 72 411 1011
+            <a href="tel:+27833008472" className="text-paper/90 hover:text-white text-sm transition-colors">
+              +27 83 300 8472
             </a>
             <a href="mailto:stuffd.bagels@gmail.com" className="text-paper/90 hover:text-white text-sm transition-colors">
               stuffd.bagels@gmail.com
