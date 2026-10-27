@@ -68,6 +68,7 @@ function calendarUrl(e: { name: string; venue: string; start: string; end: strin
 
 const EVENT_QUOTE_MSG =
   "Hi STUFF'D, I'd like a quote to bring the cart to an event.\n\nDate:\nVenue:\nNumber of guests:";
+const BUSINESS_EMAIL = "stuffd.bagels@gmail.com";
 
 const FEED = [
   { src: "/ig/feed/ig-12.jpg", alt: "" },
@@ -940,15 +941,23 @@ export default function Home() {
                   it is and roughly how many people, and we'll put together a
                   custom quote.
                 </p>
-                <a
-                  href={`https://wa.me/${BUSINESS_PHONE}?text=${encodeURIComponent(EVENT_QUOTE_MSG)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-8 inline-flex items-center rounded-full border-2 border-white bg-photo text-blue px-8 py-3.5 font-black uppercase tracking-widest text-sm transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0.5"
-                  style={{ boxShadow: "0 5px 0 var(--sb-blue)" }}
-                >
-                  Get a quote on WhatsApp
-                </a>
+                <div className="mt-8 flex flex-wrap items-center gap-4">
+                  <a
+                    href={`https://wa.me/${BUSINESS_PHONE}?text=${encodeURIComponent(EVENT_QUOTE_MSG)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center rounded-full border-2 border-white bg-photo text-blue px-8 py-3.5 font-black uppercase tracking-widest text-sm transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0.5"
+                    style={{ boxShadow: "0 5px 0 var(--sb-blue)" }}
+                  >
+                    Get a quote on WhatsApp
+                  </a>
+                  <a
+                    href={`mailto:${BUSINESS_EMAIL}?subject=${encodeURIComponent("Event quote")}&body=${encodeURIComponent(EVENT_QUOTE_MSG)}`}
+                    className="inline-flex items-center rounded-full border-2 border-white text-white px-8 py-3.5 font-black uppercase tracking-widest text-sm transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0.5"
+                  >
+                    Or email us
+                  </a>
+                </div>
               </div>
               <div className="relative lg:pr-24">
                 <p className="eyebrow text-sky m-0 mb-4">What to send us</p>
@@ -1135,7 +1144,7 @@ export default function Home() {
             <a href="tel:+27833008472" className="text-paper/90 hover:text-white text-sm transition-colors">
               +27 83 300 8472
             </a>
-            <a href="mailto:stuffd.bagels@gmail.com" className="text-paper/90 hover:text-white text-sm transition-colors">
+            <a href={`mailto:${BUSINESS_EMAIL}`} className="text-paper/90 hover:text-white text-sm transition-colors">
               stuffd.bagels@gmail.com
             </a>
             <div className="text-paper/90 text-sm mt-1">Cape Town, South Africa</div>
