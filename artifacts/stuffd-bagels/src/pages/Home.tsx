@@ -1116,7 +1116,7 @@ export default function Home() {
             href="https://instagram.com/stuffd.bagels"
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="See more of STUFF'D Bagels on Instagram"
+            aria-label="@stuffd.bagels: see more of STUFF'D Bagels on Instagram"
             className="group grid grid-cols-3 lg:grid-cols-6"
           >
             {FEED.map((f) => (
