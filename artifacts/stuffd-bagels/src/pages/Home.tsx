@@ -179,7 +179,7 @@ function TrailLinks({
         target="_blank"
         rel="noopener noreferrer"
         className={cls}
-        aria-label={`Add ${sched.name} to your calendar`}
+        aria-label={`Add to calendar: ${sched.name}`}
       >
         Add to calendar
       </a>
