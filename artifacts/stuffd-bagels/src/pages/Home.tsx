@@ -673,13 +673,14 @@ export default function Home() {
               {Object.entries(menuPricingObject).map(([item, info], idx) => (
                 <Reveal key={item} delay={idx * 80}>
                   <article className="group h-full flex flex-col" data-testid={`menu-item-${item}`}>
-                    <div className="relative overflow-hidden rounded-[22px] shadow-soft bg-sky">
+                    {/* The real photos in their boxes (founder 2026-10-28: cut-outs looked less appetising here; the belt keeps them) */}
+                    <div className="relative overflow-hidden rounded-[22px] shadow-soft bg-ink/5">
                       <BagelImg
                         src={info.image}
                         alt={item}
-                        width={640}
-                        height={640}
-                        className="block w-full aspect-[4/5] object-contain p-4 sm:p-6 drop-shadow-[0_14px_18px_rgba(22,36,92,0.28)] transition-transform duration-700 ease-out group-hover:scale-[1.05] group-hover:-rotate-3"
+                        width={900}
+                        height={1200}
+                        className="block w-full aspect-[4/5] object-cover transition-transform duration-700 ease-out group-hover:scale-[1.05]"
                       />
                       <span className="absolute top-3 right-3 rounded-full bg-photo text-ink font-bebas text-xl leading-none px-3 pt-1.5 pb-1 shadow-soft">
                         R{info.price}
