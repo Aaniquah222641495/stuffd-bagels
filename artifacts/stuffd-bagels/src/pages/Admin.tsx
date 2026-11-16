@@ -51,6 +51,7 @@ export default function Admin() {
   const [data, setData] = useState<Availability | null>(null);
   const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([]);
   const [error, setError] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   const [newDate, setNewDate] = useState("");
@@ -111,9 +112,15 @@ export default function Admin() {
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    const pw = draft || password;
-    await load(pw);
-    if (draft) setPassword(draft);
+    if (signingIn) return; // every wrong try counts towards the lock-out, so one click is one try
+    setSigningIn(true);
+    try {
+      const pw = draft || password;
+      await load(pw);
+      if (draft) setPassword(draft);
+    } finally {
+      setSigningIn(false);
+    }
   }
 
   async function save() {
@@ -304,10 +311,11 @@ export default function Admin() {
             )}
             <button
               type="submit"
-              className={`${btnCls} w-full text-white`}
+              disabled={signingIn}
+              className={`${btnCls} w-full text-white disabled:opacity-60`}
               style={{ background: ACCENT, borderColor: ACCENT }}
             >
-              Sign In
+              {signingIn ? "Signing in..." : "Sign In"}
             </button>
           </form>
         </div>

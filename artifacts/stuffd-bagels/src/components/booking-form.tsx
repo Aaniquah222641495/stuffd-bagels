@@ -1,6 +1,6 @@
 // "Bring the cart to your event": the booking enquiry form. Posts to /api/booking, which emails
 // the owner (label "Bookings") and sends the customer an automatic reply. Enquiries are not paid.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   FieldRow,
   Honeypot,
@@ -55,9 +55,12 @@ export function BookingForm() {
     document.getElementById("booking-form")?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus();
   }, [focusTick]);
 
+  // Set the moment the first click lands (state only updates on the next render), cleared when the answer is back.
+  const inFlight = useRef(false);
+
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
-    if (status === "sending") return;
+    if (status === "sending" || inFlight.current) return;
     const e = validate();
     setErrors(e);
     setProblem("");
@@ -65,8 +68,10 @@ export function BookingForm() {
       setFocusTick((n) => n + 1); // the effect above focuses the first error once it is on screen
       return;
     }
+    inFlight.current = true;
     setStatus("sending");
     const r = await postForm("/api/booking", { ...f, guests: Number(f.guests) });
+    inFlight.current = false;
     if (r.ok) {
       setRef(r.data?.ref ?? "");
       setStatus("sent");

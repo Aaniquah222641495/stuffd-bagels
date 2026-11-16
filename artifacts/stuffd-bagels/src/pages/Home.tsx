@@ -88,14 +88,12 @@ interface Pickup {
 
 const BUSINESS_EMAIL = "stuffd.bagels@gmail.com";
 
-// Bottom Instagram strip: square crops of the client's own photos (2026-11-16). The old screenshot tiles
-// (ig-04..ig-12) had cut-off text, a past event poster and meme captions, so they are no longer used.
 const FEED = [
-  { src: "/ig/feed/mountains.jpg", avif: "/ig/feed/mountains.avif", alt: "" },
-  { src: "/ig/feed/steakd.jpg", avif: "/ig/feed/steakd.avif", alt: "" },
-  { src: "/ig/feed/held2.jpg", avif: "/ig/feed/held2.avif", alt: "" },
-  { src: "/ig/feed/pizza.jpg", avif: "/ig/feed/pizza.avif", alt: "" },
-  { src: "/ig/feed/held1.jpg", avif: "/ig/feed/held1.avif", alt: "" },
+  { src: "/ig/feed/ig-12.jpg", alt: "" },
+  { src: "/ig/feed/ig-09.jpg", alt: "" },
+  { src: "/ig/feed/ig-06.jpg", alt: "" },
+  { src: "/ig/feed/ig-10.jpg", alt: "" },
+  { src: "/ig/feed/ig-04.jpg", alt: "" },
 ];
 
 const TICKER_TEXT =
@@ -121,21 +119,21 @@ const BELT: { src: string; avif?: string; word: string }[] = [
   { src: "/jalapeno-bagel.png", word: "Jalapeno" },
   { src: "/cheesy-bagel.png", word: "Cheesy" },
   { src: "/plain-bagel.png", word: "Classic" },
-  { src: "/ig/feed/steakd-belt.jpg", avif: "/ig/feed/steakd-belt.avif", word: "Steak'd" },
+  { src: "/steakd-bagel.png", word: "Steak'd" }, // cut out of the client's 2026-11-16 box photo (Vision subject lift), same style as the others
   { src: "/bagel-cutout.webp", word: "Cream cheese" },
   { src: "/hero-bagel.jpeg", word: "Packed right" },
 ];
 
 const ABOUT_PHOTOS = [
-  { src: "/ig/cart.jpg", alt: "The STUFF'D Bagels cart at a market, blue counter and cloud sign", caption: "find the cart", width: 506, height: 900 },
+  { src: "/ig/cart.jpg", alt: "The STUFF'D Bagels cart at a market, blue counter and cloud sign", caption: "find the cart", width: 506, height: 900, position: "50% 85%" },
   { src: "/bite-mountains.jpeg", avif: "/bite-mountains.avif", alt: "A woman biting into a STUFF'D jalapeno bagel with the Cape mountains behind her", caption: "jalapeno, mid-bite", width: 760, height: 1013, aspect: "3/4", position: "50% 30%" },
   { src: "/ig/made-fresh.jpg", alt: "Bagels being stuffed by hand at the STUFF'D cart", caption: "made fresh", width: 506, height: 900, position: "50% 60%" },
   { src: "/ig/chic.jpg", alt: "A customer biting into a STUFF'D bagel at a market", caption: "market day", width: 393, height: 700, position: "50% 40%" },
   { src: "/ig/box-of-four.jpg", alt: "A box of four stuffed bagels: cheesy, garlic and pizza", caption: "box of four", width: 675, height: 900 },
   { src: "/ig/unboxing.jpg", alt: "Opening a STUFF'D takeaway box", caption: "the unboxing", width: 450, height: 800, position: "50% 35%" },
   { src: "/ig/merch.jpg", alt: "A STUFF'D team member holding a fresh pizza bagel", caption: "hot off the cart", width: 675, height: 900, position: "50% 70%" },
-  { src: "/ig/friends.jpg", alt: "Friends sharing STUFF'D bagels on a couch", caption: "bring the crew", width: 720, height: 405 },
-  { src: "/ig/jalapeno-poster.jpg", alt: "Holding a jalapeno stuffed bagel, blue duotone photo", caption: "the jalapeno", width: 719, height: 900 },
+  { src: "/ig/friends.jpg", alt: "Friends sharing STUFF'D bagels on a couch", caption: "bring the crew", width: 720, height: 405, aspect: "4/3", position: "50% 50%" },
+  { src: "/ig/jalapeno-poster.jpg", alt: "Holding a jalapeno stuffed bagel, blue duotone photo", caption: "the jalapeno", width: 719, height: 900, aspect: "4/5", position: "50% 50%" },
 ];
 
 /** Taped polaroid, like the scrapbook posters on their Instagram. `tilt` is the resting angle. */
@@ -478,9 +476,12 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [total, displayTotal]);
 
+  // Set the moment the first click lands (state only updates on the next render), cleared when the answer is back.
+  const orderInFlight = useRef(false);
+
   const submitOrder = async (ev: React.FormEvent) => {
     ev.preventDefault();
-    if (orderStatus === "sending" || orderingHidden) return;
+    if (orderStatus === "sending" || orderInFlight.current || orderingHidden) return;
     const errs: Record<string, string> = {};
     if (itemCount < 1) errs.bagels = "Pick at least one bagel above first.";
     if (!name.trim()) errs.name = "Please add your name.";
@@ -494,6 +495,7 @@ export default function Home() {
       setFocusTick((n) => n + 1); // the effect below moves focus once the errors are on screen
       return;
     }
+    orderInFlight.current = true;
     setOrderStatus("sending");
     const r = await postForm("/api/order", {
       name,
@@ -507,6 +509,7 @@ export default function Home() {
       note: notes,
       website: honey,
     });
+    orderInFlight.current = false;
     if (r.ok) {
       const lines = [
         ...Object.entries(quantities).filter(([, q]) => q > 0).map(([i, q]) => `${q} x ${i}`),
@@ -1301,18 +1304,15 @@ export default function Home() {
           >
             {FEED.map((f) => (
               <span key={f.src} className="relative block overflow-hidden aspect-square">
-                <picture className="contents">
-                  <source srcSet={f.avif} type="image/avif" />
-                  <img
-                    src={f.src}
-                    alt={f.alt}
-                    width={600}
-                    height={600}
-                    loading="lazy"
-                    decoding="async"
-                    className="block w-full h-full object-cover transition-transform duration-700 ease-out hover:scale-[1.06]"
-                  />
-                </picture>
+                <img
+                  src={f.src}
+                  alt={f.alt}
+                  width={600}
+                  height={600}
+                  loading="lazy"
+                  decoding="async"
+                  className="block w-full h-full object-cover transition-transform duration-700 ease-out hover:scale-[1.06]"
+                />
               </span>
             ))}
             <span className="sesame relative flex flex-col items-center justify-center gap-2 aspect-square text-white text-center p-3">

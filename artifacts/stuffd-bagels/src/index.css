@@ -381,10 +381,14 @@
   rotate: var(--tilt, 0deg);
   transition: rotate 0.5s cubic-bezier(0.16, 1, 0.3, 1), scale 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.polaroid > img,
+/* Descendant, not child: the img sits inside a <picture>, so ".polaroid > img" never matched and the photos
+   were stretched to the frame. The inline aspect-ratio sets the window; cover crops, never stretches. */
+.polaroid img,
 .polaroid .polaroid-photo {
   display: block;
   width: 100%;
+  height: auto;
+  max-width: 100%;
   object-fit: cover;
   background: color-mix(in srgb, var(--sb-ink) 8%, var(--sb-paper));
 }

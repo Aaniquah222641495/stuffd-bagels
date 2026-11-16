@@ -10,6 +10,7 @@ const { chromium } = require(process.env.PW);
 const axeSrc = fs.readFileSync(process.env.AXE, "utf8");
 const H = await import("./_helpers.mjs");
 const { B, admin, setAvail, resetPickups, clearRateLimits, col } = H;
+const mailFor = (who, w) => `${who}${H.uniqueEmail("").replace("@example.com", "")}w${w}@example.com`;
 const log = process.env.FAKELOG;
 const nLog = () => (fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n").filter(Boolean).length : 0);
 const lastLog = () => JSON.parse(fs.readFileSync(log, "utf8").trim().split("\n").at(-1));
@@ -30,7 +31,8 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   clearRateLimits();
   await setAvail({});
   await resetPickups([]);
-  const ctx = await browser.newContext({ viewport: { width: w, height: h }, bypassCSP: true });
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, bypassCSP: true, extraHTTPHeaders: { "CF-Connecting-IP": H.ip } }); // a pretend client network per viewport (rate limits are per network)
+  const aisha = mailFor("aisha", w), sam = mailFor("sam", w);
   const page = await ctx.newPage();
   const cdp = await ctx.newCDPSession(page); await cdp.send("Network.enable"); await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
   const bad = []; page.on("console", (m) => { if (["error", "warning"].includes(m.type()) && !/status of 409/.test(m.text())) bad.push(m.text()); }); // the 409 is the deliberate switched-off-point check page.on("pageerror", (e) => bad.push("pageerror " + e.message));
@@ -73,7 +75,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("data-testid")), "input-name");
   await axeRun(page, "order form with errors");
   await page.getByTestId("btn-increase-Pizza Bagel").click(); await page.getByTestId("btn-increase-Pizza Bagel").click(); await page.getByTestId("btn-increase-Steak'd Bagel").click();
-  await page.getByTestId("input-name").fill("Aisha Khan"); await page.getByTestId("input-phone").fill("082 123 4567"); await page.getByTestId("input-email").fill("aisha@example.com");
+  await page.getByTestId("input-name").fill("Aisha Khan"); await page.getByTestId("input-phone").fill("082 123 4567"); await page.getByTestId("input-email").fill(aisha);
   await page.getByTestId("select-saturday").selectOption(sats[1]); await page.getByTestId("input-pickup-time").fill("around 11am"); await page.getByTestId("textarea-notes").fill("No onions please");
   assert.ok(!(await page.getByTestId("order-form").textContent()).includes("Please add your name"), "errors clear as fields are fixed");
   await page.getByTestId("order-form").scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS ?? "."}/order2-filled-${w}.png` });
@@ -83,7 +85,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   await page.getByTestId("order-sent").waitFor();
   assert.equal(nLog(), before + 1);
   const sent = await page.getByTestId("order-sent").textContent();
-  for (const re of [/Order sent/, /Awaiting payment/, /confirmed once it's paid/, /SB-[A-Z2-9]{6}/, /R305/, /Kenilworth Corner, Main Rd, Kenilworth/, new RegExp(nice(sats[1])), /around 11am/, /aisha@example.com/]) assert.match(sent, re);
+  for (const re of [/Order sent/, /Awaiting payment/, /confirmed once it's paid/, /SB-[A-Z2-9]{6}/, /R305/, /Kenilworth Corner, Main Rd, Kenilworth/, new RegExp(nice(sats[1])), /around 11am/, new RegExp(aisha.replace(/\./g, "\\."))]) assert.match(sent, re);
   const fwd = lastLog().body;
   assert.equal(fwd.pickupPlace, "Kenilworth Corner, Main Rd, Kenilworth"); assert.equal(fwd.pickupDate, sats[1]); assert.equal(fwd.pickupTime, "around 11am"); assert.equal(fwd.total, 305);
   await page.screenshot({ path: `${process.env.SHOTS ?? "."}/order2-sent-${w}.png` }); await axeRun(page, "order sent");
@@ -91,7 +93,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   // 4. A point switched off after the page loaded: clear message, list refreshes
   await page.getByRole("button", { name: "Start another order" }).click();
   await page.getByTestId("btn-increase-Pizza Bagel").click();
-  await page.getByTestId("input-name").fill("Aisha Khan"); await page.getByTestId("input-phone").fill("082 123 4567"); await page.getByTestId("input-email").fill("aisha@example.com");
+  await page.getByTestId("input-name").fill("Aisha Khan"); await page.getByTestId("input-phone").fill("082 123 4567"); await page.getByTestId("input-email").fill(aisha);
   await admin(`/pickups/${P1}`, "PUT", { name: "Kenilworth Corner", area: "Main Rd, Kenilworth", days: "", active: false });
   await Promise.all([page.waitForResponse((r) => r.url().endsWith("/api/order")), page.getByTestId("btn-place-order").click()]);
   await page.waitForSelector("[role=alert]");
@@ -134,7 +136,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   // 7. Booking form (unchanged by the order rules)
   await page.clock.setFixedTime(new Date()); await open();
   const bf = page.getByTestId("booking-form"); await bf.scrollIntoViewIfNeeded();
-  await page.getByTestId("booking-name").fill("Sam Peters"); await page.getByTestId("booking-phone").fill("+27 82 999 9999"); await page.getByTestId("booking-email").fill("sam@example.com");
+  await page.getByTestId("booking-name").fill("Sam Peters"); await page.getByTestId("booking-phone").fill("+27 82 999 9999"); await page.getByTestId("booking-email").fill(sam);
   await page.getByTestId("booking-date").fill("2027-02-14"); await page.getByTestId("booking-venue").fill("Kenilworth, Cape Town"); await page.getByTestId("booking-guests").fill("80");
   const b2 = nLog();
   await Promise.all([page.waitForResponse((r) => r.url().endsWith("/api/booking")), page.getByTestId("booking-submit").click()]);
