@@ -1,53 +1,81 @@
 // Menu and FAQ, shared by the page (Home.tsx) and the search-engine data (seo.ts),
 // so prices and answers in structured data always match what visitors see.
 
-// Client's confirmed printed menu (received 2026-10-25). Keep in step with pricing.md and llms.txt.
+// Client's menu board of 2026-11-16 (ops/units/web/projects/stuffd-bagels/client-assets/MENU-CONFIRMED.md).
+// Keep in step with pricing.md and llms.txt. This is the ONLY price list: the order Worker
+// (worker/forms.ts) works every order total out from it, never from what the browser sends,
+// so the Yoco payment amount will come from here too.
+// image: null = no photo (the card shows a brand no-photo card). avif is the optional smaller copy of the same photo.
+// Halal: the founder confirmed (2026-11-16, from the client) that the WHOLE menu is halal, including the pepperoni.
+// Say "halal". Do NOT say "certified" and do not name a certifier: neither is confirmed.
 export const menuPricingObject: Record<
   string,
-  { price: number; image: string; desc: string }
+  { price: number; image: string | null; avif?: string; desc: string }
 > = {
-  "Pizza Bagel": {
-    price: 85,
-    image: "/pizza-bagel.jpeg",
-    desc: "Pepperoni · Cheese · Cream Cheese",
-  },
-  "Jalapeno Bagel": {
-    price: 70,
-    image: "/jalapeno-bagel.jpeg",
-    desc: "Jalapeno · Cheese · Cream Cheese",
-  },
-  "Cheesy Bagel": {
-    price: 80,
-    image: "/cheesy-bagel.jpeg",
-    desc: "Cheese · Cream Cheese",
-  },
-  "Plain Bagel": {
+  "Classic Bagel": {
     price: 65,
     image: "/plain-bagel.jpeg",
     desc: "Cream Cheese",
   },
+  "Jalapeno Bagel": {
+    price: 75,
+    image: "/jalapeno-held.jpeg", // client photo 2026-11-16, cropped (held-2)
+    avif: "/jalapeno-held.avif",
+    desc: "Jalapeno Cream Cheese · Jalapenos",
+  },
+  "Cheesy Bagel": {
+    price: 85,
+    image: "/cheesy-bagel.jpeg",
+    desc: "Cream Cheese · Cheese",
+  },
+  "Pizza Bagel": {
+    price: 95,
+    image: "/pizza-box.jpeg", // client photo 2026-11-16, left box cropped
+    avif: "/pizza-box.avif",
+    desc: "Pepperoni · Cream Cheese · Cheese",
+  },
+  "Steak'd Bagel": {
+    price: 115,
+    image: "/steakd-box.jpeg", // client photo 2026-11-16, right box cropped
+    avif: "/steakd-box.avif",
+    desc: "Birria (Halal Beef) · Cream Cheese · Cheese",
+  },
 };
 
-// Add-on toppings from the printed menu: +R5 each, added to any bagel.
-export const TOPPINGS: Record<string, number> = {
-  "Extra Cheese": 5,
-  "Extra Jalapeno": 5,
+// Extra toppings. Waiting on the client for which toppings there are and what each costs (founder 2026-11-16:
+// the old boards said Jalapeno +R5, and cheese +R5 before that; the 2026-11-16 board does not list them).
+// price: null = not confirmed yet. A topping with a null price is HIDDEN from the order builder and refused by the
+// Worker, so no old price is ever shown or charged. To switch one on, set its price (rand) here: the browser and
+// the Worker both read this list, nothing else needs changing. Names below are the candidates from the old boards.
+export const TOPPINGS: Record<string, number | null> = {
+  "Extra Cheese": null,
+  "Extra Jalapeno": null,
 };
+
+/** Only the toppings that have a confirmed price: what the order builder shows and the Worker accepts. */
+export function pricedToppings(): Record<string, number> {
+  return Object.fromEntries(Object.entries(TOPPINGS).filter((e): e is [string, number] => typeof e[1] === "number"));
+}
 
 export const FAQ = [
   {
-    q: "Where do I collect my order?",
-    a: "At the venue on your pickup date 📍 Look for the STUFF'D cart. You won't miss us!",
+    q: "Where and when do I collect my order?",
+    a: "Online orders are collected on a Saturday at one of our pickup points 📍 Order by Wednesday, collect on Saturday. At a market? No order needed, just come and buy at the cart!",
     time: "10:42",
   },
   {
-    q: "How do I pay? There's no checkout here 🤔",
-    a: "Pay at the cart with Yoco (tap your card) or cash. No online payment ever needed 🙌",
+    q: "How do I pay for my order? 🤔",
+    a: "Your order is confirmed once it's paid. After you send it, we'll email you how to pay 🙌",
     time: "10:44",
   },
   {
+    q: "Is the food halal?",
+    a: "Yes, our whole menu is halal 🥯",
+    time: "10:45",
+  },
+  {
     q: "Can I book you guys for a private event?",
-    a: "Absolutely! Drop us a WhatsApp or email us at stuffd.bagels@gmail.com and we'll put together a custom quote for you 🥯",
+    a: "Absolutely! Fill in the event form on this page and we'll put together a custom quote for you 🥯",
     time: "10:47",
   },
 ];
