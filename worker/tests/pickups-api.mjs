@@ -1,7 +1,7 @@
 // Admin pickup points: auth, validation, limits, add / edit / switch off / remove, and what the public list shows.
 // Setup as in forms-api.mjs. Run: node worker/tests/pickups-api.mjs /tmp/fake.log
 import assert from "node:assert/strict";
-import { B, admin, post, resetPickups, clearRateLimits } from "./_helpers.mjs";
+import { B, admin, post, resetPickups, clearRateLimits, ip } from "./_helpers.mjs";
 clearRateLimits();
 let n = 0;
 const ok = (name) => console.log("PASS", ++n, name);
@@ -15,10 +15,10 @@ ok("starts empty (admin and public lists)");
 
 // Auth: same as events. No password / wrong password: 401, and nothing created.
 for (const [method, url, body] of [["GET", "/api/admin/pickups"], ["POST", "/api/admin/pickups", { name: "x", area: "y" }], ["PUT", "/api/admin/pickups/abc", { name: "x", area: "y" }], ["DELETE", "/api/admin/pickups/abc"]]) {
-  const r = await fetch(B + url, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(B + url, { method, headers: { "Content-Type": "application/json", "CF-Connecting-IP": ip }, body: body ? JSON.stringify(body) : undefined });
   assert.equal(r.status, 401, `${method} ${url} without password`);
 }
-assert.equal((await fetch(B + "/api/admin/pickups", { headers: { "x-admin-password": "wrong" } })).status, 401);
+assert.equal((await fetch(B + "/api/admin/pickups", { headers: { "x-admin-password": "wrong", "CF-Connecting-IP": ip } })).status, 401);
 clearRateLimits(); // the failed tries above count towards the 5-strikes lock-out
 assert.deepEqual(await json(await admin("/pickups")), []);
 ok("no password or wrong password: 401 on every pickup route");
@@ -39,7 +39,7 @@ await bad({ name: "x".repeat(61), area: "y" }, "name 61"); await bad({ name: "x"
 await bad({ name: "x", area: "y", days: "z".repeat(121) }, "days 121"); await bad({ name: 5, area: "y" }, "name number");
 await bad({ name: "x", area: "y", active: "yes" }, "active not boolean"); await bad([], "array body");
 assert.equal((await admin("/pickups", "POST", { name: "x".repeat(60), area: "y".repeat(120), days: "z".repeat(120) })).status, 200, "exact limits are fine");
-assert.equal((await fetch(B + "/api/admin/pickups", { method: "POST", headers: { "Content-Type": "text/plain", "x-admin-password": (await import("./_helpers.mjs")).pw }, body: "{}" })).status, 400);
+assert.equal((await fetch(B + "/api/admin/pickups", { method: "POST", headers: { "Content-Type": "text/plain", "CF-Connecting-IP": ip, "x-admin-password": (await import("./_helpers.mjs")).pw }, body: "{}" })).status, 400);
 assert.equal((await admin("/pickups", "POST", { name: "x", area: "y", pad: "p".repeat(20000) })).status, 400, "over 10 KB body");
 list = await json(await admin("/pickups")); await admin(`/pickups/${list.at(-1).id}`, "DELETE");
 ok("validation: required, length limits (60/120/120), types, content-type, 10 KB body");

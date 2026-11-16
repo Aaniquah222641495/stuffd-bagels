@@ -1,10 +1,14 @@
 // Admin password check and lockout (ADR-0028 "Password and lockout", acceptance checks 3, 4, 18).
 import { HttpError } from "./http";
-import { secondsToSastMidnight, sastToday } from "./store";
+import { hashKey, ipBucket, refund, take, type LimiterEnv, type Rule } from "./limiter-client";
+import { secondsToSastMidnight } from "./store";
 
-const MAX_IP_FAILS = 5;
-const IP_LOCK_SECONDS = 900;
-const MAX_DAY_FAILS = 100;
+// Lockout (ADR-0028, M2 of the 2026-11-16 re-test): 5 wrong passwords per 15 minutes, and 30 per day, for each
+// client network (IPv4 address or IPv6 /64). There is no all-visitors cap, so an attacker cannot lock the owner out
+// from another network. The counter lives in a Durable Object (worker/limiter.ts), which is strongly consistent.
+export const ADMIN_MAX_FAILS = 5;
+export const ADMIN_LOCK_SECONDS = 900;
+export const ADMIN_MAX_FAILS_PER_DAY = 30;
 const MAX_PASSWORD_LENGTH = 256;
 const enc = new TextEncoder();
 
@@ -17,58 +21,37 @@ async function passwordMatches(given: string | null, secret: string): Promise<bo
   return crypto.subtle.timingSafeEqual(a, b);
 }
 
-/** Keyed hash of the IP, so the raw address is never stored (and can't be brute-forced from KV). */
-export async function hashIp(ip: string, secret: string): Promise<string> {
-  const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(ip)));
-  return [...sig.slice(0, 16)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-async function count(kv: KVNamespace, key: string): Promise<number> {
-  const n = Number(await kv.get(key));
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
-
 /**
  * Throws HttpError unless the request carries the right x-admin-password.
- * Lockout writes to KV only on failed logins, and stops writing once locked, so an attack
- * cannot use up the daily KV write allowance.
+ * A slot is taken BEFORE the password is checked (all-or-nothing, inside the Durable Object), and given back if
+ * the password is right. So 12 parallel wrong guesses use 5 slots and the other 7 are refused with 429.
+ * If the counter cannot be reached the request is refused (503), never let through.
  */
-export async function requireAdmin(request: Request, env: { ADMIN_PASSWORD?: string; STUFFD_KV?: KVNamespace }): Promise<void> {
+export async function requireAdmin(request: Request, env: LimiterEnv & { ADMIN_PASSWORD?: string }): Promise<void> {
   const secret = env.ADMIN_PASSWORD;
   if (!secret) throw new HttpError(500, "Server error"); // not configured: say nothing more
 
-  const kv = env.STUFFD_KV;
-  const ipKey = `fail:${await hashIp(request.headers.get("CF-Connecting-IP") ?? "unknown", secret)}`;
-  const dayKey = `fail:day:${sastToday()}`;
-
-  let ipFails = 0;
-  let dayFails = 0;
-  if (kv) {
-    try {
-      [ipFails, dayFails] = await Promise.all([count(kv, ipKey), count(kv, dayKey)]);
-    } catch {
-      // KV hiccup: carry on to the password check rather than locking the owner out.
-    }
+  const key = `admin:${await hashKey(ipBucket(request.headers.get("CF-Connecting-IP") ?? "unknown"), secret)}`;
+  const ids = ["15m", "day"];
+  const rules: Rule[] = [
+    { id: ids[0], limit: ADMIN_MAX_FAILS, windowSec: ADMIN_LOCK_SECONDS },
+    { id: ids[1], limit: ADMIN_MAX_FAILS_PER_DAY, windowSec: secondsToSastMidnight() },
+  ];
+  let verdict;
+  try {
+    verdict = await take(env, key, rules);
+  } catch {
+    throw new HttpError(503, "Could not check the login just now. Try again in a minute.");
   }
-  if (dayFails >= MAX_DAY_FAILS) {
-    throw new HttpError(429, "Too many tries. Try again tomorrow.", { "Retry-After": String(secondsToSastMidnight()) });
+  if (!verdict.ok) {
+    const today = verdict.retryAfter > ADMIN_LOCK_SECONDS;
+    throw new HttpError(429, today ? "Too many tries. Try again tomorrow." : "Too many tries. Wait 15 minutes and try again.", {
+      "Retry-After": String(verdict.retryAfter),
+    });
   }
-  if (ipFails >= MAX_IP_FAILS) {
-    throw new HttpError(429, "Too many tries. Wait 15 minutes and try again.", { "Retry-After": String(IP_LOCK_SECONDS) });
-  }
-
-  if (await passwordMatches(request.headers.get("x-admin-password"), secret)) return;
-
-  if (kv) {
-    try {
-      await Promise.all([
-        kv.put(ipKey, String(ipFails + 1), { expirationTtl: IP_LOCK_SECONDS }),
-        kv.put(dayKey, String(dayFails + 1), { expirationTtl: 2 * 86400 }),
-      ]);
-    } catch {
-      // Could not record the failure; still refuse the request.
-    }
+  if (await passwordMatches(request.headers.get("x-admin-password"), secret)) {
+    await refund(env, key, ids);
+    return;
   }
   throw new HttpError(401, "Invalid password");
 }

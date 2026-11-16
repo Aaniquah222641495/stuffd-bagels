@@ -5,9 +5,13 @@
 // Secrets: ADMIN_PASSWORD is a Worker secret (dashboard, or `npx wrangler secret put ADMIN_PASSWORD`).
 // Locally it lives in a git-ignored .dev.vars. Never put it in this file.
 //
-// Order and booking emails: APPS_SCRIPT_URL (and optionally APPS_SCRIPT_TOKEN) are Worker secrets too, set the same way:
-// `npx wrangler@4.148.0 secret put APPS_SCRIPT_URL --env preview`. The script itself is apps-script/Code.gs (see its README).
-// Without APPS_SCRIPT_URL the order and booking forms answer "not switched on yet": nothing is lost, nothing is sent.
+// Order and booking emails: APPS_SCRIPT_URL and APPS_SCRIPT_TOKEN (32+ random characters, same value as SHARED_TOKEN in the
+// script) are Worker secrets too, set the same way: `npx wrangler@4.148.0 secret put APPS_SCRIPT_URL --env preview`.
+// The script itself is apps-script/Code.gs (see its README). Without BOTH secrets the order and booking forms answer
+// "not switched on yet": nothing is lost, nothing is sent.
+//
+// Rate limits: Durable Object class Limiter (worker/limiter.ts), SQLite-backed so it runs on the Workers Free plan.
+// Bindings are not inherited by environments, so the preview repeats it; the migration is inherited.
 //
 // KV: namespaces created 2026-11-16 in the founder's account (founder yes): stuffd-kv (live) and
 // stuffd-kv-preview. Ids are not secrets. Preview deploy: `npx wrangler@4.148.0 deploy --env preview`.
@@ -28,11 +32,14 @@
     "run_worker_first": ["/api", "/api/*"]
   },
   "kv_namespaces": [{ "binding": "STUFFD_KV", "id": "663cf05928e64e048205ec4dafc1354c" }],
+  "durable_objects": { "bindings": [{ "name": "LIMITER", "class_name": "Limiter" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Limiter"] }],
   "env": {
     // Preview for the client and the founder: separate Worker, separate KV, separate password.
     "preview": {
       "name": "stuffdbagels-preview",
-      "kv_namespaces": [{ "binding": "STUFFD_KV", "id": "6487395497af4da7a4f2b493c3edc8f6" }]
+      "kv_namespaces": [{ "binding": "STUFFD_KV", "id": "6487395497af4da7a4f2b493c3edc8f6" }],
+      "durable_objects": { "bindings": [{ "name": "LIMITER", "class_name": "Limiter" }] }
     }
   }
 }

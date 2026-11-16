@@ -2,6 +2,7 @@
 // Only /api and /api/* reach this code (wrangler.jsonc: assets.run_worker_first). Everything
 // else is served straight from the static assets, so pages and images stay free requests.
 import { requireAdmin } from "./auth";
+export { Limiter } from "./limiter";
 import { handleForm, handlePayStub } from "./forms";
 import { HttpError, errorResponse, json, readJsonObject } from "./http";
 import {
@@ -27,8 +28,10 @@ export interface Env {
   ADMIN_PASSWORD?: string;
   // Web app URL of the client's Google Apps Script (apps-script/Code.gs). Worker secret, set by the founder.
   APPS_SCRIPT_URL?: string;
-  // Optional shared token, must match SHARED_TOKEN in the script.
+  // Required shared token (32+ random characters), must match SHARED_TOKEN in the script. No token, no forwarding.
   APPS_SCRIPT_TOKEN?: string;
+  // Durable Object namespace for the strongly consistent counters (worker/limiter.ts).
+  LIMITER?: DurableObjectNamespace;
 }
 
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;

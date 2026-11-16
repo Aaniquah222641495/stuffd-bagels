@@ -1,19 +1,13 @@
 // Saturday collection rules, enforced by the real Worker order code (worker/forms.ts) with a fake clock and a fake KV.
 // Run: node worker/tests/saturday-rules.mjs      (bundles forms.ts with the esbuild that comes with wrangler)
 // All times are South African (SAST, UTC+2, no daylight saving).
-import { execFileSync } from "node:child_process";
-import { readdirSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { bundle, fakeLimiter } from "./_bundle.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const pnpm = path.join(root, "node_modules/.pnpm");
-const esb = readdirSync(pnpm).filter((d) => d.startsWith("esbuild@")).sort().at(-1);
-const out = path.join(mkdtempSync(path.join(tmpdir(), "stuffd-rules-")), "forms.mjs");
-execFileSync(path.join(pnpm, esb, "node_modules/esbuild/bin/esbuild"), [path.join(root, "worker/forms.ts"), "--bundle", "--format=esm", "--platform=neutral", `--outfile=${out}`], { stdio: "ignore" });
-const { handleForm } = await import(pathToFileURL(out).href);
+const { handleForm } = await bundle("worker/forms.ts");
 const col = await import(pathToFileURL(path.join(root, "artifacts/stuffd-bagels/src/collection.ts")).href);
 
 globalThis.fetch = async () => new Response('{"ok":true}'); // the Apps Script says yes
@@ -28,7 +22,8 @@ const POINTS = { pickups: [
   { id: "p2", name: "Off Point", area: "Somewhere", days: "", active: false },
 ] };
 async function order(date, now, { availability = {}, pickups = POINTS, body = {} } = {}) {
-  const env = { STUFFD_KV: kvWith({ availability: { ordersEnabled: true, closedDates: [], closedMessage: "", ...availability }, pickups }), ADMIN_PASSWORD: "x", APPS_SCRIPT_URL: "http://fake/exec" };
+  const lim = await fakeLimiter({ now: () => now });
+  const env = { LIMITER: lim.ns, APPS_SCRIPT_TOKEN: "t".repeat(40), STUFFD_KV: kvWith({ availability: { ordersEnabled: true, closedDates: [], closedMessage: "", ...availability }, pickups }), ADMIN_PASSWORD: "x", APPS_SCRIPT_URL: "http://fake/exec" };
   const payload = { name: "Aisha", phone: "0821234567", email: "a@b.co", pickupId: "p1", pickupDate: date, items: { "Classic Bagel": 1 }, website: "", ...body };
   const req = new Request("http://x/api/order", { method: "POST", headers: { "Content-Type": "application/json", "CF-Connecting-IP": "1.2.3.4" }, body: JSON.stringify(payload) });
   try {

@@ -27,6 +27,7 @@ export function json(
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
       "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+      "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
       "Cache-Control": cache === "public" && status === 200 ? "public, max-age=30" : "no-store",
       ...extra,
     },
