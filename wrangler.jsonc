@@ -5,13 +5,14 @@
 // Secrets: ADMIN_PASSWORD is a Worker secret (dashboard, or `npx wrangler secret put ADMIN_PASSWORD`).
 // Locally it lives in a git-ignored .dev.vars. Never put it in this file.
 //
-// KV: the STUFFD_KV namespace below has no id yet on purpose. Create the namespace (or let the
-// first `wrangler deploy` provision it), then keep the id it reports here. Not done without the founder's yes.
+// KV: namespaces created 2026-11-16 in the founder's account (founder yes): stuffd-kv (live) and
+// stuffd-kv-preview. Ids are not secrets. Preview deploy: `npx wrangler@4.148.0 deploy --env preview`.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "stuffdbagels",
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-01",
+  "preview_urls": false,
   "assets": {
     "directory": "./artifacts/stuffd-bagels/dist/public",
     "binding": "ASSETS",
@@ -22,5 +23,12 @@
     // Only the API runs the Worker. Everything else is a free static request.
     "run_worker_first": ["/api", "/api/*"]
   },
-  "kv_namespaces": [{ "binding": "STUFFD_KV" }]
+  "kv_namespaces": [{ "binding": "STUFFD_KV", "id": "663cf05928e64e048205ec4dafc1354c" }],
+  "env": {
+    // Preview for the client and the founder: separate Worker, separate KV, separate password.
+    "preview": {
+      "name": "stuffdbagels-preview",
+      "kv_namespaces": [{ "binding": "STUFFD_KV", "id": "6487395497af4da7a4f2b493c3edc8f6" }]
+    }
+  }
 }
