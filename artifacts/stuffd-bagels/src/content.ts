@@ -14,17 +14,20 @@ export const menuPricingObject: Record<
 > = {
   "Classic Bagel": {
     price: 65,
-    image: "/plain-bagel.jpeg",
+    image: "/card-classic.jpg", // straightened 2026-11-16 (the box was shot about 4 degrees off level)
+    avif: "/card-classic.avif",
     desc: "Cream Cheese",
   },
   "Jalapeno Bagel": {
     price: 75,
-    image: "/jalapeno-bagel.jpeg", // the original box photo (founder 2026-11-16: keep the previous jalapeno picture)
+    image: "/card-jalapeno.jpg", // the original box photo (founder 2026-11-16: keep the previous jalapeno picture), straightened
+    avif: "/card-jalapeno.avif",
     desc: "Jalapeno Cream Cheese · Jalapenos",
   },
   "Cheesy Bagel": {
     price: 85,
-    image: "/cheesy-bagel.jpeg",
+    image: "/card-cheesy.jpg",
+    avif: "/card-cheesy.avif",
     desc: "Cream Cheese · Cheese",
   },
   "Pizza Bagel": {

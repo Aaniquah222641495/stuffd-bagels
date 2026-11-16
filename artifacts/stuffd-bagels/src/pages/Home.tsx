@@ -88,12 +88,14 @@ interface Pickup {
 
 const BUSINESS_EMAIL = "stuffd.bagels@gmail.com";
 
+// Bottom Instagram strip: square crops of the client's own photos (2026-11-16). The old screenshot tiles
+// (ig-04..ig-12) had cut-off text, a past event poster and meme captions, so they are no longer used.
 const FEED = [
-  { src: "/ig/feed/ig-12.jpg", alt: "" },
-  { src: "/ig/feed/ig-09.jpg", alt: "" },
-  { src: "/ig/feed/ig-06.jpg", alt: "" },
-  { src: "/ig/feed/ig-10.jpg", alt: "" },
-  { src: "/ig/feed/ig-04.jpg", alt: "" },
+  { src: "/ig/feed/mountains.jpg", avif: "/ig/feed/mountains.avif", alt: "" },
+  { src: "/ig/feed/steakd.jpg", avif: "/ig/feed/steakd.avif", alt: "" },
+  { src: "/ig/feed/held2.jpg", avif: "/ig/feed/held2.avif", alt: "" },
+  { src: "/ig/feed/pizza.jpg", avif: "/ig/feed/pizza.avif", alt: "" },
+  { src: "/ig/feed/held1.jpg", avif: "/ig/feed/held1.avif", alt: "" },
 ];
 
 const TICKER_TEXT =
@@ -114,11 +116,12 @@ function BagelImg({ src, avif, className, ...rest }: React.ImgHTMLAttributes<HTM
 }
 
 /** Round bagel photos for the moving strip under the hero. */
-const BELT = [
+const BELT: { src: string; avif?: string; word: string }[] = [
   { src: "/pizza-bagel.png", word: "Pizza" },
   { src: "/jalapeno-bagel.png", word: "Jalapeno" },
   { src: "/cheesy-bagel.png", word: "Cheesy" },
   { src: "/plain-bagel.png", word: "Classic" },
+  { src: "/ig/feed/steakd-belt.jpg", avif: "/ig/feed/steakd-belt.avif", word: "Steak'd" },
   { src: "/bagel-cutout.webp", word: "Cream cheese" },
   { src: "/hero-bagel.jpeg", word: "Packed right" },
 ];
@@ -700,6 +703,7 @@ export default function Home() {
                 <div key={b.word + copy} className="flex items-center gap-8 sm:gap-12 shrink-0">
                   <BagelImg
                     src={b.src}
+                    avif={b.avif}
                     alt=""
                     width={120}
                     height={120}
@@ -1297,15 +1301,18 @@ export default function Home() {
           >
             {FEED.map((f) => (
               <span key={f.src} className="relative block overflow-hidden aspect-square">
-                <img
-                  src={f.src}
-                  alt={f.alt}
-                  width={600}
-                  height={600}
-                  loading="lazy"
-                  decoding="async"
-                  className="block w-full h-full object-cover transition-transform duration-700 ease-out hover:scale-[1.06]"
-                />
+                <picture className="contents">
+                  <source srcSet={f.avif} type="image/avif" />
+                  <img
+                    src={f.src}
+                    alt={f.alt}
+                    width={600}
+                    height={600}
+                    loading="lazy"
+                    decoding="async"
+                    className="block w-full h-full object-cover transition-transform duration-700 ease-out hover:scale-[1.06]"
+                  />
+                </picture>
               </span>
             ))}
             <span className="sesame relative flex flex-col items-center justify-center gap-2 aspect-square text-white text-center p-3">
