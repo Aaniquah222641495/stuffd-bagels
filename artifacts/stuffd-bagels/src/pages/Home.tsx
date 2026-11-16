@@ -362,12 +362,24 @@ export default function Home() {
   useScrollReveal();
 
   useEffect(() => {
-    const upcoming = upcomingEvents();
+    // Static list first (works with no API), then the live list from the admin if it answers.
+    const upcoming = upcomingEvents(EVENTS);
     setEvents(upcoming);
     if (upcoming.length > 0) setVenue(upcoming[0].venue);
+    fetch("/api/events")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((list: unknown) => {
+        if (!Array.isArray(list)) return;
+        const live = upcomingEvents(list as MarketEvent[]);
+        setEvents(live);
+        if (live.length > 0) setVenue(live[0].venue);
+      })
+      .catch(() => {});
     fetch("/api/availability")
-      .then((r) => r.json())
-      .then(setAvailability)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((a) => {
+        if (a && typeof a.ordersEnabled === "boolean") setAvailability(a);
+      })
       .catch(() => {});
   }, []);
 

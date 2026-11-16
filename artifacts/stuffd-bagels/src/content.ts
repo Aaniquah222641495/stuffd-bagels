@@ -70,10 +70,10 @@ export const EVENTS: MarketEvent[] = [
   { id: "mgm-26", name: "MGM '26", venue: "Venue to be announced", start: "2026-12-16", end: "2026-12-20" },
 ];
 
-export function upcomingEvents(today = new Date()): MarketEvent[] {
+export function upcomingEvents(list: MarketEvent[] = EVENTS, today = new Date()): MarketEvent[] {
   const y = today.getFullYear();
   const m = String(today.getMonth() + 1).padStart(2, "0");
   const d = String(today.getDate()).padStart(2, "0");
   const iso = `${y}-${m}-${d}`;
-  return EVENTS.filter((e) => e.end >= iso);
+  return list.filter((e) => e.end >= iso);
 }

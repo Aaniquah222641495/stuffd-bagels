@@ -82,6 +82,14 @@ export const PAGES: PageMeta[] = [
       },
     ],
   },
+  // The owner's admin page: prerendered as a shell (no content), never indexed, not in the sitemap.
+  {
+    path: "/admin",
+    title: "Admin | STUFF'D Bagels",
+    description: "Owner sign-in for STUFF'D Bagels.",
+    noindex: true,
+    jsonLd: [],
+  },
 ];
 
 export const NOT_FOUND: PageMeta = {

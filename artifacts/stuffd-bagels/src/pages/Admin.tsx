@@ -12,14 +12,19 @@ interface Availability {
 
 interface ScheduleEvent {
   id: string;
-  eventDate: string;
-  hours: string;
+  name: string;
   venue: string;
-  subtitle: string;
-  sortOrder: number;
+  start: string;
+  end: string;
 }
 
-const BLANK_EVENT = { eventDate: "", hours: "", venue: "", subtitle: "" };
+const BLANK_EVENT = { name: "", venue: "", start: "", end: "" };
+const TOO_MANY = "Too many tries. Wait 15 minutes and try again.";
+const SOMETHING_WRONG = "Something went wrong. Try again in a minute.";
+
+function niceDate(iso: string, opts: Intl.DateTimeFormatOptions) {
+  return new Date(iso + "T00:00:00").toLocaleDateString("en-ZA", opts);
+}
 
 function apiUrl(path: string) {
   return `${BASE}/api${path}`;
@@ -58,8 +63,13 @@ export default function Admin() {
       sessionStorage.removeItem("admin_pw");
       return;
     }
+    if (res.status === 429) {
+      setError(TOO_MANY);
+      sessionStorage.removeItem("admin_pw");
+      return;
+    }
     if (!res.ok) {
-      setError("Server error — check that the API is running.");
+      setError(SOMETHING_WRONG);
       return;
     }
     const json: Availability = await res.json();
@@ -103,6 +113,8 @@ export default function Admin() {
     } else if (res.status === 401) {
       setAuthed(false);
       setError("Session expired — please log in again.");
+    } else if (res.status === 429) {
+      setSaveMsg(TOO_MANY);
     } else {
       setSaveMsg("Save failed — try again.");
     }
@@ -122,8 +134,12 @@ export default function Admin() {
 
   async function addEvent() {
     setEventError("");
-    if (!newEvent.eventDate || !newEvent.hours || !newEvent.venue || !newEvent.subtitle) {
+    if (!newEvent.name.trim() || !newEvent.venue.trim() || !newEvent.start || !newEvent.end) {
       setEventError("Fill in all fields.");
+      return;
+    }
+    if (newEvent.end < newEvent.start) {
+      setEventError("The last day can't be before the first day.");
       return;
     }
     setAddingEvent(true);
@@ -139,8 +155,12 @@ export default function Admin() {
     if (res.ok) {
       setNewEvent(BLANK_EVENT);
       await loadEvents(password);
+    } else if (res.status === 429) {
+      setEventError(TOO_MANY);
+    } else if (res.status === 400) {
+      setEventError("Check the fields. Name up to 60 characters, venue up to 80.");
     } else {
-      setEventError("Failed to add event.");
+      setEventError(SOMETHING_WRONG);
     }
   }
 
@@ -333,7 +353,7 @@ export default function Admin() {
         <section className="border-t-2 border-ink pt-10">
           <SectionHead num="04" label="Weekend Events & Locations" />
           <p className="text-xs text-ink/40 mb-6 tracking-wide">
-            Add upcoming events — they appear on the home page schedule. Changes take effect immediately.
+            Add upcoming events — they appear on the home page schedule. Changes can take up to a minute to show.
           </p>
 
           {/* Add new event form */}
@@ -341,57 +361,62 @@ export default function Admin() {
             <div className="font-black text-xs tracking-widest uppercase mb-4" style={{ color: ACCENT }}>
               Add New Event
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[10px] font-black tracking-widest uppercase text-ink/50 mb-1">
-                  Date
-                </label>
-                <input
-                  type="date"
-                  className={inputCls}
-                  value={newEvent.eventDate}
-                  onChange={(e) => setNewEvent({ ...newEvent, eventDate: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black tracking-widest uppercase text-ink/50 mb-1">
-                  Hours
-                </label>
-                <input
-                  type="text"
-                  placeholder="10AM – 9PM"
-                  className={inputCls}
-                  value={newEvent.hours}
-                  onChange={(e) => setNewEvent({ ...newEvent, hours: e.target.value })}
-                />
-              </div>
+            <div>
+              <label htmlFor="ev-name" className="block text-[10px] font-black tracking-widest uppercase text-ink/50 mb-1">
+                Event name
+              </label>
+              <input
+                id="ev-name"
+                type="text"
+                maxLength={60}
+                placeholder="Luxe Cape Club"
+                className={inputCls}
+                value={newEvent.name}
+                onChange={(e) => setNewEvent({ ...newEvent, name: e.target.value })}
+              />
             </div>
             <div>
-              <label className="block text-[10px] font-black tracking-widest uppercase text-ink/50 mb-1">
+              <label htmlFor="ev-venue" className="block text-[10px] font-black tracking-widest uppercase text-ink/50 mb-1">
                 Venue / Location
               </label>
               <input
+                id="ev-venue"
                 type="text"
-                placeholder="Green Point Urban Park"
+                maxLength={80}
+                placeholder="Sans Souci Grounds, Newlands"
                 className={inputCls}
                 value={newEvent.venue}
                 onChange={(e) => setNewEvent({ ...newEvent, venue: e.target.value })}
               />
             </div>
-            <div>
-              <label className="block text-[10px] font-black tracking-widest uppercase text-ink/50 mb-1">
-                Display Label
-              </label>
-              <input
-                type="text"
-                placeholder="JUNE 28TH–29TH"
-                className={inputCls}
-                value={newEvent.subtitle}
-                onChange={(e) => setNewEvent({ ...newEvent, subtitle: e.target.value })}
-              />
-              <p className="text-[10px] text-ink/40 mt-1">
-                Short label shown under the venue on the home page (e.g. "JUNE 28TH–29TH")
-              </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="ev-start" className="block text-[10px] font-black tracking-widest uppercase text-ink/50 mb-1">
+                  First day
+                </label>
+                <input
+                  id="ev-start"
+                  type="date"
+                  className={inputCls}
+                  value={newEvent.start}
+                  onChange={(e) =>
+                    setNewEvent({ ...newEvent, start: e.target.value, end: newEvent.end || e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <label htmlFor="ev-end" className="block text-[10px] font-black tracking-widest uppercase text-ink/50 mb-1">
+                  Last day
+                </label>
+                <input
+                  id="ev-end"
+                  type="date"
+                  className={inputCls}
+                  value={newEvent.end}
+                  min={newEvent.start || undefined}
+                  onChange={(e) => setNewEvent({ ...newEvent, end: e.target.value })}
+                />
+              </div>
             </div>
             {eventError && (
               <p className="text-red-600 text-xs font-medium">{eventError}</p>
@@ -414,18 +439,20 @@ export default function Admin() {
           ) : (
             <div className="space-y-3">
               {scheduleEvents.map((ev) => {
-                const d = new Date(ev.eventDate + "T00:00:00");
-                const dayName = d.toLocaleDateString("en-ZA", { weekday: "long" });
-                const displayDate = d.toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" });
+                const when =
+                  ev.start === ev.end
+                    ? niceDate(ev.start, { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+                    : `${niceDate(ev.start, { day: "numeric", month: "long" })} to ${niceDate(ev.end, { day: "numeric", month: "long", year: "numeric" })}`;
                 return (
                   <div key={ev.id} className="flex items-start justify-between border-2 border-ink px-4 py-3">
                     <div>
-                      <div className="font-black text-sm">{dayName}, {displayDate}</div>
+                      <div className="font-black text-sm">{ev.name}</div>
                       <div className="text-xs text-ink/60 font-medium mt-0.5">{ev.venue}</div>
-                      <div className="text-xs text-ink/40 mt-0.5">{ev.hours} · {ev.subtitle}</div>
+                      <div className="text-xs text-ink/40 mt-0.5">{when}</div>
                     </div>
                     <button
                       onClick={() => deleteEvent(ev.id)}
+                      aria-label={`Remove ${ev.name}`}
                       className="text-xs tracking-widest uppercase font-black text-red-600 hover:text-red-800 transition-colors ml-4 shrink-0"
                     >
                       Remove
