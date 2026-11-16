@@ -179,23 +179,25 @@ export default function Admin() {
 
   if (!authed) {
     return (
-      <div className="min-h-screen bg-paper flex items-center justify-center px-4">
+      <main className="min-h-screen bg-paper flex items-center justify-center px-4">
         <div className="w-full max-w-sm">
           <div className="mb-8 text-center">
             <img src="/logo.png" alt="logo" className="h-16 w-16 mx-auto mb-4 object-contain" />
-            <div
+            <h1
               className="font-black tracking-widest uppercase text-xl"
               style={{ fontFamily: "'Bebas Neue', sans-serif" }}
             >
               Admin
-            </div>
-            <div className="text-xs tracking-widest uppercase text-ink/40 mt-1">
+            </h1>
+            <div className="text-xs tracking-widest uppercase text-ink/75 mt-1">
               Stuff'd Bagels
             </div>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
             <input
               type="password"
+              aria-label="Admin password"
+              autoComplete="current-password"
               placeholder="Password"
               autoFocus
               className={inputCls}
@@ -203,7 +205,7 @@ export default function Admin() {
               onChange={(e) => setDraft(e.target.value)}
             />
             {error && (
-              <p className="text-red-600 text-xs font-medium">{error}</p>
+              <p className="text-red-700 text-xs font-medium">{error}</p>
             )}
             <button
               type="submit"
@@ -214,36 +216,36 @@ export default function Admin() {
             </button>
           </form>
         </div>
-      </div>
+      </main>
     );
   }
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-paper flex items-center justify-center">
-        <p className="text-sm tracking-widest uppercase text-ink/40">Loading…</p>
-      </div>
+      <main className="min-h-screen bg-paper flex items-center justify-center">
+        <h1 className="text-sm tracking-widest uppercase text-ink/75">Loading…</h1>
+      </main>
     );
   }
 
   return (
     <div className="min-h-screen bg-paper">
       {/* Header */}
-      <div
+      <header
         className="border-b-2 border-ink px-6 py-4 flex items-center justify-between"
         style={{ background: "var(--sb-ink)" }}
       >
         <div className="flex items-center gap-3">
           <img src="/logo.png" alt="logo" className="h-8 w-8 object-contain invert" />
-          <span
+          <h1
             className="font-black tracking-widest text-white uppercase"
             style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.1rem" }}
           >
             Admin — Stuff'd Bagels
-          </span>
+          </h1>
         </div>
         <button
-          className="text-white/40 hover:text-white text-xs tracking-widest uppercase font-bold transition-colors"
+          className="text-white/80 hover:text-white text-xs tracking-widest uppercase font-bold transition-colors"
           onClick={() => {
             sessionStorage.removeItem("admin_pw");
             setAuthed(false);
@@ -252,9 +254,9 @@ export default function Admin() {
         >
           Sign Out
         </button>
-      </div>
+      </header>
 
-      <div className="max-w-2xl mx-auto px-6 py-10 space-y-10">
+      <main className="max-w-2xl mx-auto px-6 py-10 space-y-10">
 
         {/* ── 01 Order Status ───────────────────────────────── */}
         <section>
@@ -276,7 +278,7 @@ export default function Admin() {
               ? "Orders Open — click to close"
               : "Orders Closed — click to open"}
           </button>
-          <p className="text-xs text-ink/40 mt-2 tracking-wide">
+          <p className="text-xs text-ink/75 mt-2 tracking-wide">
             When closed, the order form is replaced with your closed message.
           </p>
         </section>
@@ -285,13 +287,14 @@ export default function Admin() {
         <section>
           <SectionHead num="02" label="Closed Message" />
           <textarea
+            aria-label="Closed message"
             rows={3}
             className={inputCls}
             value={data.closedMessage}
             onChange={(e) => setData({ ...data, closedMessage: e.target.value })}
             placeholder="We're closed today — check back soon!"
           />
-          <p className="text-xs text-ink/40 mt-2 tracking-wide">
+          <p className="text-xs text-ink/75 mt-2 tracking-wide">
             Shown on the home page when orders are off or on a closed date.
           </p>
         </section>
@@ -302,6 +305,7 @@ export default function Admin() {
           <div className="flex gap-2 mb-4">
             <input
               type="date"
+              aria-label="Closed date"
               className={`${inputCls} flex-1`}
               value={newDate}
               onChange={(e) => setNewDate(e.target.value)}
@@ -311,7 +315,7 @@ export default function Admin() {
             </button>
           </div>
           {data.closedDates.length === 0 ? (
-            <p className="text-xs text-ink/40 italic tracking-wide">No closed dates set.</p>
+            <p className="text-xs text-ink/75 italic tracking-wide">No closed dates set.</p>
           ) : (
             <div className="space-y-2">
               {data.closedDates.map((d) => (
@@ -319,7 +323,7 @@ export default function Admin() {
                   <span className="font-bold text-sm">{d}</span>
                   <button
                     onClick={() => removeClosedDate(d)}
-                    className="text-xs tracking-widest uppercase font-black text-red-600 hover:text-red-800 transition-colors"
+                    className="text-xs tracking-widest uppercase font-black text-red-700 hover:text-red-900 transition-colors"
                   >
                     Remove
                   </button>
@@ -327,7 +331,7 @@ export default function Admin() {
               ))}
             </div>
           )}
-          <p className="text-xs text-ink/40 mt-3 tracking-wide">
+          <p className="text-xs text-ink/75 mt-3 tracking-wide">
             Orders are blocked on these specific dates (SAST timezone).
           </p>
         </section>
@@ -343,7 +347,7 @@ export default function Admin() {
             {saving ? "Saving…" : "Save Availability"}
           </button>
           {saveMsg && (
-            <span className={`text-sm font-bold ${saveMsg.startsWith("Saved") ? "text-green-700" : "text-red-600"}`}>
+            <span className={`text-sm font-bold ${saveMsg.startsWith("Saved") ? "text-green-800" : "text-red-700"}`}>
               {saveMsg}
             </span>
           )}
@@ -352,7 +356,7 @@ export default function Admin() {
         {/* ── 04 Weekend Events ─────────────────────────────── */}
         <section className="border-t-2 border-ink pt-10">
           <SectionHead num="04" label="Weekend Events & Locations" />
-          <p className="text-xs text-ink/40 mb-6 tracking-wide">
+          <p className="text-xs text-ink/75 mb-6 tracking-wide">
             Add upcoming events — they appear on the home page schedule. Changes can take up to a minute to show.
           </p>
 
@@ -362,7 +366,7 @@ export default function Admin() {
               Add New Event
             </div>
             <div>
-              <label htmlFor="ev-name" className="block text-[10px] font-black tracking-widest uppercase text-ink/50 mb-1">
+              <label htmlFor="ev-name" className="block text-[10px] font-black tracking-widest uppercase text-ink/75 mb-1">
                 Event name
               </label>
               <input
@@ -376,7 +380,7 @@ export default function Admin() {
               />
             </div>
             <div>
-              <label htmlFor="ev-venue" className="block text-[10px] font-black tracking-widest uppercase text-ink/50 mb-1">
+              <label htmlFor="ev-venue" className="block text-[10px] font-black tracking-widest uppercase text-ink/75 mb-1">
                 Venue / Location
               </label>
               <input
@@ -391,7 +395,7 @@ export default function Admin() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="ev-start" className="block text-[10px] font-black tracking-widest uppercase text-ink/50 mb-1">
+                <label htmlFor="ev-start" className="block text-[10px] font-black tracking-widest uppercase text-ink/75 mb-1">
                   First day
                 </label>
                 <input
@@ -405,7 +409,7 @@ export default function Admin() {
                 />
               </div>
               <div>
-                <label htmlFor="ev-end" className="block text-[10px] font-black tracking-widest uppercase text-ink/50 mb-1">
+                <label htmlFor="ev-end" className="block text-[10px] font-black tracking-widest uppercase text-ink/75 mb-1">
                   Last day
                 </label>
                 <input
@@ -419,7 +423,7 @@ export default function Admin() {
               </div>
             </div>
             {eventError && (
-              <p className="text-red-600 text-xs font-medium">{eventError}</p>
+              <p className="text-red-700 text-xs font-medium">{eventError}</p>
             )}
             <button
               onClick={addEvent}
@@ -433,7 +437,7 @@ export default function Admin() {
 
           {/* Existing events list */}
           {scheduleEvents.length === 0 ? (
-            <p className="text-xs text-ink/40 italic tracking-wide">
+            <p className="text-xs text-ink/75 italic tracking-wide">
               No events scheduled yet.
             </p>
           ) : (
@@ -447,13 +451,13 @@ export default function Admin() {
                   <div key={ev.id} className="flex items-start justify-between border-2 border-ink px-4 py-3">
                     <div>
                       <div className="font-black text-sm">{ev.name}</div>
-                      <div className="text-xs text-ink/60 font-medium mt-0.5">{ev.venue}</div>
-                      <div className="text-xs text-ink/40 mt-0.5">{when}</div>
+                      <div className="text-xs text-ink/75 font-medium mt-0.5">{ev.venue}</div>
+                      <div className="text-xs text-ink/75 mt-0.5">{when}</div>
                     </div>
                     <button
                       onClick={() => deleteEvent(ev.id)}
                       aria-label={`Remove ${ev.name}`}
-                      className="text-xs tracking-widest uppercase font-black text-red-600 hover:text-red-800 transition-colors ml-4 shrink-0"
+                      className="text-xs tracking-widest uppercase font-black text-red-700 hover:text-red-900 transition-colors ml-4 shrink-0"
                     >
                       Remove
                     </button>
@@ -464,7 +468,7 @@ export default function Admin() {
           )}
         </section>
 
-      </div>
+      </main>
     </div>
   );
 }
