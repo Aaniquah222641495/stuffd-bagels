@@ -8,7 +8,19 @@ interface Availability {
   closedDates: string[];
   closedMessage: string;
   closedToday: boolean;
+  cutoffTime: string;
+  maxWeeksAhead: number;
 }
+
+interface PickupPoint {
+  id: string;
+  name: string;
+  area: string;
+  days: string;
+  active: boolean;
+}
+
+const BLANK_PICKUP = { name: "", area: "", days: "", active: true };
 
 interface ScheduleEvent {
   id: string;
@@ -45,12 +57,25 @@ export default function Admin() {
   const [newEvent, setNewEvent] = useState(BLANK_EVENT);
   const [eventError, setEventError] = useState("");
   const [addingEvent, setAddingEvent] = useState(false);
+  const [pickups, setPickups] = useState<PickupPoint[] | null>(null);
+  const [pickupForm, setPickupForm] = useState(BLANK_PICKUP);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [pickupError, setPickupError] = useState("");
+  const [savingPickup, setSavingPickup] = useState(false);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
 
   const loadEvents = useCallback(async (pw: string) => {
     const res = await fetch(apiUrl("/admin/events"), {
       headers: { "x-admin-password": pw },
     });
     if (res.ok) setScheduleEvents(await res.json());
+  }, []);
+
+  const loadPickups = useCallback(async (pw: string) => {
+    const res = await fetch(apiUrl("/admin/pickups"), {
+      headers: { "x-admin-password": pw },
+    });
+    if (res.ok) setPickups(await res.json());
   }, []);
 
   const load = useCallback(async (pw: string) => {
@@ -77,7 +102,8 @@ export default function Admin() {
     setAuthed(true);
     sessionStorage.setItem("admin_pw", pw);
     await loadEvents(pw);
-  }, [loadEvents]);
+    await loadPickups(pw);
+  }, [loadEvents, loadPickups]);
 
   useEffect(() => {
     if (password) load(password);
@@ -104,6 +130,8 @@ export default function Admin() {
         ordersEnabled: data.ordersEnabled,
         closedDates: data.closedDates,
         closedMessage: data.closedMessage,
+        cutoffTime: data.cutoffTime,
+        maxWeeksAhead: data.maxWeeksAhead,
       }),
     });
     setSaving(false);
@@ -115,6 +143,8 @@ export default function Admin() {
       setError("Session expired — please log in again.");
     } else if (res.status === 429) {
       setSaveMsg(TOO_MANY);
+    } else if (res.status === 400) {
+      setSaveMsg("Check the cut-off time and the weeks ahead (1 to 12).");
     } else {
       setSaveMsg("Save failed — try again.");
     }
@@ -170,6 +200,71 @@ export default function Admin() {
       headers: { "x-admin-password": password },
     });
     if (res.ok) await loadEvents(password);
+  }
+
+  const adminHeaders = { "Content-Type": "application/json", "x-admin-password": password };
+
+  function startEditPickup(pt: PickupPoint) {
+    setEditingId(pt.id);
+    setPickupForm({ name: pt.name, area: pt.area, days: pt.days, active: pt.active });
+    setPickupError("");
+    document.getElementById("pk-name")?.focus();
+  }
+
+  function cancelEditPickup() {
+    setEditingId(null);
+    setPickupForm(BLANK_PICKUP);
+    setPickupError("");
+  }
+
+  async function savePickup() {
+    setPickupError("");
+    if (!pickupForm.name.trim() || !pickupForm.area.trim()) {
+      setPickupError("Fill in the name and the area or address.");
+      return;
+    }
+    setSavingPickup(true);
+    const res = await fetch(apiUrl(editingId ? `/admin/pickups/${editingId}` : "/admin/pickups"), {
+      method: editingId ? "PUT" : "POST",
+      headers: adminHeaders,
+      body: JSON.stringify(pickupForm),
+    });
+    setSavingPickup(false);
+    if (res.ok) {
+      cancelEditPickup();
+      await loadPickups(password);
+    } else if (res.status === 429) {
+      setPickupError(TOO_MANY);
+    } else if (res.status === 400) {
+      setPickupError("Check the fields. Name up to 60 characters, area up to 120, times up to 120. You can have up to 30 points.");
+    } else if (res.status === 404) {
+      setPickupError("That pickup point was already removed.");
+      cancelEditPickup();
+      await loadPickups(password);
+    } else {
+      setPickupError(SOMETHING_WRONG);
+    }
+  }
+
+  async function togglePickup(pt: PickupPoint) {
+    const res = await fetch(apiUrl(`/admin/pickups/${pt.id}`), {
+      method: "PUT",
+      headers: adminHeaders,
+      body: JSON.stringify({ name: pt.name, area: pt.area, days: pt.days, active: !pt.active }),
+    });
+    if (res.ok) await loadPickups(password);
+    else setPickupError(SOMETHING_WRONG);
+  }
+
+  async function removePickup(id: string) {
+    const res = await fetch(apiUrl(`/admin/pickups/${id}`), {
+      method: "DELETE",
+      headers: { "x-admin-password": password },
+    });
+    setConfirmRemoveId(null);
+    if (editingId === id) cancelEditPickup();
+    if (res.ok) await loadPickups(password);
+    else setPickupError(SOMETHING_WRONG);
   }
 
   const inputCls =
@@ -332,7 +427,48 @@ export default function Admin() {
             </div>
           )}
           <p className="text-xs text-ink/75 mt-3 tracking-wide">
-            Orders are blocked on these specific dates (SAST timezone).
+            Add a Saturday here to close it: customers can't choose it for collection. If today is listed, new orders are
+            paused for the day (SAST timezone).
+          </p>
+        </section>
+
+        {/* ── 04 Collection rules ───────────────────────────── */}
+        <section>
+          <SectionHead num="04" label="Collection Rules" />
+          <p className="text-xs text-ink/75 mb-4 tracking-wide">
+            Customers collect on Saturdays only, at your pickup points. Orders for a Saturday close on the Wednesday before.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="cutoff-time" className="block text-[10px] font-black tracking-widest uppercase text-ink/75 mb-1">
+                Wednesday cut-off time
+              </label>
+              <input
+                id="cutoff-time"
+                type="time"
+                className={inputCls}
+                value={data.cutoffTime}
+                onChange={(e) => setData({ ...data, cutoffTime: e.target.value })}
+              />
+            </div>
+            <div>
+              <label htmlFor="weeks-ahead" className="block text-[10px] font-black tracking-widest uppercase text-ink/75 mb-1">
+                Weeks ahead (1 to 12)
+              </label>
+              <input
+                id="weeks-ahead"
+                type="number"
+                min={1}
+                max={12}
+                className={inputCls}
+                value={data.maxWeeksAhead}
+                onChange={(e) => setData({ ...data, maxWeeksAhead: Number(e.target.value) })}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-ink/75 mt-3 tracking-wide">
+            With {data.cutoffTime || "23:59"}, an order sent at {data.cutoffTime || "23:59"} on Wednesday still counts; from
+            the next minute the form offers the following Saturday. Times are South African time.
           </p>
         </section>
 
@@ -344,7 +480,7 @@ export default function Admin() {
             className={`${btnCls} text-white`}
             style={{ background: ACCENT, borderColor: ACCENT }}
           >
-            {saving ? "Saving…" : "Save Availability"}
+            {saving ? "Saving…" : "Save Availability and Rules"}
           </button>
           {saveMsg && (
             <span className={`text-sm font-bold ${saveMsg.startsWith("Saved") ? "text-green-800" : "text-red-700"}`}>
@@ -353,11 +489,172 @@ export default function Admin() {
           )}
         </div>
 
-        {/* ── 04 Weekend Events ─────────────────────────────── */}
-        <section className="border-t-2 border-ink pt-10">
-          <SectionHead num="04" label="Weekend Events & Locations" />
+        {/* ── 05 Pickup points ─────────────────────────────── */}
+        <section className="border-t-2 border-ink pt-10" aria-labelledby="pickups-heading">
+          <SectionHead num="05" label="Pickup Points" id="pickups-heading" />
           <p className="text-xs text-ink/75 mb-6 tracking-wide">
-            Add upcoming events — they appear on the home page schedule. Changes can take up to a minute to show.
+            Where customers collect their online orders, on Saturdays. They choose one when they order. Changes can take up
+            to a minute to show.
+          </p>
+
+          {pickups !== null && !pickups.some((p) => p.active) && (
+            <p
+              role="status"
+              data-testid="pickups-none-active"
+              className="border-2 border-red-700 text-red-700 px-4 py-3 text-xs font-bold tracking-wide mb-6"
+            >
+              {pickups.length === 0
+                ? "No pickup points yet. Online ordering is hidden on the site until you add one."
+                : "No pickup point is switched on. Online ordering is hidden on the site until you switch one on."}
+            </p>
+          )}
+
+          <div className="border-2 border-ink p-5 mb-6 space-y-3">
+            <div className="font-black text-xs tracking-widest uppercase mb-4" style={{ color: ACCENT }}>
+              {editingId ? "Edit Pickup Point" : "Add Pickup Point"}
+            </div>
+            <div>
+              <label htmlFor="pk-name" className="block text-[10px] font-black tracking-widest uppercase text-ink/75 mb-1">
+                Name
+              </label>
+              <input
+                id="pk-name"
+                type="text"
+                maxLength={60}
+                placeholder="Name of the pickup point"
+                className={inputCls}
+                value={pickupForm.name}
+                onChange={(e) => setPickupForm({ ...pickupForm, name: e.target.value })}
+              />
+            </div>
+            <div>
+              <label htmlFor="pk-area" className="block text-[10px] font-black tracking-widest uppercase text-ink/75 mb-1">
+                Area or address (shown to customers)
+              </label>
+              <input
+                id="pk-area"
+                type="text"
+                maxLength={120}
+                className={inputCls}
+                value={pickupForm.area}
+                onChange={(e) => setPickupForm({ ...pickupForm, area: e.target.value })}
+              />
+            </div>
+            <div>
+              <label htmlFor="pk-days" className="block text-[10px] font-black tracking-widest uppercase text-ink/75 mb-1">
+                Collection times (optional)
+              </label>
+              <input
+                id="pk-days"
+                type="text"
+                maxLength={120}
+                placeholder="e.g. Saturdays, 10am to 1pm"
+                className={inputCls}
+                value={pickupForm.days}
+                onChange={(e) => setPickupForm({ ...pickupForm, days: e.target.value })}
+              />
+            </div>
+            <label className="flex items-center gap-2 text-xs font-bold tracking-wide cursor-pointer">
+              <input
+                id="pk-active"
+                type="checkbox"
+                className="w-4 h-4 accent-[var(--sb-blue)]"
+                checked={pickupForm.active}
+                onChange={(e) => setPickupForm({ ...pickupForm, active: e.target.checked })}
+              />
+              Active (customers can choose it)
+            </label>
+            {pickupError && (
+              <p role="alert" className="text-red-700 text-xs font-medium">{pickupError}</p>
+            )}
+            <div className="flex gap-3 mt-2">
+              <button
+                onClick={savePickup}
+                disabled={savingPickup}
+                className={`${btnCls} text-white`}
+                style={{ background: ACCENT, borderColor: ACCENT }}
+              >
+                {savingPickup ? "Saving…" : editingId ? "Save Changes" : "Add Pickup Point"}
+              </button>
+              {editingId && (
+                <button onClick={cancelEditPickup} className={`${btnCls} bg-paper text-ink`}>
+                  Cancel
+                </button>
+              )}
+            </div>
+          </div>
+
+          {pickups !== null && pickups.length > 0 && (
+            <ul className="space-y-3 list-none p-0 m-0" data-testid="pickup-list">
+              {pickups.map((pt) => (
+                <li key={pt.id} className="border-2 border-ink px-4 py-3" data-testid="pickup-item">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-black text-sm">
+                        {pt.name}
+                        <span
+                          className={`ml-2 align-middle text-[10px] tracking-widest uppercase px-2 py-0.5 ${
+                            pt.active ? "bg-ink text-white" : "border border-ink text-ink"
+                          }`}
+                        >
+                          {pt.active ? "Active" : "Off"}
+                        </span>
+                      </div>
+                      <div className="text-xs text-ink/75 font-medium mt-0.5">{pt.area}</div>
+                      {pt.days && <div className="text-xs text-ink/75 mt-0.5">{pt.days}</div>}
+                    </div>
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <button
+                        onClick={() => togglePickup(pt)}
+                        aria-label={`${pt.active ? "Switch off" : "Switch on"} ${pt.name}`}
+                        className="text-xs tracking-widest uppercase font-black text-ink hover:text-blue transition-colors"
+                      >
+                        {pt.active ? "Switch off" : "Switch on"}
+                      </button>
+                      <button
+                        onClick={() => startEditPickup(pt)}
+                        aria-label={`Edit ${pt.name}`}
+                        className="text-xs tracking-widest uppercase font-black text-ink hover:text-blue transition-colors"
+                      >
+                        Edit
+                      </button>
+                      {confirmRemoveId === pt.id ? (
+                        <span className="text-xs font-black tracking-widest uppercase">
+                          Sure?{" "}
+                          <button
+                            onClick={() => removePickup(pt.id)}
+                            aria-label={`Yes, remove ${pt.name}`}
+                            className="text-red-700 hover:text-red-900 underline"
+                          >
+                            Yes
+                          </button>{" "}
+                          <button onClick={() => setConfirmRemoveId(null)} aria-label="No, keep it" className="underline">
+                            No
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmRemoveId(pt.id)}
+                          aria-label={`Remove ${pt.name}`}
+                          className="text-xs tracking-widest uppercase font-black text-red-700 hover:text-red-900 transition-colors"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* ── 06 Market dates ──────────────────────────────── */}
+        <section className="border-t-2 border-ink pt-10">
+          <SectionHead num="06" label="Markets: Where We At" />
+          <p className="text-xs text-ink/75 mb-6 tracking-wide">
+            Market dates appear on the home page under "Where we at". They are for information only: no online orders are taken
+            for markets, people just buy at the cart. Changes can take up to a minute to show.
           </p>
 
           {/* Add new event form */}
@@ -473,13 +770,13 @@ export default function Admin() {
   );
 }
 
-function SectionHead({ num, label }: { num: string; label: string }) {
+function SectionHead({ num, label, id }: { num: string; label: string; id?: string }) {
   return (
     <div className="flex items-center gap-3 mb-6">
       <span className="font-black tracking-widest text-xs uppercase" style={{ color: ACCENT }}>
         {num}
       </span>
-      <h2 className="font-black tracking-widest uppercase text-sm">{label}</h2>
+      <h2 id={id} className="font-black tracking-widest uppercase text-sm">{label}</h2>
       <div className="flex-1 h-[2px] bg-ink" />
     </div>
   );
