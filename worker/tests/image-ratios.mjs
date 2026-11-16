@@ -2,6 +2,7 @@
 // An image is "stretched" when its box ratio differs from the real ratio by more than 3% AND object-fit would not
 // crop it (object-fit: fill or none). object-fit cover / contain keep the real proportions, so they pass.
 // Needs wrangler dev on :8787 and arm64 Chrome on :9444 (see README). Run: PW=<playwright-core path> node worker/tests/image-ratios.mjs
+// BASE=<url> checks a deployed site instead (no signed-in admin, no spoofed IP header: the real edge refuses it).
 // Admin is checked signed in (password from .dev.vars via _helpers.mjs).
 import { createRequire } from "node:module";
 import assert from "node:assert/strict";
@@ -10,10 +11,10 @@ const { chromium } = createRequire(import.meta.url)(process.env.PW);
 const browser = await chromium.connectOverCDP("http://127.0.0.1:9444");
 let checked = 0, bad = [];
 for (const [w, h] of [[390, 844], [1280, 900]]) {
-  const ctx = await browser.newContext({ viewport: { width: w, height: h }, bypassCSP: true, reducedMotion: "reduce", extraHTTPHeaders: { "CF-Connecting-IP": ip } });
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, bypassCSP: true, reducedMotion: "reduce", extraHTTPHeaders: process.env.BASE ? {} : { "CF-Connecting-IP": ip } });
   const page = await ctx.newPage();
-  for (const path of ["/", "/privacy", "/admin", "/admin#signed-in"]) {
-    await page.goto(B + path.replace("#signed-in", ""), { waitUntil: "networkidle" });
+  for (const path of process.env.BASE ? ["/", "/privacy", "/admin"] : ["/", "/privacy", "/admin", "/admin#signed-in"]) {
+    await page.goto((process.env.BASE ?? B) + path.replace("#signed-in", ""), { waitUntil: "networkidle" });
     if (path.endsWith("#signed-in")) { await page.getByLabel("Admin password").fill(pw); await page.getByRole("button", { name: "Sign In" }).click(); await page.waitForTimeout(1500); }
     await page.evaluate(async () => { for (let y = 0; y < document.body.scrollHeight; y += 400) { window.scrollTo(0, y); await new Promise((r) => setTimeout(r, 60)); } window.scrollTo(0, 0); });
     await page.waitForTimeout(1200);
