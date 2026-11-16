@@ -19,8 +19,7 @@ export const menuPricingObject: Record<
   },
   "Jalapeno Bagel": {
     price: 75,
-    image: "/jalapeno-held.jpeg", // client photo 2026-11-16, cropped (held-2)
-    avif: "/jalapeno-held.avif",
+    image: "/jalapeno-bagel.jpeg", // the original box photo (founder 2026-11-16: keep the previous jalapeno picture)
     desc: "Jalapeno Cream Cheese · Jalapenos",
   },
   "Cheesy Bagel": {

@@ -132,7 +132,7 @@ const ABOUT_PHOTOS = [
   { src: "/ig/unboxing.jpg", alt: "Opening a STUFF'D takeaway box", caption: "the unboxing", width: 450, height: 800, position: "50% 35%" },
   { src: "/ig/merch.jpg", alt: "A STUFF'D team member holding a fresh pizza bagel", caption: "hot off the cart", width: 675, height: 900, position: "50% 70%" },
   { src: "/ig/friends.jpg", alt: "Friends sharing STUFF'D bagels on a couch", caption: "bring the crew", width: 720, height: 405 },
-  { src: "/poster-chef.jpeg", avif: "/poster-chef.avif", alt: "STUFF'D poster: a blue-toned photo of a jalapeno bagel with the little chef drawing", caption: "the jalapeno", width: 720, height: 900 },
+  { src: "/ig/jalapeno-poster.jpg", alt: "Holding a jalapeno stuffed bagel, blue duotone photo", caption: "the jalapeno", width: 719, height: 900 },
 ];
 
 /** Taped polaroid, like the scrapbook posters on their Instagram. `tilt` is the resting angle. */
