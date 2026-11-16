@@ -76,6 +76,7 @@
   --color-chat-gray: var(--sb-chat-gray);
   --color-chat-avatar: var(--sb-chat-avatar);
   --color-chat-avatar-ink: var(--sb-chat-avatar-ink);
+  --color-error: var(--sb-error);
   --color-disabled: var(--sb-disabled);
   --color-disabled-border: var(--sb-disabled-border);
 
@@ -97,6 +98,7 @@
   --sb-paper: #f7f8fc;      /* cool white: page background, like the white cart and boxes (founder 2026-10-26: cream read as yellow) */
   --sb-blue: #004f94;       /* brand blue (founder 2026-10-26), buttons, ticker; white text on it ~8.5:1 */
   --sb-blue-dk: #003a6e;    /* brand blue pressed / borders */
+  --sb-error: #b3261e;      /* form errors: 6.6:1 on white */
   --sb-sky: #cfe1f3;        /* pale brand blue: tape, labels on navy (founder 2026-10-26: no yellow) */
   --sb-photo: #fdfdff;      /* card and polaroid white (cool, matches the page) */
   --sb-tape: color-mix(in srgb, var(--sb-sky) 72%, transparent);

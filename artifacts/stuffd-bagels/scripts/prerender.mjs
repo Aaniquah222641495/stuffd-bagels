@@ -30,9 +30,10 @@ for (const page of [...PAGES, NOT_FOUND]) {
   if (body.includes("<script")) throw new Error(`Inline script in ${page.path}: it would break the CSP`);
   if (page.path === "/") {
     // Guard: every menu price in the structured data must be visible in the page.
-    const text = body.replace(/<!-- -->/g, "");
+    const text = body.replace(/<!-- -->/g, "").replace(/&#x27;/g, "'");
     for (const [name, item] of Object.entries(menuPricingObject)) {
-      if (!text.includes(name) || !text.includes(`R${item.price}`)) throw new Error(`Home page doesn't show ${name} at R${item.price}`);
+      const shown = name.replace(" Bagel", ""); // the cards show "Steak'd", not "Steak'd Bagel"
+      if (!text.includes(shown) || !text.includes(`R${item.price}`)) throw new Error(`Home page doesn't show ${name} at R${item.price}`);
     }
   }
   const html = template
