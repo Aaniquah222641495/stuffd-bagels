@@ -27,12 +27,18 @@ const CONFIG = {
   TIMEZONE: 'Africa/Johannesburg',
   ORDERS_LABEL: 'Orders',
   BOOKINGS_LABEL: 'Bookings',
-  // Optional extra lock: if you fill this in, put the same text in the Worker secret APPS_SCRIPT_TOKEN.
+  // REQUIRED. A random secret of 32 or more characters. Put the same text in the Worker secret APPS_SCRIPT_TOKEN.
+  // While this is empty (or shorter than MIN_TOKEN_LENGTH) the script refuses EVERY request, so nobody who finds the
+  // web app address can use it to send email from this Gmail account. See README.md, "The token".
   SHARED_TOKEN: '',
+  MIN_TOKEN_LENGTH: 32,
   MAX_BODY_CHARS: 12000,
   DUPLICATE_WINDOW_SECONDS: 600,
   // A free Gmail account can send about 100 emails a day; each submission sends 2.
-  MIN_QUOTA: 4
+  MIN_QUOTA: 4,
+  // Caps kept by the script itself, as a second wall behind the Worker's limits.
+  MAX_SUBMISSIONS_PER_DAY: 40,      // 40 x 2 emails = 80, below Gmail's 100 a day, so you can still email by hand
+  MAX_REPLIES_PER_ADDRESS_PER_DAY: 3 // customer replies to one mailbox per day (Gmail dots and +tags count as the same)
 };
 
 const COLOURS = { ink: '#16245c', paper: '#f7f8fc', blue: '#004f94', sky: '#cfe1f3', white: '#ffffff' };
@@ -53,12 +59,25 @@ function doPost(e) {
     let data;
     try { data = JSON.parse(body); } catch (err) { return reply_({ ok: false, error: 'invalid' }); }
     if (!data || typeof data !== 'object') return reply_({ ok: false, error: 'invalid' });
-    if (CONFIG.SHARED_TOKEN && data.token !== CONFIG.SHARED_TOKEN) return reply_({ ok: false, error: 'invalid' });
+    if (!tokenOk_(data.token)) return reply_({ ok: false, error: 'invalid' });
     return reply_(process_(data));
   } catch (err) {
     console.error('doPost failed: ' + err);
     return reply_({ ok: false, error: 'server' });
   }
+}
+
+/** Fails closed: no token set (or too short) means every request is refused. Compared in constant time. */
+function tokenOk_(given) {
+  const secret = CONFIG.SHARED_TOKEN;
+  if (typeof secret !== 'string' || secret.length < CONFIG.MIN_TOKEN_LENGTH) return false;
+  if (typeof given !== 'string') return false;
+  // Hash both sides first so the lengths match, then look at every byte (no early exit).
+  const a = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, given, Utilities.Charset.UTF_8);
+  const b = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, secret, Utilities.Charset.UTF_8);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < b.length; i++) diff |= (a[i] ^ b[i]);
+  return diff === 0;
 }
 
 function reply_(obj) {
@@ -121,12 +140,27 @@ function process_(raw) {
     const dupeKey = 'dupe_' + a.ref;
     const contentKey = 'dupec_' + hash_(JSON.stringify([a.type, a.email, a.name, a.pickupDate || a.eventDate, a.items || a.guests, a.total]));
     if (cache.get(dupeKey) || cache.get(contentKey)) return { ok: true, duplicate: true };
+    // Daily caps (kept in Script Properties, which survive between runs). Duplicates were answered above and cost nothing.
+    const today = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd');
+    const props = PropertiesService.getScriptProperties();
+    const total = readCount_(props.getProperty('cap_total'), today);
+    const rcptKey = 'cap_rc_' + hash_(recipientKey_(a.email));
+    const rcpt = readCount_(props.getProperty(rcptKey), today);
+    if (total >= CONFIG.MAX_SUBMISSIONS_PER_DAY) {
+      console.error('Daily cap reached; refusing ' + a.ref);
+      return { ok: false, error: 'cap' };
+    }
+    if (rcpt >= CONFIG.MAX_REPLIES_PER_ADDRESS_PER_DAY) {
+      console.error('Per-address cap reached; refusing ' + a.ref);
+      return { ok: false, error: 'cap' };
+    }
     if (MailApp.getRemainingDailyQuota() < CONFIG.MIN_QUOTA) {
       console.error('Email quota nearly used up; refusing ' + a.ref);
       return { ok: false, error: 'quota' };
     }
     // The owner email is the one that matters: if it fails, the customer is told it failed and can email.
     sendOwner_(a);
+    saveCaps_(props, today, rcptKey, total + 1, rcpt + 1);
     cache.put(dupeKey, '1', CONFIG.DUPLICATE_WINDOW_SECONDS);
     cache.put(contentKey, '1', CONFIG.DUPLICATE_WINDOW_SECONDS);
   } catch (err) {
@@ -139,6 +173,31 @@ function process_(raw) {
   try { sendCustomer_(a); } catch (err) { console.error('Customer reply failed for ' + a.ref + ': ' + err); }
   try { labelRecent_(); } catch (err) { console.error('Labelling failed (the 5-minute catch-up will retry): ' + err); }
   return { ok: true };
+}
+
+/** Counters look like "2026-11-16:3". A counter from an earlier day reads as 0. */
+function readCount_(v, today) {
+  if (typeof v !== 'string') return 0;
+  const p = v.split(':');
+  return p[0] === today ? Number(p[1]) || 0 : 0;
+}
+function saveCaps_(props, today, rcptKey, total, rcpt) {
+  // Tidy first: drop per-address counters from earlier days, so the store never grows.
+  const all = props.getProperties();
+  Object.keys(all).forEach(function (k) {
+    if (k.indexOf('cap_rc_') === 0 && all[k].split(':')[0] !== today) props.deleteProperty(k);
+  });
+  props.setProperty('cap_total', today + ':' + total);
+  props.setProperty(rcptKey, today + ':' + rcpt);
+}
+/** The same mailbox written different ways counts once: case, "+tag", and dots in Gmail addresses. */
+function recipientKey_(email) {
+  const parts = String(email).trim().toLowerCase().split('@');
+  let local = parts[0].split('+')[0];
+  let domain = parts[1] || '';
+  if (domain === 'googlemail.com') domain = 'gmail.com';
+  if (domain === 'gmail.com') local = local.replace(/\./g, '');
+  return local + '@' + domain;
 }
 
 function hash_(s) {

@@ -16,6 +16,7 @@ const threads = () =>
     addLabel: (l) => labelled.push([m.subject, l.getName()]),
   }));
 const labels = new Map();
+const propStore = new Map();
 const ctx = {
   console,
   Date,
@@ -23,6 +24,12 @@ const ctx = {
   ContentService: { createTextOutput: (s) => ({ s, setMimeType() { return this; } }), MimeType: { JSON: "json" } },
   LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock() {} }) },
   CacheService: { getScriptCache: () => ({ get: (k) => cacheStore.get(k) ?? null, put: (k, v) => cacheStore.set(k, v) }) },
+  PropertiesService: { getScriptProperties: () => ({
+    getProperty: (k) => propStore.get(k) ?? null,
+    setProperty: (k, v) => void propStore.set(k, String(v)),
+    deleteProperty: (k) => void propStore.delete(k),
+    getProperties: () => Object.fromEntries(propStore),
+  }) },
   MailApp: { sendEmail: (m) => sent.push(m), getRemainingDailyQuota: () => quota },
   Session: { getEffectiveUser: () => ({ getEmail: () => "stuffd.bagels@gmail.com" }) },
   Utilities: {
@@ -43,7 +50,11 @@ const ctx = {
 };
 vm.createContext(ctx);
 vm.runInContext(code, ctx);
-const post = (o) => JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify(o) } }).s);
+const TOKEN = "k7Vq2mXw9LpR4sTz8NbC3dHf6JyA1eGu0QiO5vWx"; // 40 characters, as the README asks for
+assert.ok(TOKEN.length >= 32);
+vm.runInContext(`CONFIG.SHARED_TOKEN = ${JSON.stringify(TOKEN)}`, ctx);
+const NONE = Symbol("no token field");
+const post = (o, token = TOKEN) => JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify(token === NONE ? o : { ...o, token }) } }).s);
 
 const order = {
   type: "order", ref: "SB-ABC234", name: "Aisha <b>Khan</b>", phone: "+27821234567", email: "aisha@example.com",
@@ -110,13 +121,51 @@ for (const bad of [
 assert.equal(sent.length, 4, "nothing sent for invalid input");
 assert.equal(ctx.doPost({ postData: { contents: "not json" } }).s.includes('"invalid"'), true);
 
-// Token, when set.
-vm.runInContext('CONFIG.SHARED_TOKEN = "s3cret"', ctx);
-assert.equal(post({ ...booking, ref: "BK-BBB222", guests: 12 }).ok, false);
-assert.equal(post({ ...booking, ref: "BK-BBB222", guests: 12, token: "s3cret" }).ok, true);
+// Token is REQUIRED (M3). Empty or short means every request is refused, even one that "matches".
+const goodBooking = { ...booking, ref: "BK-BBB222", guests: 12, email: "tokentest@example.com" };
+assert.equal(post(goodBooking, NONE).ok, false, "no token field: refused");
+assert.equal(post(goodBooking, "").ok, false, "empty token: refused");
+assert.equal(post(goodBooking, "wrong").ok, false, "wrong token: refused");
+assert.equal(post(goodBooking, TOKEN.slice(0, -1) + "X").ok, false, "same length, one character off: refused");
+assert.equal(post(goodBooking, TOKEN + "x").ok, false, "longer token: refused");
+assert.equal(post(goodBooking, 12345).ok, false, "non-string token: refused");
+assert.equal(sent.length, 4, "nothing sent without the right token");
 vm.runInContext('CONFIG.SHARED_TOKEN = ""', ctx);
+assert.equal(post(goodBooking, "").ok, false, "script token empty + empty token sent: still refused");
+assert.equal(post(goodBooking, NONE).ok, false, "script token empty + no token sent: still refused");
+vm.runInContext('CONFIG.SHARED_TOKEN = "s3cret"', ctx);
+assert.equal(post(goodBooking, "s3cret").ok, false, "script token too short: refused even when it matches");
+assert.equal(sent.length, 4);
+vm.runInContext(`CONFIG.SHARED_TOKEN = ${JSON.stringify(TOKEN)}`, ctx);
+assert.equal(post(goodBooking).ok, true, "right 32+ character token: accepted");
+assert.equal(sent.length, 6);
+
+// Per-address cap: 3 customer replies per mailbox per day; case, +tag and Gmail dots are the same mailbox.
+const cap = (ref, email) => post({ ...booking, ref, email, guests: 20 });
+assert.equal(cap("BK-CAP111", "Sam.Smith@gmail.com").ok, true);
+assert.equal(cap("BK-CAP112", "samsmith+two@googlemail.com").ok, true);
+assert.equal(cap("BK-CAP113", "SAM.SMITH+3@gmail.com").ok, true);
+const before = sent.length;
+assert.deepEqual(cap("BK-CAP114", "s.a.m.smith@gmail.com"), { ok: false, error: "cap" });
+assert.equal(sent.length, before, "4th for the same mailbox sends nothing");
+assert.equal(cap("BK-CAP115", "someone.else@example.com").ok, true, "another address is unaffected");
+
+// Daily total cap: below Gmail's 100 a day (40 submissions x 2 emails = 80).
+assert.ok(vm.runInContext("CONFIG.MAX_SUBMISSIONS_PER_DAY * 2 < 100", ctx));
+vm.runInContext("CONFIG.MAX_SUBMISSIONS_PER_DAY = 10", ctx);
+let accepted = 0, refused = 0;
+for (let i = 0; i < 12; i++) post({ ...booking, ref: `BK-DAY${String(100 + i)}`, email: `day${i}@example.com`, guests: 30 + i }).ok ? accepted++ : refused++;
+assert.equal(accepted + refused, 12);
+assert.ok(refused >= 1, "the daily cap stops further submissions");
+assert.equal(post({ ...booking, ref: "BK-DAY999", email: "late@example.com", guests: 99 }).error, "cap");
+// A new day starts from zero and old per-address counters are tidied away.
+for (const [k, v] of propStore) propStore.set(k, "2000-01-01:" + v.split(":")[1]);
+assert.equal(post({ ...booking, ref: "BK-DAY998", email: "late@example.com", guests: 98 }).ok, true);
+assert.ok([...propStore.keys()].filter((k) => k.startsWith("cap_rc_")).length <= 1, "old per-address counters removed");
+vm.runInContext("CONFIG.MAX_SUBMISSIONS_PER_DAY = 40", ctx);
+propStore.clear();
 
 // Quota.
 quota = 2;
-assert.equal(post({ ...booking, ref: "BK-CCC333", guests: 13 }).error, "quota");
+assert.equal(post({ ...booking, ref: "BK-CCC333", guests: 13, email: "quota@example.com" }).error, "quota");
 console.log("apps-script selftest: all checks passed");

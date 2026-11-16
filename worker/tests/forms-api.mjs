@@ -1,11 +1,12 @@
 // Worker order/booking API test against `wrangler dev`. Setup (three terminals):
 //   1. node worker/tests/fake-apps-script.mjs /tmp/fake.log
-//   2. npx wrangler@4.148.0 dev --port 8787 --var APPS_SCRIPT_URL:http://127.0.0.1:8799/exec --var APPS_SCRIPT_TOKEN:tok123
-//   3. rm -f /tmp/fake.log && node worker/tests/forms-api.mjs /tmp/fake.log
-// It sets up its own pickup points and clears the local rate-limit counters. Dates follow the real clock.
+//   2. npx wrangler@4.148.0 dev --port 8787 --var APPS_SCRIPT_URL:http://127.0.0.1:8799/exec --persist-to /tmp/stuffd-state --var APPS_SCRIPT_TOKEN:$TOKEN
+//   3. rm -f /tmp/fake.log && TOKEN=<same value> node worker/tests/forms-api.mjs /tmp/fake.log
+// TOKEN is the same 32+ character value passed to wrangler dev (the Worker refuses to forward without one).
+// It sets up its own pickup points and uses a fresh pretend client IP for rate limits. Dates follow the real clock.
 // The exact cut-off and month-end cases live in saturday-rules.mjs (fake clock); this file checks the live HTTP path.
 import assert from "node:assert/strict";
-import { admin, clearRateLimits, col, logged, post, resetPickups, saturdays, setAvail } from "./_helpers.mjs";
+import { admin, clearRateLimits, col, logged, post, resetPickups, saturdays, setAvail, uniqueEmail } from "./_helpers.mjs";
 
 clearRateLimits();
 await setAvail({});
@@ -18,8 +19,8 @@ assert.ok(sats.length >= 3, "need three open Saturdays to run");
 const [, SAT, SAT2] = sats; // index 0 may be at its cut-off edge right now
 const addDays = (iso, n) => new Date(Date.parse(iso + "T00:00:00Z") + n * 86400000).toISOString().slice(0, 10);
 
-const order = (o = {}) => ({ name: "Aisha Khan", phone: "082 123 4567", email: "aisha@example.com", pickupId: P1, pickupDate: SAT, items: { "Pizza Bagel": 2 }, toppings: {}, note: "No onions", website: "", ...o });
-const booking = (o = {}) => ({ name: "Sam", phone: "+27 82 999 9999", email: "sam@example.com", eventDate: addDays(SAT, 90), venue: "Kenilworth", guests: 80, details: "Birthday", website: "", ...o });
+const order = (o = {}) => ({ name: "Aisha Khan", phone: "082 123 4567", email: uniqueEmail("aisha"), pickupId: P1, pickupDate: SAT, items: { "Pizza Bagel": 2 }, toppings: {}, note: "No onions", website: "", ...o });
+const booking = (o = {}) => ({ name: "Sam", phone: "+27 82 999 9999", email: uniqueEmail("sam"), eventDate: addDays(SAT, 90), venue: "Kenilworth", guests: 80, details: "Birthday", website: "", ...o });
 let n = 0;
 const ok = (name) => console.log("PASS", ++n, name);
 
@@ -29,7 +30,7 @@ assert.equal(r.status, 200); assert.match(j.ref, /^SB-[A-Z2-9]{6}$/); assert.equ
 let l = logged(); assert.equal(l.length, 1);
 assert.equal(l[0].method, "POST"); assert.match(l[0].ct, /text\/plain/);
 const f = l[0].body;
-assert.equal(f.type, "order"); assert.equal(f.phone, "+27821234567"); assert.equal(f.token, "tok123"); assert.equal(f.total, 190);
+assert.equal(f.type, "order"); assert.equal(f.phone, "+27821234567"); assert.equal(f.token, process.env.TOKEN); assert.equal(f.total, 190);
 assert.equal(f.pickupPlace, "Kenilworth Corner, Main Rd, Kenilworth"); assert.equal(f.pickupDays, "Saturdays, 10am to 1pm"); assert.equal(f.pickupDate, SAT);
 assert.equal(col.isSaturday(f.pickupDate), true);
 ok("valid order forwarded with pickup point, Saturday, server total R190, phone normalised, token sent");

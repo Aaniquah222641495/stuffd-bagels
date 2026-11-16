@@ -3,14 +3,15 @@
 // The browser only ever talks to this Worker, so the page CSP stays connect-src 'self'.
 //
 // Orders are "awaiting payment" until the Yoco step exists (hook: POST /api/order/pay, a stub).
-// Nothing personal is stored here: KV only holds hashed-IP counters that expire on their own.
+// Nothing personal is stored here: the rate-limit counters (worker/limiter.ts) sit under keyed hashes of the network and
+// the email address, hold only a number and a reset time, and delete themselves when their window ends.
 import { menuPricingObject, pricedToppings } from "../artifacts/stuffd-bagels/src/content";
-import { hashIp } from "./auth";
+import { hashKey, ipBucket, normaliseEmail, refund, take, type LimiterEnv, type Rule } from "./limiter-client";
 import { HttpError, json, readJsonObject } from "./http";
 import { saturdayStatus, sastDay } from "../artifacts/stuffd-bagels/src/collection";
-import { isRealDate, publicAvailability, publicPickups, sastToday } from "./store";
+import { isRealDate, publicAvailability, publicPickups, sastToday, secondsToSastMidnight } from "./store";
 
-export interface FormsEnv {
+export interface FormsEnv extends LimiterEnv {
   STUFFD_KV?: KVNamespace;
   ADMIN_PASSWORD?: string;
   APPS_SCRIPT_URL?: string;
@@ -28,8 +29,10 @@ export const FORM_LIMITS = {
   perItem: 50,
   totalItems: 100,
   maxGuests: 5000,
-  perIpPerHour: { order: 5, booking: 3 },
-  perDay: 40, // Gmail lets a free account send about 100 emails a day; each submission sends 2.
+  perIpPerHour: { order: 5, booking: 3 }, // per IPv4 address or IPv6 /64
+  perRecipientPerDay: 3, // customer replies to one mailbox per day (same cap in apps-script/Code.gs)
+  perDay: 40, // Gmail lets a free account send about 100 emails a day; each submission sends 2. Code.gs has the same cap.
+  minToken: 32, // APPS_SCRIPT_TOKEN must be at least this long (Code.gs refuses anything shorter)
 };
 
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -180,44 +183,68 @@ function parseBooking(body: Record<string, unknown>): BookingPayload {
   return { type: "booking", ref: reference("BK"), name, phone: tel, email: mail, eventDate: date, venue, guests, details };
 }
 
-/** Counts a submission against the per-IP hourly limit and the shared daily cap. Fails closed. */
-async function rateLimit(request: Request, env: FormsEnv, kind: "order" | "booking"): Promise<void> {
-  const kv = env.STUFFD_KV;
-  if (!kv) throw new HttpError(503, "We can't take this right now. Please try again in a minute.");
-  const ipKey = `rl:${kind}:${await hashIp(request.headers.get("CF-Connecting-IP") ?? "unknown", env.ADMIN_PASSWORD ?? "stuffd-forms")}:${Math.floor(Date.now() / 3600000)}`;
-  const dayKey = `rl:day:${sastToday()}`;
-  let ip = 0;
-  let day = 0;
-  try {
-    const [a, b] = await Promise.all([kv.get(ipKey), kv.get(dayKey)]);
-    ip = Number(a) || 0;
-    day = Number(b) || 0;
-  } catch {
-    throw new HttpError(503, "We can't take this right now. Please try again in a minute.");
-  }
-  if (ip >= FORM_LIMITS.perIpPerHour[kind]) {
-    throw new HttpError(429, "That's a few too many in a row. Please wait an hour, or email stuffd.bagels@gmail.com.", { "Retry-After": "3600" });
-  }
-  if (day >= FORM_LIMITS.perDay) {
-    throw new HttpError(429, "We've had a very busy day. Please email stuffd.bagels@gmail.com instead.", { "Retry-After": "3600" });
-  }
-  try {
-    await Promise.all([kv.put(ipKey, String(ip + 1), { expirationTtl: 3700 }), kv.put(dayKey, String(day + 1), { expirationTtl: 2 * 86400 })]);
-  } catch {
-    throw new HttpError(503, "We can't take this right now. Please try again in a minute.");
+/**
+ * Counts a submission against, in order: the sender's network per hour (IPv4 or IPv6 /64), the customer's mailbox
+ * per day, and the shared daily cap. The counters live in Durable Objects (strongly consistent), so parallel
+ * submissions cannot slip past them. A refusal gives back the slots already taken. Fails closed.
+ */
+async function rateLimit(request: Request, env: FormsEnv, kind: "order" | "booking", mail: string): Promise<void> {
+  const unavailable = () => new HttpError(503, "We can't take this right now. Please try again in a minute.");
+  const secret = env.ADMIN_PASSWORD ?? "stuffd-forms";
+  const midnight = secondsToSastMidnight();
+  const steps: { key: string; rule: Rule; refused: string }[] = [
+    {
+      key: `form:${kind}:${await hashKey(ipBucket(request.headers.get("CF-Connecting-IP") ?? "unknown"), secret)}`,
+      rule: { id: "hour", limit: FORM_LIMITS.perIpPerHour[kind], windowSec: 3600 },
+      refused: "That's a few too many in a row. Please wait an hour, or email stuffd.bagels@gmail.com.",
+    },
+    {
+      key: `rcpt:${await hashKey(normaliseEmail(mail), secret)}`,
+      rule: { id: "day", limit: FORM_LIMITS.perRecipientPerDay, windowSec: midnight },
+      refused: "We've already had a few from that email address today. Please email stuffd.bagels@gmail.com instead.",
+    },
+    {
+      key: `all:${sastToday()}`,
+      rule: { id: "day", limit: FORM_LIMITS.perDay, windowSec: midnight },
+      refused: "We've had a very busy day. Please email stuffd.bagels@gmail.com instead.",
+    },
+  ];
+  const taken: typeof steps = [];
+  for (const step of steps) {
+    let verdict;
+    try {
+      verdict = await take(env, step.key, [step.rule]);
+    } catch {
+      await Promise.all(taken.map((t) => refund(env, t.key, [t.rule.id])));
+      throw unavailable();
+    }
+    if (!verdict.ok) {
+      await Promise.all(taken.map((t) => refund(env, t.key, [t.rule.id])));
+      throw new HttpError(429, step.refused, { "Retry-After": String(Math.min(verdict.retryAfter, 3600)) });
+    }
+    taken.push(step);
   }
 }
 
+/** Both secrets must be set. Without the token the script (Code.gs) would be an open mail relay, so never forward without it. */
+function assertSwitchedOn(env: FormsEnv): { url: string; token: string } {
+  const { APPS_SCRIPT_URL: url, APPS_SCRIPT_TOKEN: token } = env;
+  if (!url || !token || token.length < FORM_LIMITS.minToken) {
+    throw new HttpError(503, "Online ordering isn't switched on yet. Please email stuffd.bagels@gmail.com.");
+  }
+  return { url, token };
+}
+
 async function forward(env: FormsEnv, payload: OrderPayload | BookingPayload): Promise<void> {
-  if (!env.APPS_SCRIPT_URL) throw new HttpError(503, "Online ordering isn't switched on yet. Please email stuffd.bagels@gmail.com.");
+  const { url, token } = assertSwitchedOn(env); // again, so no code path can forward without it
   const fail = () => new HttpError(502, "We couldn't send that just now. Please try again, or email stuffd.bagels@gmail.com.");
   let res: Response;
   try {
-    res = await fetch(env.APPS_SCRIPT_URL, {
+    res = await fetch(url, {
       method: "POST",
       // text/plain: Apps Script web apps do not answer CORS preflights, and this is server to server anyway.
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ ...payload, token: env.APPS_SCRIPT_TOKEN ?? "", receivedAt: new Date().toISOString() }),
+      body: JSON.stringify({ ...payload, token, receivedAt: new Date().toISOString() }),
       redirect: "follow",
       signal: AbortSignal.timeout(25000),
     });
@@ -247,7 +274,8 @@ export async function handleForm(request: Request, env: FormsEnv, kind: "order" 
     }
   }
   const payload = kind === "order" ? await parseOrder(body, env, now) : parseBooking(body);
-  await rateLimit(request, env, kind);
+  assertSwitchedOn(env); // before counting anything: a switched-off site must not use up anyone's allowance
+  await rateLimit(request, env, kind, payload.email);
   await forward(env, payload);
   return json({ ok: true, ref: payload.ref, ...(payload.type === "order" ? { total: payload.total, status: "awaiting_payment" } : {}) });
 }

@@ -2,13 +2,13 @@
 // Run: rm -f /tmp/fake.log && node worker/tests/prices.mjs /tmp/fake.log
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { clearRateLimits, log, post, resetPickups, saturdays, setAvail } from "./_helpers.mjs";
+import { clearRateLimits, log, post, resetPickups, saturdays, setAvail, uniqueEmail } from "./_helpers.mjs";
 clearRateLimits(); await setAvail({});
 const [P] = await resetPickups([{ name: "Test Point", area: "Test Area" }]);
 const SAT = saturdays()[1];
 const send = (b) => post("/api/order", b);
 const last = () => JSON.parse(fs.readFileSync(log, "utf8").trim().split("\n").at(-1));
-const o = (x = {}) => ({ name: "Aisha", phone: "0821234567", email: "a@b.co", pickupId: P, pickupDate: SAT, items: { "Steak'd Bagel": 1, "Classic Bagel": 2 }, website: "", ...x });
+const o = (x = {}) => ({ name: "Aisha", phone: "0821234567", email: uniqueEmail("price"), pickupId: P, pickupDate: SAT, items: { "Steak'd Bagel": 1, "Classic Bagel": 2 }, website: "", ...x });
 let r = await send(o({ total: 1, price: 1, prices: { "Steak'd Bagel": 1 } })); let j = await r.json();
 assert.equal(r.status, 200); assert.equal(j.total, 245, "server total 115 + 2 x 65 regardless of what the browser sends");
 const f = last().body;

@@ -17,7 +17,23 @@ address and puts the two labels in her mailbox.
 1. Go to https://script.google.com signed in as stuffd.bagels@gmail.com. Click **New project**.
 2. Click "Untitled project" at the top, name it **STUFFD orders**, press Enter.
 3. In the code editor, select everything in `Code.gs`, delete it, and paste all of `apps-script/Code.gs` from this repo.
-4. Press **Cmd+S** (Ctrl+S on Windows) to save. Leave the CONFIG block as it is for now (the defaults are right).
+4. Make the token (next section, "The token") and put it in `SHARED_TOKEN` in the CONFIG block. **The script refuses every
+   request until you do**, so this step is not optional. Leave the rest of CONFIG as it is.
+5. Press **Cmd+S** (Ctrl+S on Windows) to save.
+
+### The token (required, about 2 minutes)
+The token is a secret password that only the website server and the script know. Without it, anyone who found the web app
+address could make your Gmail send email to anybody, so the script refuses to work without one.
+
+1. Make a random token of **32 or more characters**. In Terminal, run: `openssl rand -base64 36 | tr -d '/+=\n'` and copy the output.
+   (A password manager's "generate" button with 40 characters and letters and numbers works too.)
+2. Paste it between the quotes: `SHARED_TOKEN: 'paste-it-here',` in the CONFIG block of the script. Save.
+3. Deploy it (Part 3 for the first time, or **Deploy > Manage deployments > pencil > Version: New version > Deploy** if it already exists).
+   Changing `SHARED_TOKEN` only takes effect after a new version is deployed.
+4. Give the **same value** to the website server (this is the only place it goes besides the script; never put it in the repo, a chat or an email):
+   `npx wrangler@4.148.0 secret put APPS_SCRIPT_TOKEN --env preview` and paste it when asked (it is not echoed).
+   The website server also refuses to send anything on if this secret is missing or shorter than 32 characters.
+5. To change it later, repeat steps 1 to 4 (new token in both places, new version in the script).
 
 ## Part 2: Run the one-time set-up
 1. In the grey bar above the code, click the function drop-down (it may say `doGet`) and choose **setup**.
@@ -32,8 +48,8 @@ address and puts the two labels in her mailbox.
 1. Top right: **Deploy > New deployment**.
 2. Click the gear next to "Select type" and choose **Web app**.
 3. Description: `Orders and bookings`. **Execute as: Me (stuffd.bagels@gmail.com)**. **Who has access: Anyone**.
-   ("Anyone" is needed so the website server can reach it. The address is a long secret link, and the website
-   server checks every order before sending it on.)
+   ("Anyone" is needed so the website server can reach it. The address is a long secret link, the website server checks
+   every order before sending it on, and the script refuses anything without the token from "The token" above.)
 4. Click **Deploy**. Copy the **Web app URL** (it ends in `/exec`).
 5. Paste the URL into a new browser tab. You should see `{"ok":true,...,"status":"running"}`.
 
@@ -48,7 +64,8 @@ address and puts the two labels in her mailbox.
 6. Delete the test emails when you are happy.
 
 ## Part 5: Give the website the address
-Do this for the **preview** first (the founder or Digital Pantry does this part, with the URL from Part 3):
+Do this for the **preview** first (the founder does this part, with the URL from Part 3). The website needs **both** secrets,
+`APPS_SCRIPT_URL` and `APPS_SCRIPT_TOKEN` (see "The token"); with only one, the order and booking forms say "not switched on yet".
 
 **Cloudflare dashboard:** Workers & Pages > **stuffdbagels-preview** > **Settings** > **Variables and Secrets** >
 **Add** > Type **Secret**, name `APPS_SCRIPT_URL`, value = the Web app URL > **Deploy**.
@@ -59,10 +76,9 @@ Do this for the **preview** first (the founder or Digital Pantry does this part,
 Then place a real test order on the preview site (see the checklist in the session notes) and check both emails arrive.
 The live `stuffdbagels` Worker gets the same secret only when the site goes live on its own address.
 
-### Optional extra lock (recommended once everything works)
-Pick a long random phrase. Put it in `SHARED_TOKEN` in the CONFIG block of the script (Part 1), save, then
-**Deploy > Manage deployments > pencil > Version: New version > Deploy**. Put the same phrase in the Worker secret
-`APPS_SCRIPT_TOKEN`. The script then refuses anything that does not carry it.
+### If the web app address ever leaks
+Anyone with the address still needs the token, so a leaked address alone is harmless. If the token leaks too, make a new token
+(steps 1 to 5 above) and deploy a new version: the old one stops working at once.
 
 ## Changing the script later
 Edit, save, then **Deploy > Manage deployments > pencil > Version: New version > Deploy**. The URL stays the same.
@@ -70,8 +86,10 @@ If you change `SITE_URL` or the phone number in CONFIG, do this too.
 
 ## Good to know
 - **Email limits:** a free Gmail account can send about 100 emails a day, and each order or booking sends 2. The website
-  stops accepting after 40 a day and asks people to email instead, so the limit is never hit. If the script cannot
-  send, the website tells the customer to email you; nothing is lost silently.
+  stops accepting after 40 a day and asks people to email instead, and the script has its own cap of 40 a day (80 emails),
+  so you can still send a few by hand. The script also sends **at most 3 customer replies to one email address per day**
+  (`john.smith`, `johnsmith+x` and `JohnSmith@googlemail.com` count as the same Gmail address). Both caps are in CONFIG.
+  If the script cannot send, the website tells the customer to email you; nothing is lost silently.
 - **Labels:** Gmail has no real folders. A label works like one: click **Orders** in the sidebar to see only orders.
   If you want them to skip your Inbox, make a Gmail filter later; the script does not hide anything.
 - **Orders are "awaiting payment".** The "Pay now" step (Yoco) is not built yet. Every email carries a reference
