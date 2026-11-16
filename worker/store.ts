@@ -1,4 +1,5 @@
 // Reads, validates and writes the two KV keys: `availability` and `events` (ADR-0028).
+import { DEFAULT_CUTOFF, DEFAULT_WEEKS_AHEAD, MAX_WEEKS_AHEAD, isCutoffTime } from "../artifacts/stuffd-bagels/src/collection";
 import { EVENTS, type MarketEvent } from "../artifacts/stuffd-bagels/src/content";
 import { HttpError } from "./http";
 
@@ -8,19 +9,28 @@ export const LIMITS = {
   name: 60,
   venue: 80,
   message: 160,
+  pickups: 30,
+  pickupName: 60,
+  pickupArea: 120,
+  pickupDays: 120,
 };
 
 export interface Availability {
   ordersEnabled: boolean;
+  /** Closed dates: a Saturday listed here can't be collected on; today listed here pauses new orders. */
   closedDates: string[];
   closedMessage: string;
+  /** Wednesday cut-off for the coming Saturday, "HH:MM" SAST (owner-editable). */
+  cutoffTime: string;
+  /** How many weeks ahead a customer may order (owner-editable). */
+  maxWeeksAhead: number;
 }
 
 export interface PublicAvailability extends Availability {
   closedToday: boolean;
 }
 
-const OPEN: Availability = { ordersEnabled: true, closedDates: [], closedMessage: "" };
+const OPEN: Availability = { ordersEnabled: true, closedDates: [], closedMessage: "", cutoffTime: DEFAULT_CUTOFF, maxWeeksAhead: DEFAULT_WEEKS_AHEAD };
 
 /** Today in Africa/Johannesburg (UTC+2, no daylight saving), as YYYY-MM-DD. */
 export function sastToday(now = Date.now()): string {
@@ -60,6 +70,11 @@ export async function readAvailability(kv: KVNamespace): Promise<Availability> {
     ordersEnabled: typeof v.ordersEnabled === "boolean" ? v.ordersEnabled : OPEN.ordersEnabled,
     closedDates: Array.isArray(v.closedDates) ? v.closedDates.filter(isRealDate).slice(0, LIMITS.closedDates) : [],
     closedMessage: typeof v.closedMessage === "string" ? v.closedMessage.slice(0, LIMITS.message) : "",
+    cutoffTime: isCutoffTime(v.cutoffTime) ? v.cutoffTime : DEFAULT_CUTOFF,
+    maxWeeksAhead:
+      typeof v.maxWeeksAhead === "number" && Number.isInteger(v.maxWeeksAhead) && v.maxWeeksAhead >= 1 && v.maxWeeksAhead <= MAX_WEEKS_AHEAD
+        ? v.maxWeeksAhead
+        : DEFAULT_WEEKS_AHEAD,
   };
 }
 
@@ -84,10 +99,17 @@ export function parseAvailabilityInput(body: Record<string, unknown>): Availabil
   if (!Array.isArray(dates) || dates.length > LIMITS.closedDates || !dates.every(isRealDate)) throw bad();
   const message = body.closedMessage ?? "";
   if (typeof message !== "string" || message.length > LIMITS.message) throw bad();
+  // Cut-off and weeks ahead are optional in the request (older callers) and default to the standard rules.
+  const cutoffTime = body.cutoffTime ?? DEFAULT_CUTOFF;
+  if (!isCutoffTime(cutoffTime)) throw bad();
+  const weeks = body.maxWeeksAhead ?? DEFAULT_WEEKS_AHEAD;
+  if (typeof weeks !== "number" || !Number.isInteger(weeks) || weeks < 1 || weeks > MAX_WEEKS_AHEAD) throw bad();
   return {
     ordersEnabled: body.ordersEnabled,
     closedDates: [...new Set(dates as string[])].sort(),
     closedMessage: message.trim(),
+    cutoffTime,
+    maxWeeksAhead: weeks,
   };
 }
 
@@ -142,6 +164,82 @@ export function parseEventInput(body: Record<string, unknown>): Omit<MarketEvent
 export async function writeEvents(kv: KVNamespace, events: MarketEvent[]): Promise<void> {
   try {
     await kv.put("events", JSON.stringify({ events: [...events].sort(byStart), updatedAt: new Date().toISOString() }));
+  } catch {
+    throw new HttpError(503, "Could not save. Try again in a minute.");
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Pickup points: places the owner sets for customers to collect from (KV key `pickups`).
+// Starts EMPTY on purpose: nothing is invented. Online orders are collected ONLY at these points (not at
+// markets: at a market people just buy at the cart), so ordering is hidden until one point is active.
+// ---------------------------------------------------------------------------------------------
+export interface PickupPoint {
+  id: string;
+  name: string;
+  /** Area or address shown to customers. */
+  area: string;
+  /** Optional collection times, shown as a hint ("Saturdays, 10am to 1pm"). */
+  days: string;
+  active: boolean;
+}
+
+function cleanPickup(v: unknown): PickupPoint | null {
+  const p = asRecord(v);
+  if (typeof p.id !== "string" || typeof p.name !== "string" || typeof p.area !== "string") return null;
+  return {
+    id: p.id.slice(0, 64),
+    name: p.name.slice(0, LIMITS.pickupName),
+    area: p.area.slice(0, LIMITS.pickupArea),
+    days: typeof p.days === "string" ? p.days.slice(0, LIMITS.pickupDays) : "",
+    active: typeof p.active === "boolean" ? p.active : true,
+  };
+}
+
+/** All pickup points, active or not. Empty if nothing has ever been saved. */
+export async function readPickups(kv: KVNamespace): Promise<PickupPoint[]> {
+  const v = asRecord(await readKey(kv, "pickups"));
+  if (!Array.isArray(v.pickups)) return [];
+  return v.pickups.map(cleanPickup).filter((p): p is PickupPoint => p !== null);
+}
+
+/** Public view: active points only. If storage is missing or broken, none (markets still work). */
+export async function publicPickups(kv: KVNamespace | undefined): Promise<PickupPoint[]> {
+  if (!kv) return [];
+  try {
+    return (await readPickups(kv)).filter((p) => p.active);
+  } catch {
+    return [];
+  }
+}
+
+function textField(v: unknown, max: number, required: boolean): string {
+  const bad = () => new HttpError(400, "Invalid fields");
+  if (v === undefined || v === null || v === "") {
+    if (required) throw bad();
+    return "";
+  }
+  if (typeof v !== "string") throw bad();
+  const s = v.replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, " ").replace(/\s+/g, " ").trim();
+  if ((required && !s) || s.length > max) throw bad();
+  return s;
+}
+
+/** Add or edit: name and area required, days (collection times) optional, active defaults to true. */
+export function parsePickupInput(body: Record<string, unknown>): Omit<PickupPoint, "id"> {
+  const bad = () => new HttpError(400, "Invalid fields");
+  if (body.active !== undefined && typeof body.active !== "boolean") throw bad();
+  return {
+    name: textField(body.name, LIMITS.pickupName, true),
+    area: textField(body.area, LIMITS.pickupArea, true),
+    days: textField(body.days, LIMITS.pickupDays, false),
+    active: body.active ?? true,
+  };
+}
+
+export async function writePickups(kv: KVNamespace, pickups: PickupPoint[]): Promise<void> {
+  try {
+    await kv.put("pickups", JSON.stringify({ pickups, updatedAt: new Date().toISOString() }));
   } catch {
     throw new HttpError(503, "Could not save. Try again in a minute.");
   }

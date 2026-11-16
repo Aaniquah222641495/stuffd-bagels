@@ -2,24 +2,33 @@
 // Only /api and /api/* reach this code (wrangler.jsonc: assets.run_worker_first). Everything
 // else is served straight from the static assets, so pages and images stay free requests.
 import { requireAdmin } from "./auth";
+import { handleForm, handlePayStub } from "./forms";
 import { HttpError, errorResponse, json, readJsonObject } from "./http";
 import {
   LIMITS,
   parseAvailabilityInput,
   parseEventInput,
+  parsePickupInput,
   publicAvailability,
   publicEvents,
+  publicPickups,
   readAvailability,
   readEvents,
+  readPickups,
   withToday,
   writeAvailability,
   writeEvents,
+  writePickups,
 } from "./store";
 
 export interface Env {
   ASSETS: Fetcher;
   STUFFD_KV?: KVNamespace;
   ADMIN_PASSWORD?: string;
+  // Web app URL of the client's Google Apps Script (apps-script/Code.gs). Worker secret, set by the founder.
+  APPS_SCRIPT_URL?: string;
+  // Optional shared token, must match SHARED_TOKEN in the script.
+  APPS_SCRIPT_TOKEN?: string;
 }
 
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -72,7 +81,44 @@ async function handleAdmin(request: Request, env: Env, parts: string[]): Promise
     return json({ ok: true });
   }
 
+  // Pickup points: same auth, body limits and error style as events, plus edit (PUT) because a point's
+  // name, address and on/off switch change more often than a market does.
+  if (resource === "pickups" && id === undefined) {
+    methodOnly(request, ["GET", "POST"]);
+    const kv = needKv(env);
+    const points = await readPickupsSafe(kv);
+    if (request.method === "GET") return json(points);
+    const input = parsePickupInput(await readJsonObject(request));
+    if (points.length >= LIMITS.pickups) throw new HttpError(400, "Too many pickup points. Remove one first.");
+    const newId = crypto.randomUUID();
+    await writePickups(kv, [...points, { id: newId, ...input }]);
+    return json({ ok: true, id: newId });
+  }
+
+  if (resource === "pickups" && id !== undefined && extra.length === 0) {
+    methodOnly(request, ["PUT", "DELETE"]);
+    if (!SAFE_ID.test(id)) throw new HttpError(400, "Invalid fields");
+    const kv = needKv(env);
+    const points = await readPickupsSafe(kv);
+    if (!points.some((p) => p.id === id)) throw new HttpError(404, "Not found");
+    if (request.method === "DELETE") {
+      await writePickups(kv, points.filter((p) => p.id !== id));
+      return json({ ok: true });
+    }
+    const input = parsePickupInput(await readJsonObject(request));
+    await writePickups(kv, points.map((p) => (p.id === id ? { id, ...input } : p)));
+    return json({ ok: true });
+  }
+
   throw new HttpError(404, "Not found");
+}
+
+async function readPickupsSafe(kv: KVNamespace) {
+  try {
+    return await readPickups(kv);
+  } catch {
+    throw new HttpError(503, "Storage is not responding. Try again in a minute.");
+  }
 }
 
 // Admin reads: a KV failure is a 503 (the owner should know), not a silent fallback.
@@ -112,6 +158,20 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
   if (parts.length === 2 && parts[1] === "events") {
     methodOnly(request, ["GET", "HEAD"]);
     return json(await publicEvents(env.STUFFD_KV), 200, "public");
+  }
+  if (parts.length === 2 && parts[1] === "pickups") {
+    methodOnly(request, ["GET", "HEAD"]);
+    // Only what customers need: active points, no internal fields.
+    const list = (await publicPickups(env.STUFFD_KV)).map(({ id, name, area, days }) => ({ id, name, area, days }));
+    return json(list, 200, "public");
+  }
+  if (parts.length === 2 && (parts[1] === "order" || parts[1] === "booking")) {
+    methodOnly(request, ["POST"]);
+    return handleForm(request, env, parts[1]);
+  }
+  if (parts.length === 3 && parts[1] === "order" && parts[2] === "pay") {
+    methodOnly(request, ["POST"]);
+    return handlePayStub(request);
   }
   throw new HttpError(404, "Not found");
 }

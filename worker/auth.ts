@@ -18,7 +18,7 @@ async function passwordMatches(given: string | null, secret: string): Promise<bo
 }
 
 /** Keyed hash of the IP, so the raw address is never stored (and can't be brute-forced from KV). */
-async function hashIp(ip: string, secret: string): Promise<string> {
+export async function hashIp(ip: string, secret: string): Promise<string> {
   const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(ip)));
   return [...sig.slice(0, 16)].map((b) => b.toString(16).padStart(2, "0")).join("");
