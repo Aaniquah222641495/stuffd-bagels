@@ -62,13 +62,18 @@ export function pricedToppings(): Record<string, number> {
 export const FAQ = [
   {
     q: "Where and when do I collect my order?",
-    a: "Online orders are collected on a Saturday at one of our pickup points 📍 Order by Wednesday, collect on Saturday. At a market? No order needed, just come and buy at the cart!",
+    a: "Online orders are collected on a Saturday at one of our pickup points 📍 Order by Wednesday, collect on Saturday. For now that is the last Saturday of each month, and orders for it open on the 15th. At a market? No order needed, just come and buy at the cart!",
     time: "10:42",
   },
   {
     q: "How do I pay for my order? 🤔",
     a: "Your order is confirmed once it's paid. After you send it, we'll email you how to pay 🙌",
     time: "10:44",
+  },
+  {
+    q: "What if I cancel or can't collect my order?",
+    a: "If you cancel before the Wednesday cut-off, or you pay and don't collect, your order becomes credit for another collection Saturday or one of our markets (credit, not a refund).",
+    time: "10:45",
   },
   {
     q: "Is the food halal?",

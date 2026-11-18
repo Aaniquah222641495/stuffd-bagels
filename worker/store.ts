@@ -1,10 +1,12 @@
 // Reads, validates and writes the two KV keys: `availability` and `events` (ADR-0028).
-import { DEFAULT_CUTOFF, DEFAULT_WEEKS_AHEAD, MAX_WEEKS_AHEAD, isCutoffTime } from "../artifacts/stuffd-bagels/src/collection";
+import { DEFAULT_CUTOFF, isCutoffTime, isSaturday } from "../artifacts/stuffd-bagels/src/collection";
 import { EVENTS, type MarketEvent } from "../artifacts/stuffd-bagels/src/content";
 import { HttpError } from "./http";
 
 export const LIMITS = {
   closedDates: 60,
+  addedSaturdays: 24,
+  removedSaturdays: 24,
   events: 50,
   name: 60,
   venue: 80,
@@ -22,15 +24,21 @@ export interface Availability {
   closedMessage: string;
   /** Wednesday cut-off for the coming Saturday, "HH:MM" SAST (owner-editable). */
   cutoffTime: string;
-  /** How many weeks ahead a customer may order (owner-editable). */
-  maxWeeksAhead: number;
+  /**
+   * Collection Saturdays. By default the last Saturday of each month (collection.ts). The owner adds Saturdays here,
+   * takes default ones off, and can change the day orders open (default: the 15th). This replaces the old
+   * "weeks ahead" setting; a stored maxWeeksAhead from before is ignored.
+   */
+  addedSaturdays: string[];
+  removedSaturdays: string[];
+  opensOn: Record<string, string>;
 }
 
 export interface PublicAvailability extends Availability {
   closedToday: boolean;
 }
 
-const OPEN: Availability = { ordersEnabled: true, closedDates: [], closedMessage: "", cutoffTime: DEFAULT_CUTOFF, maxWeeksAhead: DEFAULT_WEEKS_AHEAD };
+const OPEN: Availability = { ordersEnabled: true, closedDates: [], closedMessage: "", cutoffTime: DEFAULT_CUTOFF, addedSaturdays: [], removedSaturdays: [], opensOn: {} };
 
 /** Today in Africa/Johannesburg (UTC+2, no daylight saving), as YYYY-MM-DD. */
 export function sastToday(now = Date.now()): string {
@@ -63,6 +71,17 @@ function asRecord(v: unknown): Record<string, unknown> {
   return typeof v === "object" && v !== null ? (v as Record<string, unknown>) : {};
 }
 
+const isSat = (x: unknown): x is string => isRealDate(x) && isSaturday(x);
+
+/** Only real Saturdays as keys, real dates as values, an opening day never after its Saturday. */
+function cleanOpensOn(v: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, d] of Object.entries(asRecord(v)).slice(0, LIMITS.addedSaturdays + LIMITS.removedSaturdays + 12)) {
+    if (isSat(k) && isRealDate(d) && d <= k) out[k] = d;
+  }
+  return out;
+}
+
 /** Stored availability, with every field checked. Missing or odd values fall back to "open". */
 export async function readAvailability(kv: KVNamespace): Promise<Availability> {
   const v = asRecord(await readKey(kv, "availability"));
@@ -71,10 +90,9 @@ export async function readAvailability(kv: KVNamespace): Promise<Availability> {
     closedDates: Array.isArray(v.closedDates) ? v.closedDates.filter(isRealDate).slice(0, LIMITS.closedDates) : [],
     closedMessage: typeof v.closedMessage === "string" ? v.closedMessage.slice(0, LIMITS.message) : "",
     cutoffTime: isCutoffTime(v.cutoffTime) ? v.cutoffTime : DEFAULT_CUTOFF,
-    maxWeeksAhead:
-      typeof v.maxWeeksAhead === "number" && Number.isInteger(v.maxWeeksAhead) && v.maxWeeksAhead >= 1 && v.maxWeeksAhead <= MAX_WEEKS_AHEAD
-        ? v.maxWeeksAhead
-        : DEFAULT_WEEKS_AHEAD,
+    addedSaturdays: Array.isArray(v.addedSaturdays) ? v.addedSaturdays.filter(isSat).slice(0, LIMITS.addedSaturdays) : [],
+    removedSaturdays: Array.isArray(v.removedSaturdays) ? v.removedSaturdays.filter(isSat).slice(0, LIMITS.removedSaturdays) : [],
+    opensOn: cleanOpensOn(v.opensOn),
   };
 }
 
@@ -99,17 +117,26 @@ export function parseAvailabilityInput(body: Record<string, unknown>): Availabil
   if (!Array.isArray(dates) || dates.length > LIMITS.closedDates || !dates.every(isRealDate)) throw bad();
   const message = body.closedMessage ?? "";
   if (typeof message !== "string" || message.length > LIMITS.message) throw bad();
-  // Cut-off and weeks ahead are optional in the request (older callers) and default to the standard rules.
+  // Cut-off and the Saturday lists are optional in the request (older callers) and default to the standard rules.
   const cutoffTime = body.cutoffTime ?? DEFAULT_CUTOFF;
   if (!isCutoffTime(cutoffTime)) throw bad();
-  const weeks = body.maxWeeksAhead ?? DEFAULT_WEEKS_AHEAD;
-  if (typeof weeks !== "number" || !Number.isInteger(weeks) || weeks < 1 || weeks > MAX_WEEKS_AHEAD) throw bad();
+  const added = body.addedSaturdays ?? [];
+  const removed = body.removedSaturdays ?? [];
+  if (!Array.isArray(added) || added.length > LIMITS.addedSaturdays || !added.every(isSat)) throw bad();
+  if (!Array.isArray(removed) || removed.length > LIMITS.removedSaturdays || !removed.every(isSat)) throw bad();
+  const opens = body.opensOn ?? {};
+  if (typeof opens !== "object" || opens === null || Array.isArray(opens)) throw bad();
+  const opensEntries = Object.entries(opens as Record<string, unknown>);
+  if (opensEntries.length > LIMITS.addedSaturdays + LIMITS.removedSaturdays + 12) throw bad();
+  for (const [k, d] of opensEntries) if (!isSat(k) || !isRealDate(d) || d > k) throw bad();
   return {
     ordersEnabled: body.ordersEnabled,
     closedDates: [...new Set(dates as string[])].sort(),
     closedMessage: message.trim(),
     cutoffTime,
-    maxWeeksAhead: weeks,
+    addedSaturdays: [...new Set(added as string[])].sort(),
+    removedSaturdays: [...new Set(removed as string[])].sort(),
+    opensOn: Object.fromEntries(opensEntries.sort(([a], [b]) => a.localeCompare(b))) as Record<string, string>,
   };
 }
 

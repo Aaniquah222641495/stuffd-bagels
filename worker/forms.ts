@@ -8,7 +8,7 @@
 import { menuPricingObject, pricedToppings } from "../artifacts/stuffd-bagels/src/content";
 import { hashKey, ipBucket, normaliseEmail, refund, take, type LimiterEnv, type Rule } from "./limiter-client";
 import { HttpError, json, readJsonObject } from "./http";
-import { saturdayStatus, sastDay } from "../artifacts/stuffd-bagels/src/collection";
+import { niceDay, opensOnFor, saturdayStatus, sastDay } from "../artifacts/stuffd-bagels/src/collection";
 import { isRealDate, publicAvailability, publicPickups, sastToday, secondsToSastMidnight } from "./store";
 
 export interface FormsEnv extends LimiterEnv {
@@ -144,16 +144,19 @@ async function parseOrder(body: Record<string, unknown>, env: FormsEnv, now: num
   if (bagels.length === 0 || count > FORM_LIMITS.totalItems) throw bad();
   const total = items.reduce((n, i) => n + i.line, 0);
 
-  // Collection: a Saturday, before that Saturday's Wednesday cut-off, not closed, not too far ahead (collection.ts).
+  // Collection: a listed collection Saturday, on or after the day orders open, before its Wednesday cut-off, not closed (collection.ts).
   const avail = await publicAvailability(env.STUFFD_KV);
   const status = saturdayStatus(typeof body.pickupDate === "string" ? body.pickupDate : "", now, {
     cutoffTime: avail.cutoffTime,
-    maxWeeksAhead: avail.maxWeeksAhead,
     closedDates: avail.closedDates,
+    addedSaturdays: avail.addedSaturdays,
+    removedSaturdays: avail.removedSaturdays,
+    opensOn: avail.opensOn,
   });
   if (status === "closed_date") throw new HttpError(409, avail.closedMessage || "We're closed on that Saturday. Please choose another.");
   if (status === "cutoff_passed") throw new HttpError(409, "Orders for that Saturday have closed. Please choose the next Saturday.");
-  if (status === "too_far") throw new HttpError(409, "That Saturday is too far ahead to order for yet. Please choose an earlier one.");
+  if (status === "not_open_yet") throw new HttpError(409, `Orders for that Saturday open on ${niceDay(opensOnFor(body.pickupDate as string, avail))}. Please try again then.`);
+  if (status === "not_offered") throw new HttpError(409, "That Saturday isn't a collection day. Please choose one from the list.");
   if (status !== "ok") throw bad(); // not a Saturday, or in the past
   const date = body.pickupDate as string;
 

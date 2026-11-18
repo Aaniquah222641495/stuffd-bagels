@@ -267,6 +267,10 @@ function sendOwner_(a) {
   MailApp.sendEmail({ to: owner_(), subject: ownerSubject_(a), body: lines.join('\n'), replyTo: a.email, name: CONFIG.BUSINESS_NAME + ' website' });
 }
 
+// DRAFT wording from the client's rule (2026-11-18), pending dp-counsel (CPA s17 advance-booking cancellations).
+// No credit expiry is stated because none has been decided. Keep in step with CANCELLATION_POLICY in src/collection.ts.
+const CANCELLATION_POLICY_ = "If you cancel before the Wednesday cut-off, or you pay and don't collect, your order becomes credit for another collection Saturday or one of our markets (credit, not a refund).";
+
 function sendCustomer_(a) {
   if (MailApp.getRemainingDailyQuota() < 1) return;
   const f = first_(a.name);
@@ -278,7 +282,7 @@ function sendCustomer_(a) {
       .concat(a.items.map(function (i) { return [i.qty + ' x ' + i.name, rand_(i.line)]; }))
       .concat([['Total', rand_(a.total)]]);
     if (a.note) rows.push(['Your note', a.note]);
-    outro = 'Your order is awaiting payment. It is confirmed once it has been paid, and we will be in touch with how to pay. Questions? Just reply to this email.';
+    outro = 'Your order is awaiting payment. It is confirmed once it has been paid, and we will be in touch with how to pay. ' + CANCELLATION_POLICY_ + ' Questions? Just reply to this email.';
   } else {
     subject = "STUFF'D: we've got your event enquiry " + a.ref;
     intro = "Thanks for thinking of us, " + f + "! Your event enquiry has landed.";

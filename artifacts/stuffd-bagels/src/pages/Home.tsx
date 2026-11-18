@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { BookingForm } from "@/components/booking-form";
-import { DEFAULT_CUTOFF, DEFAULT_WEEKS_AHEAD, availableSaturdays, cutoffDay, nearestSaturdayNote, niceDay } from "@/collection";
+import { CANCELLATION_POLICY, DEFAULT_CUTOFF, availableSaturdays, cutoffDay, niceDay, openingNote } from "@/collection";
 import {
   FieldRow,
   Honeypot,
@@ -396,7 +396,9 @@ export default function Home() {
     closedMessage: string;
     closedDates?: string[];
     cutoffTime?: string;
-    maxWeeksAhead?: number;
+    addedSaturdays?: string[];
+    removedSaturdays?: string[];
+    opensOn?: Record<string, string>;
   } | null>(null);
 
   useScrollReveal();
@@ -574,14 +576,16 @@ export default function Home() {
   // Collection: owner pickup points only, on a Saturday that is still open (rules in src/collection.ts, also enforced by the Worker).
   const rules = {
     cutoffTime: availability?.cutoffTime ?? DEFAULT_CUTOFF,
-    maxWeeksAhead: availability?.maxWeeksAhead ?? DEFAULT_WEEKS_AHEAD,
     closedDates: availability?.closedDates ?? [],
+    addedSaturdays: availability?.addedSaturdays ?? [],
+    removedSaturdays: availability?.removedSaturdays ?? [],
+    opensOn: availability?.opensOn ?? {},
   };
   const nowMs = today ? Date.now() : 0; // only after mount, so the prerendered HTML matches the first render
   const saturdays = today ? availableSaturdays(nowMs, rules) : [];
   const chosenSat = saturdays.includes(saturday) ? saturday : saturdays[0];
   const chosenPoint = pickups.find((p) => p.id === pickup) ?? pickups[0];
-  const satNote = today ? nearestSaturdayNote(nowMs, rules) : "";
+  const satNote = today ? openingNote(nowMs, rules) : "";
   const cutoffLine = chosenSat ? `Orders for ${niceDay(chosenSat)} close on ${niceDay(cutoffDay(chosenSat))} at ${rules.cutoffTime}.` : "";
   // Ordering is hidden (not just disabled) when it is switched off, today is closed, there is no active
   // pickup point, or no Saturday is open. Markets play no part: at a market people just buy at the cart.
@@ -590,7 +594,7 @@ export default function Home() {
     : pickupsLoaded && pickups.length === 0
       ? "Online ordering opens soon. We're setting up our pickup points. Questions? Email stuffd.bagels@gmail.com"
       : today !== null && saturdays.length === 0
-        ? availability?.closedMessage || "There's no Saturday open for orders right now. Please check back soon."
+        ? availability?.closedMessage || satNote || "There's no Saturday open for orders right now. Please check back soon."
         : null;
   const orderingHidden = hiddenMessage !== null;
 
@@ -1087,6 +1091,9 @@ export default function Home() {
 
                     <p className="text-sm mt-4 text-ink/75 leading-relaxed px-1 m-0">
                       Your order is confirmed once it's paid. After you send it, we'll email you how to pay.
+                    </p>
+                    <p className="text-sm mt-3 text-ink/75 leading-relaxed px-1 m-0" data-testid="cancellation-policy">
+                      {CANCELLATION_POLICY} By sending your order you agree to this.
                     </p>
                     <PrivacyNote what="We use your name, phone and email only to deal with this order." />
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { collectionSaturdays, isSaturday, niceDay, opensOnFor, sastDay } from "@/collection";
 
 const ACCENT = "var(--sb-blue)";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -9,7 +10,9 @@ interface Availability {
   closedMessage: string;
   closedToday: boolean;
   cutoffTime: string;
-  maxWeeksAhead: number;
+  addedSaturdays: string[];
+  removedSaturdays: string[];
+  opensOn: Record<string, string>;
 }
 
 interface PickupPoint {
@@ -55,6 +58,8 @@ export default function Admin() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   const [newDate, setNewDate] = useState("");
+  const [newSat, setNewSat] = useState("");
+  const [satMsg, setSatMsg] = useState("");
   const [newEvent, setNewEvent] = useState(BLANK_EVENT);
   const [eventError, setEventError] = useState("");
   const [addingEvent, setAddingEvent] = useState(false);
@@ -138,7 +143,9 @@ export default function Admin() {
         closedDates: data.closedDates,
         closedMessage: data.closedMessage,
         cutoffTime: data.cutoffTime,
-        maxWeeksAhead: data.maxWeeksAhead,
+        addedSaturdays: data.addedSaturdays,
+        removedSaturdays: data.removedSaturdays,
+        opensOn: data.opensOn,
       }),
     });
     setSaving(false);
@@ -151,7 +158,7 @@ export default function Admin() {
     } else if (res.status === 429) {
       setSaveMsg(TOO_MANY);
     } else if (res.status === 400) {
-      setSaveMsg("Check the cut-off time and the weeks ahead (1 to 12).");
+      setSaveMsg("Check the cut-off time and the collection Saturdays (each one must open on or before its own date).");
     } else {
       setSaveMsg("Save failed — try again.");
     }
@@ -162,6 +169,48 @@ export default function Admin() {
     if (data.closedDates.includes(newDate)) return;
     setData({ ...data, closedDates: [...data.closedDates, newDate].sort() });
     setNewDate("");
+  }
+
+  // True when the Saturday is on the built-in list (last Saturday of its month), before any owner changes. "Now" is the
+  // Saturday itself, so its own month is always inside the generated window.
+  const isDefaultSaturday = (d: string, rules: Availability) =>
+    collectionSaturdays(Date.parse(`${d}T12:00:00Z`), { ...rules, addedSaturdays: [], removedSaturdays: [] }).includes(d);
+
+  // Collection Saturdays: the list is the default (last Saturday of each month) plus what is added, minus what is removed.
+  function addSaturday() {
+    if (!data || !newSat) return;
+    setSatMsg("");
+    if (!isSaturday(newSat) || newSat < sastDay(Date.now())) return setSatMsg("Pick a Saturday that has not passed.");
+    if (collectionSaturdays(Date.now(), data).includes(newSat)) return setSatMsg("That Saturday is already on the list.");
+    const isDefault = isDefaultSaturday(newSat, data);
+    setData({
+      ...data,
+      removedSaturdays: data.removedSaturdays.filter((x) => x !== newSat),
+      addedSaturdays: isDefault ? data.addedSaturdays : [...new Set([...data.addedSaturdays, newSat])].sort(),
+    });
+    setNewSat("");
+  }
+
+  function removeSaturday(d: string) {
+    if (!data) return;
+    const { [d]: _gone, ...opensOn } = data.opensOn;
+    setData({
+      ...data,
+      opensOn,
+      addedSaturdays: data.addedSaturdays.filter((x) => x !== d),
+      removedSaturdays: isDefaultSaturday(d, data) ? [...new Set([...data.removedSaturdays, d])].sort() : data.removedSaturdays,
+    });
+  }
+
+  function putBackSaturday(d: string) {
+    if (!data) return;
+    setData({ ...data, removedSaturdays: data.removedSaturdays.filter((x) => x !== d) });
+  }
+
+  function setOpens(d: string, v: string) {
+    if (!data) return;
+    const { [d]: _old, ...rest } = data.opensOn;
+    setData({ ...data, opensOn: v && v !== opensOnFor(d, { opensOn: {} }) ? { ...rest, [d]: v } : rest });
   }
 
   function removeClosedDate(d: string) {
@@ -459,25 +508,68 @@ export default function Admin() {
                 onChange={(e) => setData({ ...data, cutoffTime: e.target.value })}
               />
             </div>
-            <div>
-              <label htmlFor="weeks-ahead" className="block text-[10px] font-black tracking-widest uppercase text-ink/75 mb-1">
-                Weeks ahead (1 to 12)
-              </label>
-              <input
-                id="weeks-ahead"
-                type="number"
-                min={1}
-                max={12}
-                className={inputCls}
-                value={data.maxWeeksAhead}
-                onChange={(e) => setData({ ...data, maxWeeksAhead: Number(e.target.value) })}
-              />
-            </div>
           </div>
           <p className="text-xs text-ink/75 mt-3 tracking-wide">
             With {data.cutoffTime || "23:59"}, an order sent at {data.cutoffTime || "23:59"} on Wednesday still counts; from
-            the next minute the form offers the following Saturday. Times are South African time.
+            the next minute that Saturday is closed. Times are South African time.
           </p>
+
+          <h3 className="mt-8 mb-1 text-sm font-black tracking-widest uppercase">Collection Saturdays</h3>
+          <p className="text-xs text-ink/75 mb-4 tracking-wide">
+            Customers can only order for the Saturdays listed here. The list starts as the last Saturday of each month.
+            Orders for each one open on the day you set (the 15th unless you change it) and close on the Wednesday before.
+          </p>
+          <div className="space-y-2" data-testid="collection-saturdays">
+            {collectionSaturdays(Date.now(), data).map((d) => (
+              <div key={d} className="flex flex-wrap items-center justify-between gap-3 border-2 border-ink px-4 py-2" data-testid={`sat-${d}`}>
+                <span className="font-bold text-sm">{niceDay(d)}</span>
+                <label className="flex items-center gap-2 text-xs font-bold tracking-wide">
+                  Orders open on
+                  <input
+                    type="date"
+                    aria-label={`Orders open on, for ${niceDay(d)}`}
+                    className={`${inputCls} w-auto`}
+                    value={opensOnFor(d, data)}
+                    max={d}
+                    onChange={(e) => setOpens(d, e.target.value)}
+                  />
+                </label>
+                <button
+                  onClick={() => removeSaturday(d)}
+                  aria-label={`Remove ${niceDay(d)} from collection Saturdays`}
+                  className="text-xs tracking-widest uppercase font-black text-red-700 hover:text-red-900 transition-colors"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            {collectionSaturdays(Date.now(), data).length === 0 && (
+              <p className="text-xs text-ink/75 italic tracking-wide">No collection Saturdays listed, so ordering is hidden.</p>
+            )}
+          </div>
+          <div className="flex gap-2 mt-4">
+            <input
+              type="date"
+              aria-label="Saturday to add"
+              className={`${inputCls} flex-1`}
+              value={newSat}
+              onChange={(e) => setNewSat(e.target.value)}
+            />
+            <button onClick={addSaturday} className={`${btnCls} bg-ink text-white`}>
+              Add Saturday
+            </button>
+          </div>
+          {satMsg && <p role="alert" className="text-xs font-bold text-red-700 mt-2">{satMsg}</p>}
+          {data.removedSaturdays.filter((d) => d >= sastDay(Date.now())).length > 0 && (
+            <p className="text-xs text-ink/75 mt-3 tracking-wide">
+              Taken off:{" "}
+              {data.removedSaturdays.filter((d) => d >= sastDay(Date.now())).map((d) => (
+                <button key={d} onClick={() => putBackSaturday(d)} className="underline font-bold mr-3" aria-label={`Put ${niceDay(d)} back on the list`}>
+                  {niceDay(d)} (put back)
+                </button>
+              ))}
+            </p>
+          )}
         </section>
 
         {/* ── Save availability ─────────────────────────────── */}
