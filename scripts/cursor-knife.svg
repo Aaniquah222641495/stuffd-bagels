@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="steel" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#d3d9e0"/><stop offset="1" stop-color="#a3adb8"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(6 6) rotate(-45) translate(-4.5 0)">
+    <g fill="#fff" stroke="#fff" stroke-width="4.5" stroke-linejoin="round">
+      <path d="M4.5 0 C7.8 0 9 4 9 9 L9 40 L1.5 40 C0.6 30 0 18 0 9 C0 3.5 1.5 0 4.5 0 Z"/>
+      <rect x="1" y="40" width="7.5" height="31" rx="3.75"/>
+    </g>
+    <!-- blade: straight spine on the right, gently curved cutting edge on the left -->
+    <path d="M4.5 0 C7.8 0 9 4 9 9 L9 40 L1.5 40 C0.6 30 0 18 0 9 C0 3.5 1.5 0 4.5 0 Z" fill="url(#steel)" stroke="#69737e" stroke-width="1"/>
+    <!-- small smear of cream cheese near the tip -->
+    <path d="M1.4 7 C3 4.6 7 4.4 8 7 C8.4 9.6 6.4 11 4.2 11 C2.2 11 1 9.4 1.4 7 Z" fill="#fff6e0" stroke="#dcc79a" stroke-width=".7"/>
+    <!-- blue handle -->
+    <rect x="1" y="40" width="7.5" height="31" rx="3.75" fill="#004f94" stroke="#003a6e" stroke-width="1"/>
+    <rect x="2.8" y="44" width="1.6" height="16" rx=".8" fill="#fff" opacity=".35"/>
+  </g>
+</svg>

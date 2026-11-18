@@ -539,3 +539,27 @@
 .cart-bob { transform-origin: 50% 100%; animation: cart-bob 5s ease-in-out infinite; }
 @keyframes cart-bob { 0%, 100% { transform: rotate(-0.8deg); } 50% { transform: rotate(0.8deg) translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .cart-bob { animation: none; } }
+
+/* Signature playful cursor (Digital Pantry studio touch, founder 2026-11-18): a butter knife with a Stuff'd-blue handle (Imaan's pick).
+   Mouse/trackpad only; text fields keep the normal text caret. The plain url() line is the
+   fallback for browsers without image-set() in cursor; hotspot is the knife tip (3 3). */
+@media (pointer: fine) {
+  html,
+  a,
+  button,
+  summary,
+  label,
+  select,
+  [role="button"] {
+    cursor: url("/cursor-knife.png") 3 3, auto;
+    cursor: image-set(url("/cursor-knife.png") 1x, url("/cursor-knife@2x.png") 2x) 3 3, auto;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+  textarea {
+    cursor: text;
+  }
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+}
