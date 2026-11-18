@@ -43,3 +43,48 @@ export async function fakeLimiter(clock = { now: () => Date.now() }, state = { f
     },
   };
 }
+
+/**
+ * A stand-in for the ORDERS Durable Object namespace, built on the REAL state machine (orders-core.ts): one in-memory store,
+ * the same OrdersService the Durable Object wraps, and a clock the test can move. `svc` is exposed so a test can run the alarm
+ * (`svc.tick(send)`) and inspect rows (`rows()`). `fail` makes every call throw (the "store is down" case).
+ */
+export async function fakeOrders(clock = { now: () => Date.now() }, state = { fail: false }) {
+  const core = await bundle("worker/orders-core.ts");
+  const m = new Map();
+  const store = {
+    get: (ref) => m.get(ref),
+    byAttempt: (id) => [...m.values()].find((r) => r.attemptId === id),
+    byCheckout: (id) => [...m.values()].find((r) => r.checkoutId === id),
+    put: (r) => void m.set(r.ref, { ...r }),
+    remove: (ref) => void m.delete(ref),
+    all: () => [...m.values()].map((r) => ({ ...r })),
+  };
+  const svc = new core.OrdersService(store, () => clock.now());
+  const stub = new Proxy({}, {
+    get: (_t, name) => async (...args) => {
+      if (state.fail) throw new Error("down");
+      await Promise.resolve();
+      return svc[name](...args);
+    },
+  });
+  return { core, svc, state, rows: () => store.all(), ns: { idFromName: (n) => n, get: () => stub } };
+}
+
+/** Yoco settings for Node tests of the order path: a test key that is obviously fake, and a test-mode origin. */
+export const YOCO_TEST_ENV = { YOCO_SECRET_KEY: "sk_test_localfake1234567890", YOCO_WEBHOOK_SECRET: "whsec_" + Buffer.alloc(24, 7).toString("base64"), YOCO_MODE: "test", SITE_ORIGIN: "https://preview.example.workers.dev" };
+
+/** A fetch that answers Yoco's create-checkout call like Yoco would, and hands every other request to `other`. `calls` records the Yoco ones. */
+export function fakeYocoFetch(other = async () => new Response('{"ok":true}')) {
+  const calls = [];
+  const f = async (url, init) => {
+    if (String(url).startsWith("https://payments.yoco.com/api/checkouts")) {
+      calls.push({ headers: init.headers, body: JSON.parse(init.body) });
+      const id = `ch_${calls.length}${Math.random().toString(16).slice(2, 8)}`;
+      return new Response(JSON.stringify({ id, status: "created", redirectUrl: `https://c.yoco.com/checkout/${id}`, processingMode: "test" }), { status: 201 });
+    }
+    return other(url, init);
+  };
+  f.calls = calls;
+  return f;
+}

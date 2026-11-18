@@ -1,5 +1,6 @@
-// Browser test (Playwright over CDP + axe) of the order form, booking form and admin pickup screens at 390 and 1280.
-// See worker/tests/README.md for the setup. It writes screenshots to $SHOTS (default: the current folder).
+// Browser test (Playwright over CDP + axe) of the order form, the Yoco hand-off and result page, booking form and admin screens at 390 and 1280.
+// See worker/tests/README.md for the setup (wrangler dev with the fake Yoco flags, fake Apps Script, fake Yoco). Needs WHSEC (the webhook secret
+// wrangler dev was started with) and FAKE_YOCO in the environment. It writes screenshots to $SHOTS (default: the current folder).
 
 
 import { createRequire } from "node:module";
@@ -10,6 +11,7 @@ const { chromium } = require(process.env.PW);
 const axeSrc = fs.readFileSync(process.env.AXE, "utf8");
 const H = await import("./_helpers.mjs");
 const { B, admin, setAvail, resetPickups, clearRateLimits, col } = H;
+assert.ok(process.env.WHSEC, "set WHSEC (the webhook secret wrangler dev was started with)");
 const mailFor = (who, w) => `${who}${H.uniqueEmail("").replace("@example.com", "")}w${w}@example.com`;
 const log = process.env.FAKELOG;
 const nLog = () => (fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n").filter(Boolean).length : 0);
@@ -35,7 +37,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   const aisha = mailFor("aisha", w), sam = mailFor("sam", w);
   const page = await ctx.newPage();
   const cdp = await ctx.newCDPSession(page); await cdp.send("Network.enable"); await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
-  const bad = []; page.on("console", (m) => { if (["error", "warning"].includes(m.type()) && !/status of 409/.test(m.text())) bad.push(m.text()); }); // the 409 is the deliberate switched-off-point check page.on("pageerror", (e) => bad.push("pageerror " + e.message));
+  const bad = []; page.on("console", (m) => { if (["error", "warning"].includes(m.type()) && !/status of (409|503)/.test(m.text())) bad.push(m.text()); }); // the 409 is the deliberate switched-off-point check page.on("pageerror", (e) => bad.push("pageerror " + e.message));
   const open = async () => { await page.goto(B + "/", { waitUntil: "networkidle" }); await page.waitForTimeout(700); };
 
   // 1. No pickup points: ordering hidden, menu still there, markets are only information
@@ -72,7 +74,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   assert.ok(!/market/i.test(form.replace("or one of our markets, valid for 2 months", "")), "no market wording in the order form apart from the credit policy");
   console.log("  Saturdays offered:", opts.join(", "));
 
-  // 3. Validate, send
+  // 3. Validate, then Pay: the browser goes to (fake) Yoco, nothing is emailed until the signed webhook
   await page.getByTestId("btn-place-order").click();
   assert.ok(await page.locator("[data-testid=order-form] [aria-invalid=true]").count() >= 3);
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("data-testid")), "input-name");
@@ -84,22 +86,92 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   await page.getByTestId("input-name").fill("Aisha Khan"); await page.getByTestId("input-phone").fill("082 123 4567"); await page.getByTestId("input-email").fill(aisha);
   await page.getByTestId("select-saturday").selectOption(sats[1]); await page.getByTestId("input-pickup-time").fill("around 11am"); await page.getByTestId("textarea-notes").fill("No onions please");
   assert.ok(!(await page.getByTestId("order-form").textContent()).includes("Please add your name"), "errors clear as fields are fixed");
-  await page.getByTestId("order-form").scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS ?? "."}/order2-filled-${w}.png` });
+  assert.equal((await page.getByTestId("btn-place-order").textContent()).trim(), "Pay R310 with Yoco");
+  assert.match(await page.getByTestId("pay-note").textContent(), /You'll pay on Yoco's secure page\. Your order is confirmed once it's paid\./);
+  assert.match(await page.getByTestId("pay-window-note").textContent(), /Start your order before Wednesday 23:59\./);
+  assert.ok(!/how to pay|Awaiting payment|Order sent/i.test(await page.locator("body").textContent()), "no 'awaiting payment' wording anywhere on the page");
+  await page.getByTestId("order-form").scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS ?? "."}/order3-filled-${w}.png` });
+  await axeRun(page, "order form filled (Pay button)");
+  await H.resetYoco();
   const before = nLog();
   const [resp] = await Promise.all([page.waitForResponse((r) => r.url().endsWith("/api/order") && r.request().method() === "POST"), page.getByTestId("btn-place-order").click()]);
   assert.equal(resp.status(), 200);
-  await page.getByTestId("order-sent").waitFor();
-  assert.equal(nLog(), before + 1);
-  const sent = await page.getByTestId("order-sent").textContent();
-  for (const re of [/Order sent/, /Awaiting payment/, /confirmed once it's paid/, /SB-[A-Z2-9]{6}/, /R310/, /Kenilworth Corner, Main Rd, Kenilworth/, new RegExp(nice(sats[1])), /around 11am/, new RegExp(aisha.replace(/\./g, "\\."))]) assert.match(sent, re);
+  await page.waitForURL(/127\.0\.0\.1:8798\/pay\//); // (the page navigated away, so its JSON body is gone: read the reference from the fake Yoco)
+  assert.equal(nLog(), before, "nothing emailed before payment");
+  let { calls, visits } = await H.yocoCalls();
+  const placed = { ref: calls[0].body.externalId, redirectUrl: page.url() };
+  assert.match(placed.ref, /^SB-[A-Z2-9]{6}$/); assert.match(placed.redirectUrl, /^http:\/\/127\.0\.0\.1:8798\/pay\/ch_/);
+  assert.equal(calls.length, 1); assert.equal(calls[0].body.amount, 31000); assert.equal(visits.at(-1).referer, `${B}/`, "Yoco sees our origin as the referrer (live payments are domain-checked)");
+  assert.equal(calls[0].body.cancelUrl, `${B}/order/result?r=cancel&ref=${placed.ref}`);
+  const checkoutId = H.checkoutIdOf(placed.redirectUrl);
+
+  // 3a. Back from Yoco with ?r=success: "confirming" until the signed webhook arrives, then "confirmed"
+  await page.click("#ok");
+  await page.waitForURL(/\/order\/result\?r=success/);
+  await page.getByTestId("result-card").waitFor();
+  assert.equal(await page.getByTestId("result-card").getAttribute("data-state"), "confirming");
+  assert.match(await page.getByTestId("result-card").textContent(), /We're confirming your payment/);
+  assert.ok(!/Order confirmed/.test(await page.getByTestId("result-card").textContent()), "the redirect alone never says confirmed");
+  await page.screenshot({ path: `${process.env.SHOTS ?? "."}/result-confirming-${w}.png` }); await axeRun(page, "result page: confirming");
+  assert.equal((await H.webhook(H.paidPayload(checkoutId, { amount: 31000 }))).status, 200);
+  await page.waitForFunction(() => document.querySelector("[data-testid=result-card]")?.getAttribute("data-state") === "confirmed", null, { timeout: 15000 });
+  assert.match(await page.getByTestId("result-card").textContent(), /Order confirmed\. Your confirmation email is on its way\./);
+  assert.ok((await page.getByTestId("result-card").textContent()).includes(placed.ref));
+  assert.equal(await page.evaluate(() => sessionStorage.getItem("sb-order-draft")), null, "saved cart cleared once confirmed");
+  await page.screenshot({ path: `${process.env.SHOTS ?? "."}/result-confirmed-${w}.png` }); await axeRun(page, "result page: confirmed");
+  await H.until(() => nLog() === before + 1, "the paid-order email request");
   const fwd = lastLog().body;
+  assert.equal(fwd.paid, true); assert.equal(fwd.checkoutId, checkoutId);
   assert.equal(fwd.pickupPlace, "Kenilworth Corner, Main Rd, Kenilworth"); assert.equal(fwd.pickupDate, sats[1]); assert.equal(fwd.pickupTime, "around 11am"); assert.equal(fwd.total, 310); assert.deepEqual(fwd.items.find((i) => i.name === "Extra Jalapeno"), { name: "Extra Jalapeno", qty: 1, unit: 5, line: 5 });
-  await page.screenshot({ path: `${process.env.SHOTS ?? "."}/order2-sent-${w}.png` }); await axeRun(page, "order sent");
+  assert.equal(await page.evaluate(() => document.querySelector("meta[name=robots]")?.getAttribute("content")), "noindex, follow", "result page is noindex");
+  assert.match((await fetch(B + "/order/result")).headers.get("cache-control") ?? "", /no-store/, "result page is not cached");
+
+  // 3b. Cancel on Yoco: "no payment taken", no email, and "Back to my order" puts the cart back
+  const fill = async () => {
+    await open();
+    await page.getByTestId("btn-increase-Pizza Bagel").click();
+    await page.getByTestId("input-name").fill("Aisha Khan"); await page.getByTestId("input-phone").fill("082 123 4567"); await page.getByTestId("input-email").fill(aisha);
+  };
+  const pay = async () => { const [rr] = await Promise.all([page.waitForResponse((r) => r.url().endsWith("/api/order") && r.request().method() === "POST"), page.getByTestId("btn-place-order").click()]); assert.equal(rr.status(), 200, "pay: order accepted"); await page.waitForURL(/127\.0\.0\.1:8798\/pay\//); };
+  await fill(); await pay();
+  await page.click("#cancel"); await page.waitForURL(/\/order\/result\?r=cancel/); await page.getByTestId("result-card").waitFor();
+  assert.equal(await page.getByTestId("result-card").getAttribute("data-state"), "cancel");
+  assert.match(await page.getByTestId("result-card").textContent(), /Payment cancelled\. Your order isn't placed and you haven't paid\./);
+  assert.equal(nLog(), before + 1, "no email for a cancelled order");
+  await page.screenshot({ path: `${process.env.SHOTS ?? "."}/result-cancel-${w}.png` }); await axeRun(page, "result page: cancel");
+  await page.getByTestId("back-to-order").click(); await page.getByTestId("order-form").waitFor(); await page.waitForTimeout(700);
+  assert.equal(await page.getByTestId("input-name").inputValue(), "Aisha Khan", "details restored"); assert.equal(await page.getByTestId("input-email").inputValue(), aisha);
+  assert.match(await page.getByTestId("btn-place-order").textContent(), /Pay R95 with Yoco/, "cart restored (1 Pizza Bagel)");
+  assert.equal(await page.evaluate(() => sessionStorage.getItem("sb-order-draft")), null, "the saved cart is used once");
+
+  // 3c. Failure on Yoco: "didn't go through", cart restored too
+  await pay(); await page.click("#fail"); await page.waitForURL(/\/order\/result\?r=failure/); await page.getByTestId("result-card").waitFor();
+  assert.equal(await page.getByTestId("result-card").getAttribute("data-state"), "failure");
+  assert.match(await page.getByTestId("result-card").textContent(), /Your payment didn't go through, so your order isn't placed\. Try again or use another card\./);
+  assert.match(await page.getByTestId("result-card").textContent(), /SB-[A-Z2-9]{6}/, "the reference is shown for the bank-charge case");
+  await page.screenshot({ path: `${process.env.SHOTS ?? "."}/result-failure-${w}.png` }); await axeRun(page, "result page: failure");
+  await page.getByTestId("back-to-order").click(); await page.getByTestId("order-form").waitFor(); await page.waitForTimeout(700);
+  assert.match(await page.getByTestId("btn-place-order").textContent(), /Pay R95 with Yoco/);
+  assert.equal(nLog(), before + 1);
+
+  // 3d. Result page edge states (server answers faked): still confirming, expired, unknown ref, junk query
+  const stub = async (status, body) => { await page.unroute("**/api/order/status*"); await page.route("**/api/order/status*", (route) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) })); };
+  const state = async (url) => { await page.goto(B + url, { waitUntil: "networkidle" }); await page.getByTestId("result-card").waitFor(); await page.waitForTimeout(1500); return page.getByTestId("result-card").getAttribute("data-state"); };
+  await stub(503, { error: "x" });
+  assert.equal(await state("/order/result?r=success&ref=SB-ABCDEF"), "slow");
+  assert.match(await page.getByTestId("result-card").textContent(), /still being confirmed\. You'll get an email when it is\. Nothing in 15 minutes\? Email stuffd\.bagels@gmail\.com with reference SB-ABCDEF/);
+  await page.screenshot({ path: `${process.env.SHOTS ?? "."}/result-slow-${w}.png` }); await axeRun(page, "result page: still confirming");
+  await stub(200, { status: "expired" }); assert.equal(await state("/order/result?r=success&ref=SB-ABCDEF"), "expired");
+  await stub(200, { status: "unknown" }); assert.equal(await state("/order/result?r=success&ref=SB-ABCDEF"), "notfound");
+  await page.unroute("**/api/order/status*");
+  assert.equal(await state("/order/result?r=success"), "notfound", "success with no reference");
+  assert.equal(await state("/order/result?r=bogus&ref=%3Cscript%3E"), "unknown", "junk query");
+  assert.ok(!(await page.getByTestId("result-card").innerHTML()).includes("<script"), "nothing from the query string is injected");
+  await axeRun(page, "result page: junk query");
+  await fill();
 
   // 4. A point switched off after the page loaded: clear message, list refreshes
-  await page.getByRole("button", { name: "Start another order" }).click();
   await page.getByTestId("btn-increase-Pizza Bagel").click();
-  await page.getByTestId("input-name").fill("Aisha Khan"); await page.getByTestId("input-phone").fill("082 123 4567"); await page.getByTestId("input-email").fill(aisha);
   await admin(`/pickups/${P1}`, "PUT", { name: "Kenilworth Corner", area: "Main Rd, Kenilworth", days: "", active: false });
   await Promise.all([page.waitForResponse((r) => r.url().endsWith("/api/order")), page.getByTestId("btn-place-order").click()]);
   await page.waitForSelector("[role=alert]");

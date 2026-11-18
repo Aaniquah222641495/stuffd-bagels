@@ -6,16 +6,17 @@
  *   - the "Orders" and "Bookings" Gmail labels live in HER mailbox.
  * Set-up steps: README.md next to this file. Change only the CONFIG block.
  *
- * How it works: the website posts an order or a booking to its own Worker (/api/order, /api/booking).
- * The Worker checks it (limits, honeypot, orders switched on, pickup day is a real market day, prices
- * worked out from the menu) and forwards it here. This script checks it again, then:
- *   1. emails the owner  "New order: <name>, <day>"  or  "Booking enquiry: <name>, <date>",
- *   2. emails the customer a short branded reply from the owner's address,
+ * How it works: the website posts a booking to its own Worker (/api/booking) and the Worker forwards it here. ORDERS
+ * are different (ADR-0041): the customer pays on Yoco first, Yoco tells the Worker it was paid (a signed webhook), and ONLY
+ * THEN does the Worker send the order here, marked paid:true with Yoco's checkout id. This script refuses any order that
+ * isn't paid, so an unpaid order can never reach the owner's inbox. For each accepted request it:
+ *   1. emails the owner  "New order: <name>, <day>"  (paid, confirmed)  or  "Booking enquiry: <name>, <date>",
+ *   2. emails the customer a short branded reply from the owner's address ("order confirmed" for orders),
  *   3. puts the owner email under the Gmail label "Orders" or "Bookings".
  * Nothing is stored except the emails themselves (and short-lived duplicate and quota counters).
  *
- * Orders are "awaiting payment": an order is only confirmed once it has been paid (founder 2026-11-16).
- * The Yoco "Pay now" step is not built yet; the reference in each email is what it will hang on.
+ * The Worker may send the same paid order more than once (it retries if this script was slow): a paid order is
+ * de-duplicated by its reference for 6 hours, the longest Google's CacheService allows, so it is emailed once.
  */
 
 const CONFIG = {
@@ -34,6 +35,7 @@ const CONFIG = {
   MIN_TOKEN_LENGTH: 32,
   MAX_BODY_CHARS: 12000,
   DUPLICATE_WINDOW_SECONDS: 600,
+  PAID_DUPLICATE_WINDOW_SECONDS: 21600, // 6 hours, the maximum CacheService allows
   // A free Gmail account can send about 100 emails a day; each submission sends 2.
   MIN_QUOTA: 4,
   // Caps kept by the script itself, as a second wall behind the Worker's limits.
@@ -95,6 +97,7 @@ function str_(v, max) {
 function line_(v, max) { return str_(v, max).replace(/\s+/g, ' '); }
 function validDate_(v) { return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(new Date(v + 'T12:00:00Z').getTime()); }
 function validEmail_(v) { return /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(\.[A-Za-z0-9\-]+)*\.[A-Za-z]{2,}$/.test(v) && v.length <= 254; }
+function validCheckoutId_(v) { return typeof v === 'string' && /^[A-Za-z0-9_\-]{4,100}$/.test(v); }
 function validRef_(v, prefix) { return typeof v === 'string' && new RegExp('^' + prefix + '-[A-Z0-9]{6}$').test(v); }
 
 /** Returns { ok, data } with only the fields we use, cut to length, or { ok: false }. */
@@ -107,6 +110,8 @@ function clean_(d) {
     // Orders are collected on a Saturday at one of the owner's pickup points (never at a market).
     const place = line_(d.pickupPlace, 200);
     if (!validRef_(d.ref, 'SB') || !place || !validDate_(d.pickupDate) || !Array.isArray(d.items) || d.items.length < 1 || d.items.length > 12) return { ok: false };
+    // A paid order only (ADR-0041). The Worker sends it after Yoco's signed webhook; nothing else may send an order.
+    if (d.paid !== true || !validCheckoutId_(d.checkoutId)) return { ok: false };
     const items = [];
     let total = 0;
     for (let i = 0; i < d.items.length; i++) {
@@ -116,7 +121,7 @@ function clean_(d) {
       items.push({ name: line_(it.name, 40), qty: qty, unit: unit, line: qty * unit });
       total += qty * unit;
     }
-    return { ok: true, data: Object.assign(common, { type: 'order', ref: d.ref, pickupDate: d.pickupDate, pickupTime: line_(d.pickupTime, 40), pickupPlace: place, pickupDays: line_(d.pickupDays, 120), items: items, total: total, note: str_(d.note, 300) }) };
+    return { ok: true, data: Object.assign(common, { type: 'order', paid: true, checkoutId: d.checkoutId, ref: d.ref, pickupDate: d.pickupDate, pickupTime: line_(d.pickupTime, 40), pickupPlace: place, pickupDays: line_(d.pickupDays, 120), items: items, total: total, note: str_(d.note, 300) }) };
   }
   if (d.type === 'booking') {
     const guests = Number(d.guests);
@@ -138,8 +143,10 @@ function process_(raw) {
   try {
     const cache = CacheService.getScriptCache();
     const dupeKey = 'dupe_' + a.ref;
-    const contentKey = 'dupec_' + hash_(JSON.stringify([a.type, a.email, a.name, a.pickupDate || a.eventDate, a.items || a.guests, a.total]));
-    if (cache.get(dupeKey) || cache.get(contentKey)) return { ok: true, duplicate: true };
+    // Bookings also match on content (a double click makes a new reference). Paid orders match on the reference only: two
+    // different payments for the same cart are two orders, and the second one must never be swallowed.
+    const contentKey = a.type === 'booking' ? 'dupec_' + hash_(JSON.stringify([a.type, a.email, a.name, a.eventDate, a.guests])) : '';
+    if (cache.get(dupeKey) || (contentKey && cache.get(contentKey))) return { ok: true, duplicate: true };
     // Daily caps (kept in Script Properties, which survive between runs). Duplicates were answered above and cost nothing.
     const today = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd');
     const props = PropertiesService.getScriptProperties();
@@ -161,8 +168,9 @@ function process_(raw) {
     // The owner email is the one that matters: if it fails, the customer is told it failed and can email.
     sendOwner_(a);
     saveCaps_(props, today, rcptKey, total + 1, rcpt + 1);
-    cache.put(dupeKey, '1', CONFIG.DUPLICATE_WINDOW_SECONDS);
-    cache.put(contentKey, '1', CONFIG.DUPLICATE_WINDOW_SECONDS);
+    // 21600 s (6 hours) is the longest CacheService keeps a value (Apps Script docs). A paid order is held that long; a booking 10 minutes.
+    cache.put(dupeKey, '1', a.type === 'order' ? CONFIG.PAID_DUPLICATE_WINDOW_SECONDS : CONFIG.DUPLICATE_WINDOW_SECONDS);
+    if (contentKey) cache.put(contentKey, '1', CONFIG.DUPLICATE_WINDOW_SECONDS);
   } catch (err) {
     console.error('Owner email failed for ' + a.ref + ': ' + err);
     return { ok: false, error: 'mail' };
@@ -241,7 +249,8 @@ function sendOwner_(a) {
   if (a.type === 'order') {
     lines = [
       'NEW ORDER ' + a.ref,
-      'Status: AWAITING PAYMENT. Not confirmed until it is paid.',
+      'PAID ONLINE (Yoco) ' + rand_(a.total) + '. Confirmed.',
+      'Yoco checkout id: ' + a.checkoutId + '  (keep this: it is what you need to refund)',
       '',
       'Name: ' + a.name,
       'Phone: ' + a.phone + '  (' + wa + ')',
@@ -276,13 +285,13 @@ function sendCustomer_(a) {
   const f = first_(a.name);
   let subject, intro, rows, outro;
   if (a.type === 'order') {
-    subject = "STUFF'D: we've got your order " + a.ref;
-    intro = "Thanks for your order, " + f + "! We've got it.";
+    subject = "STUFF'D: order confirmed " + a.ref;
+    intro = "Thanks for your order, " + f + "! Paid and confirmed.";
     rows = [['Reference', a.ref]].concat(pickupRows_(a))
       .concat(a.items.map(function (i) { return [i.qty + ' x ' + i.name, rand_(i.line)]; }))
       .concat([['Total', rand_(a.total)]]);
     if (a.note) rows.push(['Your note', a.note]);
-    outro = 'Your order is awaiting payment. It is confirmed once it has been paid, and we will be in touch with how to pay. ' + CANCELLATION_POLICY_ + ' Questions? Just reply to this email.';
+    outro = 'Your payment has been received and your order is confirmed. ' + CANCELLATION_POLICY_ + ' Questions? Just reply to this email.';
   } else {
     subject = "STUFF'D: we've got your event enquiry " + a.ref;
     intro = "Thanks for thinking of us, " + f + "! Your event enquiry has landed.";
@@ -352,11 +361,12 @@ function setup() {
 /** Sends a pretend order and booking to the owner's own address (the customer reply goes to the same address). */
 function testOrder() {
   console.log(JSON.stringify(process_({
-    type: 'order', ref: 'SB-TEST22', name: 'Test Customer', phone: '+27820000000', email: owner_(),
+    type: 'order', paid: true, checkoutId: 'ch_TEST0001', // a real order only arrives after Yoco says it was paid
+    ref: 'SB-' + Math.random().toString(36).slice(2, 8).toUpperCase().padEnd(6, '7'), name: 'Test Customer', phone: '+27820000000', email: owner_(),
     pickupDate: '2026-12-19', // any date works for the test; real orders are always a Saturday
     pickupTime: '10:30', pickupDays: 'Saturdays, 10am to 1pm',
     pickupPlace: 'Test pickup point, Cape Town',
-    items: [{ name: 'Pizza Bagel', qty: 2, unit: 85, line: 170 }, { name: 'Extra Cheese', qty: 1, unit: 5, line: 5 }],
+    items: [{ name: 'Pizza Bagel', qty: 2, unit: 85, line: 170 }, { name: 'Extra Jalapeno', qty: 1, unit: 5, line: 5 }],
     total: 175, note: 'This is a test, please ignore.'
   })));
 }

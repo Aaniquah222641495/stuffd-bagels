@@ -1,22 +1,27 @@
-// Order and booking forms: validate, rate limit, then forward to the client's Google Apps Script
-// (apps-script/Code.gs), which emails her and the customer from her own Gmail address.
-// The browser only ever talks to this Worker, so the page CSP stays connect-src 'self'.
+// Order and booking forms. The browser only ever talks to this Worker, so the page CSP stays connect-src 'self'.
 //
-// Orders are "awaiting payment" until the Yoco step exists (hook: POST /api/order/pay, a stub).
-// Nothing personal is stored here: the rate-limit counters (worker/limiter.ts) sit under keyed hashes of the network and
+// Bookings: validate, rate limit, then forward to the client's Google Apps Script (apps-script/Code.gs), which emails her and
+// the customer from her own Gmail address. Bookings are enquiries, not paid.
+//
+// Orders (ADR-0041): validate, price on the server, rate limit, remember the pending order in the Orders Durable Object, make
+// a Yoco checkout and hand the browser its redirectUrl. NO email goes out here: an order is confirmed only when Yoco's signed
+// webhook says it was paid (worker/payments.ts), and the Orders object then sends the emails.
+// Nothing personal is kept by the rate limiter: its counters (worker/limiter.ts) sit under keyed hashes of the network and
 // the email address, hold only a number and a reset time, and delete themselves when their window ends.
 import { menuPricingObject, pricedToppings } from "../artifacts/stuffd-bagels/src/content";
 import { hashKey, ipBucket, limiterSalt, normaliseEmail, refund, take, type LimiterEnv, type Rule } from "./limiter-client";
 import { HttpError, json, readJsonObject } from "./http";
+import { MIN_TOKEN, assertSwitchedOn, forward, type MailerEnv } from "./mailer";
+import { contentHash } from "./orders-core";
+import { orders, type OrdersEnv } from "./orders-client";
+import { YocoError, createCheckout, modeOk, type YocoEnv } from "./yoco";
 import { niceDay, opensOnFor, saturdayStatus, sastDay } from "../artifacts/stuffd-bagels/src/collection";
 import { isRealDate, marketsForRules, publicAvailability, publicPickups, sastToday, secondsToSastMidnight } from "./store";
 
-export interface FormsEnv extends LimiterEnv {
+export interface FormsEnv extends LimiterEnv, OrdersEnv, YocoEnv, MailerEnv {
   STUFFD_KV?: KVNamespace;
   ADMIN_PASSWORD?: string;
   LIMITER_SALT?: string;
-  APPS_SCRIPT_URL?: string;
-  APPS_SCRIPT_TOKEN?: string;
 }
 
 export const FORM_LIMITS = {
@@ -33,7 +38,7 @@ export const FORM_LIMITS = {
   perIpPerHour: { order: 5, booking: 3 }, // per IPv4 address or IPv6 /64
   perRecipientPerDay: 3, // customer replies to one mailbox per day (same cap in apps-script/Code.gs)
   perDay: 40, // Gmail lets a free account send about 100 emails a day; each submission sends 2. Code.gs has the same cap.
-  minToken: 32, // APPS_SCRIPT_TOKEN must be at least this long (Code.gs refuses anything shorter)
+  minToken: MIN_TOKEN, // APPS_SCRIPT_TOKEN must be at least this long (Code.gs refuses anything shorter)
 };
 
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -194,7 +199,7 @@ function parseBooking(body: Record<string, unknown>): BookingPayload {
  * per day, and the shared daily cap. The counters live in Durable Objects (strongly consistent), so parallel
  * submissions cannot slip past them. A refusal gives back the slots already taken. Fails closed.
  */
-async function rateLimit(request: Request, env: FormsEnv, kind: "order" | "booking", mail: string): Promise<void> {
+async function rateLimit(request: Request, env: FormsEnv, kind: "order" | "booking", mail: string): Promise<() => Promise<void>> {
   const unavailable = () => new HttpError(503, "We can't take this right now. Please try again in a minute.");
   const secret = limiterSalt(env);
   const midnight = secondsToSastMidnight();
@@ -230,40 +235,99 @@ async function rateLimit(request: Request, env: FormsEnv, kind: "order" | "booki
     }
     taken.push(step);
   }
+  // Gives the slots back (an order whose payment page never opened shouldn't use up anyone's allowance).
+  return async () => void (await Promise.all(taken.map((t) => refund(env, t.key, [t.rule.id]))));
 }
 
-/** Both secrets must be set. Without the token the script (Code.gs) would be an open mail relay, so never forward without it. */
-function assertSwitchedOn(env: FormsEnv): { url: string; token: string } {
-  const { APPS_SCRIPT_URL: url, APPS_SCRIPT_TOKEN: token } = env;
-  if (!url || !token || token.length < FORM_LIMITS.minToken) {
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** 503 unless BOTH the email side (Apps Script) and the payment side (Yoco keys, mode, origin, Orders object) are ready. */
+function assertOrdersReady(env: FormsEnv): void {
+  assertSwitchedOn(env); // a paid order must be emailable, so refuse to take money while the script isn't set up
+  if (modeOk(env) !== null || !env.ORDERS) {
     throw new HttpError(503, "Online ordering isn't switched on yet. Please email stuffd.bagels@gmail.com.");
   }
-  return { url, token };
 }
 
-async function forward(env: FormsEnv, payload: OrderPayload | BookingPayload): Promise<void> {
-  const { url, token } = assertSwitchedOn(env); // again, so no code path can forward without it
-  const fail = () => new HttpError(502, "We couldn't send that just now. Please try again, or email stuffd.bagels@gmail.com.");
-  let res: Response;
+/** A repeat of a press we already know (or a changed cart): answer from the stored row, without a new Yoco call. */
+function knownAttempt(r: { kind: string; ref?: string; redirectUrl?: string; amountCents?: number }): Response | null {
+  switch (r.kind) {
+    case "existing":
+      return json({ ok: true, ref: r.ref, total: (r.amountCents as number) / 100, redirectUrl: r.redirectUrl });
+    case "changed":
+      throw new HttpError(409, "Your order changed. Please press Pay again.");
+    case "expired":
+      throw new HttpError(409, "That payment page has timed out. Please press Pay again.");
+    case "busy":
+      throw new HttpError(409, "Your payment page is just opening. Please wait a moment and try again.");
+    case "paid":
+      throw new HttpError(409, "That order has already been paid.");
+    default:
+      return null;
+  }
+}
+
+/** POST /api/order: starts a paid order. Answers { ok, ref, total, redirectUrl }; the browser then goes to redirectUrl. */
+async function handleOrder(request: Request, env: FormsEnv, body: Record<string, unknown>, now: number): Promise<Response> {
+  const attemptId = typeof body.attemptId === "string" && UUID_V4.test(body.attemptId) ? body.attemptId.toLowerCase() : null;
+  if (!attemptId) throw bad();
+  const payload = await parseOrder(body, env, now);
+  assertOrdersReady(env); // before counting anything: a switched-off site must not use up anyone's allowance
+
+  const amountCents = payload.items.reduce((n, i) => n + i.qty * i.unit * 100, 0); // whole rand today; integer cents
+  if (amountCents !== payload.total * 100 || amountCents < 200) throw new Error("order amount mismatch"); // a bug, never user input
+  const hash = await contentHash({
+    items: payload.items, pickupId: String(body.pickupId), pickupDate: payload.pickupDate, pickupTime: payload.pickupTime,
+    name: payload.name, phone: payload.phone, email: payload.email, note: payload.note,
+  });
+
+  const unavailable = () => new HttpError(503, "We can't take this right now. Please try again in a minute.");
+  let store;
   try {
-    res = await fetch(url, {
-      method: "POST",
-      // text/plain: Apps Script web apps do not answer CORS preflights, and this is server to server anyway.
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ ...payload, token, receivedAt: new Date().toISOString() }),
-      redirect: "follow",
-      signal: AbortSignal.timeout(25000),
+    store = orders(env);
+    const known = knownAttempt(await store.lookup(attemptId, hash));
+    if (known) return known; // a retry of the same press: no new rate-limit slot, no new Yoco call
+  } catch (err) {
+    if (err instanceof HttpError) throw err;
+    throw unavailable();
+  }
+
+  const release = await rateLimit(request, env, "order", payload.email);
+  let begun;
+  try {
+    begun = await store.begin({ attemptId, contentHash: hash, ref: payload.ref, amountCents, orderJson: JSON.stringify(payload) });
+  } catch {
+    await release();
+    throw unavailable();
+  }
+  if (begun.kind !== "new") {
+    await release(); // two taps raced: the other one won
+    return knownAttempt(begun) as Response;
+  }
+
+  const fail = async (): Promise<never> => {
+    await store.drop(payload.ref).catch(() => {});
+    await release();
+    throw new HttpError(502, "The payment page didn't open. Please try again.");
+  };
+  let checkout;
+  try {
+    checkout = await createCheckout(env, {
+      ref: payload.ref, attemptId, amountCents, now,
+      lines: payload.items.map((i) => ({ name: i.name, qty: i.qty, unitCents: i.unit * 100 })),
     });
-  } catch {
-    throw fail();
+  } catch (err) {
+    console.error("checkout failed:", err instanceof YocoError ? `${err.reason} ${err.status}` : "unknown"); // reason only, no body, no key
+    return fail();
   }
-  let reply: unknown = null;
+  let attached = false;
   try {
-    reply = JSON.parse(await res.text());
+    attached = await store.attach({ ref: payload.ref, checkoutId: checkout.id, redirectUrl: checkout.redirectUrl });
   } catch {
-    // not JSON: treated as a failure below
+    // handled below
   }
-  if (!res.ok || typeof reply !== "object" || reply === null || (reply as { ok?: unknown }).ok !== true) throw fail();
+  if (!attached) return fail();
+  return json({ ok: true, ref: payload.ref, total: payload.total, redirectUrl: checkout.redirectUrl });
 }
 
 /** POST /api/order and POST /api/booking. */
@@ -278,20 +342,11 @@ export async function handleForm(request: Request, env: FormsEnv, kind: "order" 
     if (!avail.ordersEnabled || avail.closedDates.includes(sastDay(now))) {
       throw new HttpError(409, avail.closedMessage || "Orders are closed right now. See you at the next market.");
     }
+    return handleOrder(request, env, body, now);
   }
-  const payload = kind === "order" ? await parseOrder(body, env, now) : parseBooking(body);
+  const payload = parseBooking(body);
   assertSwitchedOn(env); // before counting anything: a switched-off site must not use up anyone's allowance
-  await rateLimit(request, env, kind, payload.email);
+  await rateLimit(request, env, "booking", payload.email);
   await forward(env, payload);
-  return json({ ok: true, ref: payload.ref, ...(payload.type === "order" ? { total: payload.total, status: "awaiting_payment" } : {}) });
-}
-
-/**
- * POST /api/order/pay: where the "Pay now" step will go once the Yoco design (ADR pending with
- * dp-architect) is signed off. It deliberately does nothing yet. When built it takes the order
- * reference from the order email and creates the Yoco checkout for that order's total.
- */
-export async function handlePayStub(request: Request): Promise<Response> {
-  await readJsonObject(request).catch(() => ({}));
-  throw new HttpError(501, "Online payment isn't switched on yet.");
+  return json({ ok: true, ref: payload.ref });
 }

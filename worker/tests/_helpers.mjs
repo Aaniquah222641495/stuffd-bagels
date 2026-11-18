@@ -63,3 +63,23 @@ export async function resetPickups(points) {
 export function clearRateLimits() {
   newIp();
 }
+
+// ---- Yoco (fake) helpers for the payment tests. FAKE_YOCO and WHSEC must match the --var values wrangler dev was started with.
+import crypto from "node:crypto";
+export const FAKE_YOCO = process.env.FAKE_YOCO ?? "http://127.0.0.1:8798";
+export const yocoCalls = async () => (await (await fetch(FAKE_YOCO + "/_calls")).json());
+export const resetYoco = () => fetch(FAKE_YOCO + "/_reset", { method: "POST" });
+export const checkoutIdOf = (redirectUrl) => redirectUrl.split("/pay/")[1];
+/** POST a Yoco-style signed webhook to the Worker. `over` can break the signature, timestamp or secret on purpose. */
+export function webhook(payload, { type = "payment.succeeded", id = "msg_" + crypto.randomUUID(), tsOffset = 0, secret = process.env.WHSEC, body, signWith } = {}) {
+  const ts = Math.floor(Date.now() / 1000) + tsOffset;
+  const raw = body ?? JSON.stringify({ id: "evt_" + id, type, createdDate: new Date().toISOString(), payload });
+  const key = Buffer.from((signWith ?? secret).slice("whsec_".length), "base64");
+  const sig = crypto.createHmac("sha256", key).update(`${id}.${ts}.${raw}`).digest("base64");
+  return fetch(B + "/api/yoco/webhook", { method: "POST", headers: { "content-type": "application/json", "webhook-id": id, "webhook-timestamp": String(ts), "webhook-signature": "v1," + sig }, body: raw });
+}
+export const paidPayload = (checkoutId, over = {}) => ({ id: "p_" + crypto.randomBytes(4).toString("hex"), amount: 6500, currency: "ZAR", mode: "test", status: "succeeded", type: "payment", metadata: { checkoutId }, paymentMethodDetails: { type: "card", card: { maskedCard: "411111******1111", cardHolder: "TEST CARDHOLDER" } }, ...over });
+export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** Waits until `fn()` is true (polling), or fails the test. */
+export async function until(fn, what, ms = 15000) { const t = Date.now(); while (Date.now() - t < ms) { if (await fn()) return; await sleep(250); } throw new Error("timed out waiting for " + what); }
+export const attemptId = () => crypto.randomUUID();

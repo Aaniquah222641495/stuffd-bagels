@@ -9,6 +9,7 @@ const code = fs.readFileSync(new URL("./Code.gs", import.meta.url), "utf8");
 const sent = [];
 const labelled = [];
 const cacheStore = new Map();
+const cacheTtl = new Map();
 let quota = 100;
 const threads = () =>
   sent.filter((m) => /^(New order|Booking enquiry): /.test(m.subject)).map((m) => ({
@@ -23,7 +24,7 @@ const ctx = {
   JSON,
   ContentService: { createTextOutput: (s) => ({ s, setMimeType() { return this; } }), MimeType: { JSON: "json" } },
   LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock() {} }) },
-  CacheService: { getScriptCache: () => ({ get: (k) => cacheStore.get(k) ?? null, put: (k, v) => cacheStore.set(k, v) }) },
+  CacheService: { getScriptCache: () => ({ get: (k) => cacheStore.get(k) ?? null, put: (k, v, ttl) => { cacheStore.set(k, v); cacheTtl.set(k, ttl); } }) },
   PropertiesService: { getScriptProperties: () => ({
     getProperty: (k) => propStore.get(k) ?? null,
     setProperty: (k, v) => void propStore.set(k, String(v)),
@@ -57,7 +58,7 @@ const NONE = Symbol("no token field");
 const post = (o, token = TOKEN) => JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify(token === NONE ? o : { ...o, token }) } }).s);
 
 const order = {
-  type: "order", ref: "SB-ABC234", name: "Aisha <b>Khan</b>", phone: "+27821234567", email: "aisha@example.com",
+  type: "order", paid: true, checkoutId: "ch_ABC123xyz", ref: "SB-ABC234", name: "Aisha <b>Khan</b>", phone: "+27821234567", email: "aisha@example.com",
   pickupDate: "2026-12-19", pickupTime: "", pickupDays: "", pickupPlace: "Kenilworth Corner, Main Rd, Kenilworth",
   items: [{ name: "Pizza Bagel", qty: 2, unit: 95, line: 999 }, { name: "Steak'd Bagel", qty: 1, unit: 115, line: 115 }],
   note: "No onions <i>please</i>",
@@ -67,15 +68,18 @@ assert.equal(r1.ok, true);
 assert.equal(sent.length, 2);
 const [owner, customer] = sent;
 assert.match(owner.subject, /^New order: Aisha <b>Khan<\/b>, Sat 19 Dec$/);
-assert.match(owner.body, /AWAITING PAYMENT/);
+assert.match(owner.body, /PAID ONLINE \(Yoco\) R305\. Confirmed\./);
+assert.match(owner.body, /Yoco checkout id: ch_ABC123xyz/);
+assert.doesNotMatch(owner.body, /awaiting/i);
 assert.match(owner.body, /Total: R305/, "total is recomputed from qty x unit, not trusted");
 assert.equal(owner.replyTo, "aisha@example.com");
 assert.equal(customer.to, "aisha@example.com");
-assert.match(customer.subject, /we've got your order SB-ABC234/);
-assert.match(customer.body, /awaiting payment/);
+assert.equal(customer.subject, "STUFF'D: order confirmed SB-ABC234");
+assert.match(customer.body, /Paid and confirmed/);
+assert.match(customer.body, /Your payment has been received and your order is confirmed/);
+assert.doesNotMatch(customer.body + customer.htmlBody, /awaiting|how to pay|be in touch/i, "no 'awaiting payment' wording in the customer email");
 assert.match(customer.body, /becomes credit for another collection Saturday or one of our markets, valid for 2 months/, "cancellation policy (DRAFT) is in the order auto-reply");
 assert.ok(customer.htmlBody.includes("credit, not a refund"));
-assert.doesNotMatch(customer.body + customer.htmlBody, /order is confirmed/i);
 assert.ok(customer.htmlBody.includes("&lt;i&gt;please"), "customer text is escaped in the HTML email");
 assert.ok(!customer.htmlBody.includes("<i>please"), "no raw HTML from the customer");
 assert.deepEqual(labelled.map((l) => l[1]), ["Orders"]);
@@ -168,6 +172,46 @@ assert.equal(post({ ...booking, ref: "BK-DAY998", email: "late@example.com", gue
 assert.ok([...propStore.keys()].filter((k) => k.startsWith("cap_rc_")).length <= 1, "old per-address counters removed");
 vm.runInContext("CONFIG.MAX_SUBMISSIONS_PER_DAY = 40", ctx);
 propStore.clear();
+
+// Paid orders only (ADR-0041): an order that isn't marked paid, or has no Yoco checkout id, is refused and nothing is emailed.
+{
+  const before = sent.length;
+  const base = { ...order, name: "Unpaid Una", email: "una@example.com" };
+  const { paid: _p, ...noPaid } = base;
+  const { checkoutId: _c, ...noCheckout } = base;
+  let k = 0;
+  for (const bad of [noPaid, { ...base, paid: false }, { ...base, paid: "true" }, { ...base, paid: 1 }, { ...base, paid: "yes" }, noCheckout, { ...base, checkoutId: "" }, { ...base, checkoutId: 12345 }, { ...base, checkoutId: "ch bad id" }, { ...base, checkoutId: "x" }]) {
+    assert.equal(post({ ...bad, ref: `SB-UNP${String(100 + k++)}` }).ok, false, JSON.stringify([bad.paid, bad.checkoutId]));
+  }
+  assert.equal(sent.length, before, "no owner email and no customer email for an unpaid order");
+  // Bookings are not paid and are unaffected.
+  assert.equal(post({ ...booking, ref: "BK-NOPAY1", email: "nopay@example.com", guests: 21 }).ok, true);
+  assert.equal(sent.length, before + 2);
+  sent.length = before;
+}
+
+// A paid order is de-duplicated by reference for the full 6 hours CacheService allows; two payments for the same cart are two orders.
+{
+  const before = sent.length;
+  const paidOrder = { ...order, ref: "SB-PAID22", email: "paid@example.com", name: "Pay Pal", checkoutId: "ch_PAID1111" };
+  const contentKeys = () => [...cacheTtl.keys()].filter((k) => k.startsWith("dupec_")).length;
+  const keysBefore = contentKeys();
+  assert.equal(post(paidOrder).ok, true); assert.equal(sent.length, before + 2);
+  assert.equal(contentKeys(), keysBefore, "no content key for orders");
+  assert.equal(cacheTtl.get("dupe_SB-PAID22"), 21600, "reference held for 6 hours (the CacheService maximum)");
+  assert.deepEqual(post(paidOrder), { ok: true, duplicate: true }, "a retry after an ambiguous timeout sends nothing more");
+  assert.deepEqual(post({ ...paidOrder, checkoutId: "ch_PAID1111" }), { ok: true, duplicate: true });
+  assert.equal(sent.length, before + 2);
+  // same customer, same cart, a different payment (different reference and checkout): a genuine second order
+  assert.equal(post({ ...paidOrder, ref: "SB-PAID23", checkoutId: "ch_PAID2222" }).ok, true);
+  assert.equal(sent.length, before + 4, "the second paid order is not swallowed as a duplicate of the first");
+  // bookings keep the 10-minute window
+  assert.equal(cacheTtl.get("dupe_BK-ZZZ999"), 600);
+  propStore.clear();
+}
+
+// No 'awaiting payment' anywhere in the script.
+assert.ok(!/awaiting payment|AWAITING/i.test(code), "Code.gs has no 'awaiting payment' wording");
 
 // Quota.
 quota = 2;

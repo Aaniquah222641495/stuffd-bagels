@@ -3,7 +3,9 @@
 // else is served straight from the static assets, so pages and images stay free requests.
 import { requireAdmin } from "./auth";
 export { Limiter } from "./limiter";
-import { handleForm, handlePayStub } from "./forms";
+export { Orders } from "./orders";
+import { handleForm } from "./forms";
+import { handleAttention, handleStatus, handleWebhook } from "./payments";
 import { HttpError, errorResponse, json, plainHttpRefused, readJsonObject, withNoindex } from "./http";
 import {
   LIMITS,
@@ -39,6 +41,15 @@ export interface Env {
   APPS_SCRIPT_TOKEN?: string;
   // Durable Object namespace for the strongly consistent counters (worker/limiter.ts).
   LIMITER?: DurableObjectNamespace;
+  // Durable Object namespace for pending and paid orders (worker/orders.ts, ADR-0041).
+  ORDERS?: DurableObjectNamespace;
+  // Yoco (ADR-0041). Secrets set by the founder: YOCO_SECRET_KEY, YOCO_WEBHOOK_SECRET. Plain vars in wrangler.jsonc: YOCO_MODE, SITE_ORIGIN.
+  YOCO_SECRET_KEY?: string;
+  YOCO_WEBHOOK_SECRET?: string;
+  YOCO_MODE?: string;
+  SITE_ORIGIN?: string;
+  // Tests only: honoured only for http://127.0.0.1 (a local fake Yoco).
+  YOCO_API_BASE?: string;
 }
 
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -121,6 +132,11 @@ async function handleAdmin(request: Request, env: Env, parts: string[]): Promise
     return json({ ok: true });
   }
 
+  if (resource === "orders" && id === "attention" && extra.length === 0) {
+    methodOnly(request, ["GET"]);
+    return handleAttention(env);
+  }
+
   throw new HttpError(404, "Not found");
 }
 
@@ -180,9 +196,13 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
     methodOnly(request, ["POST"]);
     return handleForm(request, env, parts[1]);
   }
-  if (parts.length === 3 && parts[1] === "order" && parts[2] === "pay") {
+  if (parts.length === 3 && parts[1] === "order" && parts[2] === "status") {
+    methodOnly(request, ["GET", "HEAD"]);
+    return handleStatus(request, env);
+  }
+  if (parts.length === 3 && parts[1] === "yoco" && parts[2] === "webhook") {
     methodOnly(request, ["POST"]);
-    return handlePayStub(request);
+    return handleWebhook(request, env);
   }
   throw new HttpError(404, "Not found");
 }

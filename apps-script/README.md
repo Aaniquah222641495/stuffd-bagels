@@ -1,14 +1,24 @@
 # STUFF'D Bagels: order and booking emails (set-up guide, about 15 minutes, once)
 
-The website sends every order and every event booking to its own server (the Worker). The Worker checks it and
-passes it to a small Google script that lives in **stuffd.bagels@gmail.com**. The script:
+> **RE-PASTE REQUIRED (Yoco payments, ADR-0041, 2026-11-18).** `Code.gs` changed: it now accepts an order ONLY when it is
+> marked `paid: true` with a Yoco checkout id, and the order emails say "PAID ONLINE" / "order confirmed". If the script was
+> installed before this change, open it at https://script.google.com (signed in as stuffd.bagels@gmail.com), replace ALL of
+> `Code.gs` with the new file, keep your `SHARED_TOKEN` in CONFIG, save, then **Deploy > Manage deployments > pencil >
+> Version: New version > Deploy**. If this is the first install, just follow the parts below. **Plan to do this at the
+> Gmail session, before the first test payment.** An old script plus the new Worker refuses every order (safe, but no email).
 
-1. emails the owner **"New order: <name>, <Saturday>"** or **"Booking enquiry: <name>, <date>"**,
-2. emails the customer a short branded reply **from stuffd.bagels@gmail.com** (orders say "awaiting payment";
+A customer **pays on Yoco first**. Only when Yoco's signed notice (a webhook) reaches the website server does the server pass
+the order to a small Google script that lives in **stuffd.bagels@gmail.com**. Event bookings are enquiries and are passed on
+straight away. For each one the script:
+
+1. emails the owner **"New order: <name>, <Saturday>"** (the body says **PAID ONLINE (Yoco)**, the total, and the Yoco checkout
+   id you need if you ever refund) or **"Booking enquiry: <name>, <date>"**,
+2. emails the customer a short branded reply **from stuffd.bagels@gmail.com** (orders: **"STUFF'D: order confirmed <ref>"**;
    booking enquiries say nothing is booked until you confirm),
 3. files the owner email under the Gmail label **Orders** or **Bookings** (Gmail labels are its folders).
 
-It uses only free Google services. Nothing is stored except the emails themselves.
+An unpaid order never reaches your inbox: the script refuses any order that isn't marked paid. It uses only free Google
+services. Nothing is stored except the emails themselves.
 
 You must do Parts 1 to 3 **signed in as stuffd.bagels@gmail.com**. That is what makes the replies come from her
 address and puts the two labels in her mailbox.
@@ -56,11 +66,11 @@ address could make your Gmail send email to anybody, so the script refuses to wo
 ## Part 4: Test it (sends two emails to stuffd.bagels@gmail.com itself)
 1. Back in the editor choose **testOrder** in the function drop-down and click **Run**.
 2. Open Gmail. Within a minute you should have:
-   - **New order: Test Customer, ...** (the owner email: pickup point, Saturday, items, total, "AWAITING PAYMENT"),
-   - **STUFF'D: we've got your order SB-TEST22** (what the customer receives: the branded one).
+   - **New order: Test Customer, ...** (the owner email: "PAID ONLINE (Yoco)", the checkout id, pickup point, Saturday, items, total),
+   - **STUFF'D: order confirmed SB-...** (what the customer receives: the branded one; the test uses a fresh reference each run).
 3. The owner email carries the **Orders** label straight away or within 5 minutes.
 4. Choose **testBooking** and Run. You get **Booking enquiry: Test Customer, ...**, a customer reply, and the **Bookings** label.
-5. Running a test twice within 10 minutes does nothing the second time (duplicate guard). Wait, or ignore.
+5. Running **testBooking** twice within 10 minutes does nothing the second time (duplicate guard). Wait, or ignore. (**testOrder** makes a new reference every run, so it always sends.)
 6. Delete the test emails when you are happy.
 
 ## Part 5: Give the website the address
@@ -92,8 +102,13 @@ If you change `SITE_URL` or the phone number in CONFIG, do this too.
   If the script cannot send, the website tells the customer to email you; nothing is lost silently.
 - **Labels:** Gmail has no real folders. A label works like one: click **Orders** in the sidebar to see only orders.
   If you want them to skip your Inbox, make a Gmail filter later; the script does not hide anything.
-- **Orders are "awaiting payment".** The "Pay now" step (Yoco) is not built yet. Every email carries a reference
-  (SB-XXXXXX for orders, BK-XXXXXX for bookings) that the payment step will use.
+- **Orders are paid before they reach you.** The website only sends an order here after Yoco confirms the payment, so
+  every "New order" email is a paid, confirmed order. Each email carries a reference (SB-XXXXXX for orders, BK-XXXXXX for
+  bookings); the order email also shows the Yoco checkout id (use it to refund from your Yoco app or the API).
+  The website server may send the same paid order twice if this script was slow; the script remembers each order's
+  reference for 6 hours (the longest Google allows) and emails it once.
+- **If the emails never arrive** for a paid order, the website keeps the order details for 7 days and shows a red
+  "paid orders need you" line on the admin page. The payment itself is always visible in your Yoco app.
 - **Privacy:** customer details stay in this Gmail account. The privacy notice on the website says so.
 - The checks in `selftest.mjs` can be run with `node apps-script/selftest.mjs`. They test the script's logic with
   pretend Google services; the real proof is Part 4.

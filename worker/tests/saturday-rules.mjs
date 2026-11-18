@@ -4,13 +4,13 @@
 import path from "node:path";
 import assert from "node:assert/strict";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { bundle, fakeLimiter } from "./_bundle.mjs";
+import { YOCO_TEST_ENV, bundle, fakeLimiter, fakeOrders, fakeYocoFetch } from "./_bundle.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const { handleForm } = await bundle("worker/forms.ts");
 const col = await import(pathToFileURL(path.join(root, "artifacts/stuffd-bagels/src/collection.ts")).href);
 
-globalThis.fetch = async () => new Response('{"ok":true}'); // the Apps Script says yes
+globalThis.fetch = fakeYocoFetch(); // Orders open a (fake) Yoco checkout; nothing is emailed until the payment webhook
 const sast = (iso, time = "12:00:00") => Date.parse(`${iso}T${time}+02:00`);
 
 function kvWith(data) {
@@ -26,8 +26,9 @@ const POINTS = { pickups: [
 async function order(date, now, { availability = {}, pickups = POINTS, body = {}, plain = false, events } = {}) {
   if (!plain && typeof date === "string") availability = { addedSaturdays: [date], opensOn: { [date]: "2000-01-01" }, ...availability };
   const lim = await fakeLimiter({ now: () => now });
-  const env = { LIMITER: lim.ns, APPS_SCRIPT_TOKEN: "t".repeat(40), STUFFD_KV: kvWith({ availability: { ordersEnabled: true, closedDates: [], closedMessage: "", ...availability }, pickups, ...(events ? { events: { events: events.map((e, i) => ({ id: `e${i}`, venue: "Somewhere", ...e })) } } : {}) }), ADMIN_PASSWORD: "x", APPS_SCRIPT_URL: "http://fake/exec" };
-  const payload = { name: "Aisha", phone: "0821234567", email: "a@b.co", pickupId: "p1", pickupDate: date, items: { "Classic Bagel": 1 }, website: "", ...body };
+  const ord = await fakeOrders({ now: () => now });
+  const env = { LIMITER: lim.ns, ORDERS: ord.ns, ...YOCO_TEST_ENV, APPS_SCRIPT_TOKEN: "t".repeat(40), STUFFD_KV: kvWith({ availability: { ordersEnabled: true, closedDates: [], closedMessage: "", ...availability }, pickups, ...(events ? { events: { events: events.map((e, i) => ({ id: `e${i}`, venue: "Somewhere", ...e })) } } : {}) }), ADMIN_PASSWORD: "x", APPS_SCRIPT_URL: "http://fake/exec" };
+  const payload = { name: "Aisha", phone: "0821234567", email: "a@b.co", pickupId: "p1", pickupDate: date, items: { "Classic Bagel": 1 }, website: "", attemptId: crypto.randomUUID(), ...body };
   const req = new Request("http://x/api/order", { method: "POST", headers: { "Content-Type": "application/json", "CF-Connecting-IP": "1.2.3.4" }, body: JSON.stringify(payload) });
   try {
     const res = await handleForm(req, env, "order", now);
@@ -156,7 +157,7 @@ assert.equal((await order("2026-11-28", sast("2026-11-16"), { body: { pickupId: 
 assert.equal((await order("2026-11-28", sast("2026-11-16"), { body: { pickupId: "../x" } })).status, 400);
 assert.equal((await order("2026-11-28", sast("2026-11-16"), { pickups: { pickups: [] } })).status, 409, "no pickup points: nothing to collect from");
 r = await order("2026-11-28", sast("2026-11-16"), { body: { pickupTime: "around 10:30" } });
-assert.equal(r.status, 200); assert.match(r.body.ref, /^SB-/); assert.equal(r.body.status, "awaiting_payment");
+assert.equal(r.status, 200); assert.match(r.body.ref, /^SB-/); assert.match(r.body.redirectUrl, /^https:\/\/c\.yoco\.com\//);
 assert.equal((await order("2026-11-28", sast("2026-11-16"), { body: { pickupTime: "x".repeat(41) } })).status, 400);
 ok("pickup point must exist and be active; markets/eventId refused; time note limited to 40 characters");
 
