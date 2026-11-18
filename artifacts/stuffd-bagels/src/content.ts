@@ -72,7 +72,7 @@ export const FAQ = [
   },
   {
     q: "What if I cancel or can't collect my order?",
-    a: "If you cancel before the Wednesday cut-off, or you pay and don't collect, your order becomes credit for another collection Saturday or one of our markets (credit, not a refund).",
+    a: "If you cancel before the Wednesday cut-off, or you pay and don't collect, your order becomes credit for another collection Saturday or one of our markets, valid for 2 months (credit, not a refund).",
     time: "10:45",
   },
   {

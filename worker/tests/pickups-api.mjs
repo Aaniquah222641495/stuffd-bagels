@@ -1,7 +1,7 @@
 // Admin pickup points: auth, validation, limits, add / edit / switch off / remove, and what the public list shows.
 // Setup as in forms-api.mjs. Run: node worker/tests/pickups-api.mjs /tmp/fake.log
 import assert from "node:assert/strict";
-import { B, admin, post, resetPickups, clearRateLimits, ip } from "./_helpers.mjs";
+import { B, admin, post, resetPickups, clearRateLimits, ip, col } from "./_helpers.mjs";
 clearRateLimits();
 let n = 0;
 const ok = (name) => console.log("PASS", ++n, name);
@@ -89,4 +89,22 @@ for (const body of [{ cutoffTime: "24:00" }, { cutoffTime: "9:00" }, { cutoffTim
 assert.equal((await admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "" })).status, 200, "older callers without the new fields still work");
 pubA = await json(await fetch(B + "/api/availability")); assert.equal(pubA.cutoffTime, "23:59"); assert.deepEqual([pubA.addedSaturdays, pubA.removedSaturdays, pubA.opensOn], [[], [], {}], "no lists saved: the built-in last-Saturday default");
 ok("cut-off time and Saturday lists: saved, validated (HH:MM; real Saturdays; opening day not after its Saturday; at most 24), defaults 23:59 and the built-in list");
+// Adding a market: a default Saturday that is already open for orders is kept, not skipped (orders may exist)
+{
+  await admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "" });
+  const now = Date.now(); const today = col.sastDay(now);
+  const open = col.collectionSaturdays(now, { cutoffTime: "23:59", closedDates: [], events: [] }).find((d) => col.opensOnFor(d, {}) <= today);
+  if (open) {
+    const sunday = new Date(Date.parse(open + "T00:00:00Z") + 86400000).toISOString().slice(0, 10);
+    const add = await admin("/events", "POST", { name: "Test weekend market", venue: "Test hall", start: sunday, end: sunday });
+    assert.equal(add.status, 200); const added = await json(add);
+    assert.deepEqual(added.keptSaturdays, [open], "open default Saturday kept");
+    assert.deepEqual((await json(await fetch(B + "/api/availability?x=" + Math.random()))).keptSaturdays, [open]);
+    await admin(`/events/${added.id}`, "DELETE");
+  }
+  const bad = [{ keptSaturdays: ["2026-12-04"] }, { keptSaturdays: "2026-12-05" }, { keptSaturdays: ["nope"] }];
+  for (const b of bad) assert.equal((await admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "", ...b })).status, 400, JSON.stringify(b));
+  await admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "" });
+  ok(open ? "adding a market keeps an already-open default Saturday; keptSaturdays validated" : "keptSaturdays validated (no default Saturday open today, market keep not exercised)");
+}
 console.log(`pickups-api: all ${n} groups passed`);

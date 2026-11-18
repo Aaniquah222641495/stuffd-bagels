@@ -1,5 +1,5 @@
 // Reads, validates and writes the two KV keys: `availability` and `events` (ADR-0028).
-import { DEFAULT_CUTOFF, isCutoffTime, isSaturday } from "../artifacts/stuffd-bagels/src/collection";
+import { DEFAULT_CUTOFF, isCutoffTime, isSaturday, saturdaysToKeep } from "../artifacts/stuffd-bagels/src/collection";
 import { EVENTS, type MarketEvent } from "../artifacts/stuffd-bagels/src/content";
 import { HttpError } from "./http";
 
@@ -7,6 +7,7 @@ export const LIMITS = {
   closedDates: 60,
   addedSaturdays: 24,
   removedSaturdays: 24,
+  keptSaturdays: 24,
   events: 50,
   name: 60,
   venue: 80,
@@ -31,6 +32,8 @@ export interface Availability {
    */
   addedSaturdays: string[];
   removedSaturdays: string[];
+  /** Default Saturdays put back after being skipped for a market (collection.ts). */
+  keptSaturdays: string[];
   opensOn: Record<string, string>;
 }
 
@@ -38,7 +41,7 @@ export interface PublicAvailability extends Availability {
   closedToday: boolean;
 }
 
-const OPEN: Availability = { ordersEnabled: true, closedDates: [], closedMessage: "", cutoffTime: DEFAULT_CUTOFF, addedSaturdays: [], removedSaturdays: [], opensOn: {} };
+const OPEN: Availability = { ordersEnabled: true, closedDates: [], closedMessage: "", cutoffTime: DEFAULT_CUTOFF, addedSaturdays: [], removedSaturdays: [], keptSaturdays: [], opensOn: {} };
 
 /** Today in Africa/Johannesburg (UTC+2, no daylight saving), as YYYY-MM-DD. */
 export function sastToday(now = Date.now()): string {
@@ -92,6 +95,7 @@ export async function readAvailability(kv: KVNamespace): Promise<Availability> {
     cutoffTime: isCutoffTime(v.cutoffTime) ? v.cutoffTime : DEFAULT_CUTOFF,
     addedSaturdays: Array.isArray(v.addedSaturdays) ? v.addedSaturdays.filter(isSat).slice(0, LIMITS.addedSaturdays) : [],
     removedSaturdays: Array.isArray(v.removedSaturdays) ? v.removedSaturdays.filter(isSat).slice(0, LIMITS.removedSaturdays) : [],
+    keptSaturdays: Array.isArray(v.keptSaturdays) ? v.keptSaturdays.filter(isSat).slice(0, LIMITS.keptSaturdays) : [],
     opensOn: cleanOpensOn(v.opensOn),
   };
 }
@@ -124,6 +128,8 @@ export function parseAvailabilityInput(body: Record<string, unknown>): Availabil
   const removed = body.removedSaturdays ?? [];
   if (!Array.isArray(added) || added.length > LIMITS.addedSaturdays || !added.every(isSat)) throw bad();
   if (!Array.isArray(removed) || removed.length > LIMITS.removedSaturdays || !removed.every(isSat)) throw bad();
+  const kept = body.keptSaturdays ?? [];
+  if (!Array.isArray(kept) || kept.length > LIMITS.keptSaturdays || !kept.every(isSat)) throw bad();
   const opens = body.opensOn ?? {};
   if (typeof opens !== "object" || opens === null || Array.isArray(opens)) throw bad();
   const opensEntries = Object.entries(opens as Record<string, unknown>);
@@ -136,6 +142,7 @@ export function parseAvailabilityInput(body: Record<string, unknown>): Availabil
     cutoffTime,
     addedSaturdays: [...new Set(added as string[])].sort(),
     removedSaturdays: [...new Set(removed as string[])].sort(),
+    keptSaturdays: [...new Set(kept as string[])].sort(),
     opensOn: Object.fromEntries(opensEntries.sort(([a], [b]) => a.localeCompare(b))) as Record<string, string>,
   };
 }
@@ -162,6 +169,31 @@ export async function readEvents(kv: KVNamespace): Promise<MarketEvent[]> {
   const v = asRecord(await readKey(kv, "events"));
   if (!Array.isArray(v.events)) return [...EVENTS].sort(byStart);
   return v.events.map(cleanEvent).filter((e): e is MarketEvent => e !== null).sort(byStart);
+}
+
+/** Markets for the collection rules. Fails open to the bundled list if storage is missing or broken. */
+export async function marketsForRules(kv: KVNamespace | undefined): Promise<{ name: string; start: string; end: string }[]> {
+  let list: MarketEvent[] = EVENTS;
+  if (kv) {
+    try {
+      list = await readEvents(kv);
+    } catch {
+      list = EVENTS;
+    }
+  }
+  return list.map((e) => ({ name: e.name, start: e.start, end: e.end }));
+}
+
+/**
+ * After the owner adds a market: any default Saturday that is already open for orders and that the market would skip is
+ * put in keptSaturdays instead (orders may exist already; the admin warns). Returns the dates kept.
+ */
+export async function keepOpenSaturdays(kv: KVNamespace, before: MarketEvent[], added: MarketEvent, now = Date.now()): Promise<string[]> {
+  const avail = await readAvailability(kv);
+  const rules = { ...avail, events: before.map((e) => ({ name: e.name, start: e.start, end: e.end })) };
+  const keep = saturdaysToKeep(now, rules, [{ name: added.name, start: added.start, end: added.end }]).filter((d) => !avail.keptSaturdays.includes(d));
+  if (keep.length) await writeAvailability(kv, { ...avail, keptSaturdays: [...avail.keptSaturdays, ...keep].sort() });
+  return keep;
 }
 
 export function upcoming(list: MarketEvent[]): MarketEvent[] {

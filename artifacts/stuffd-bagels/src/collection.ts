@@ -5,6 +5,9 @@
 //    at 00:00 South African time, and close on the Wednesday before at the cut-off time (default 23:59, owner-editable).
 //    The cut-off minute itself: with 23:59, an order at 23:59:30 Wednesday is accepted and the first refused
 //    moment is Thursday 00:00:00 (all South African time).
+//  - A default Saturday is skipped when a market (an event) covers that Saturday or its Sunday: with a market on, there
+//    is usually no collection that month. The owner can put it back (keptSaturdays). A Saturday the owner adds by hand
+//    is never skipped (admin shows a warning instead), and neither is one already open for orders when a market is added.
 //  - The owner can add Saturdays (addedSaturdays) and take default ones off (removedSaturdays). There is no
 //    "weeks ahead" setting any more: the list itself says what can be ordered. Closed dates still win.
 const SAST_MS = 2 * 3600 * 1000;
@@ -24,6 +27,10 @@ export interface CollectionRules {
   addedSaturdays?: string[];
   /** Default Saturdays the owner took off the list (YYYY-MM-DD). */
   removedSaturdays?: string[];
+  /** Default Saturdays the owner put back after they were skipped for a market (YYYY-MM-DD). */
+  keptSaturdays?: string[];
+  /** Markets (start and end inclusive). A default Saturday is skipped if one covers it or its Sunday. */
+  events?: { name: string; start: string; end: string }[];
   /** Per-Saturday day orders open (YYYY-MM-DD, at 00:00 SAST). Missing = the 15th of that Saturday's month. */
   opensOn?: Record<string, string>;
 }
@@ -79,19 +86,63 @@ export function opensOnFor(saturdayIso: string, rules: Pick<CollectionRules, "op
   return prev.toISOString().slice(0, 10);
 }
 
-/** Every Saturday that is on the list from today on (soonest first): default last Saturdays plus added, minus removed. */
-export function collectionSaturdays(now: number, rules: CollectionRules): string[] {
+/** Name of a market covering this Saturday or the Sunday after it, or "" when there is none. */
+export function marketClash(saturdayIso: string, events: CollectionRules["events"]): string {
+  const sunday = new Date(dayStartUtc(saturdayIso) + DAY_MS).toISOString().slice(0, 10);
+  const hit = (events ?? []).find((e) => (e.start <= saturdayIso && saturdayIso <= e.end) || (e.start <= sunday && sunday <= e.end));
+  return hit ? hit.name : "";
+}
+
+/** The built-in last Saturdays from today on, before any owner change and before market skipping. */
+function defaultSaturdays(now: number): string[] {
   const today = sastDay(now);
   const y = Number(today.slice(0, 4));
   const m = Number(today.slice(5, 7));
-  const set = new Set<string>();
+  const out: string[] = [];
   for (let k = 0; k < DEFAULT_MONTHS_AHEAD; k++) {
     const d = new Date(Date.UTC(y, m - 1 + k, 1));
-    set.add(lastSaturdayOfMonth(d.getUTCFullYear(), d.getUTCMonth() + 1));
+    const iso = lastSaturdayOfMonth(d.getUTCFullYear(), d.getUTCMonth() + 1);
+    if (iso >= today) out.push(iso);
   }
+  return out;
+}
+
+/** Default Saturdays skipped because of a market and not put back or removed: the admin shows these. */
+export function skippedSaturdays(now: number, rules: CollectionRules): { date: string; event: string }[] {
+  const out: { date: string; event: string }[] = [];
+  for (const iso of defaultSaturdays(now)) {
+    const event = marketClash(iso, rules.events);
+    if (event && !(rules.keptSaturdays ?? []).includes(iso) && !(rules.removedSaturdays ?? []).includes(iso)) out.push({ date: iso, event });
+  }
+  return out;
+}
+
+/** Warning for a Saturday that is on the list although a market covers its weekend (hand-added, put back or already open). */
+export function saturdayWarning(saturdayIso: string, rules: CollectionRules): string {
+  const event = marketClash(saturdayIso, rules.events);
+  return event ? `${event} is on that weekend` : "";
+}
+
+/** Every Saturday that is on the list from today on (soonest first): default last Saturdays (minus market weekends) plus added, minus removed. */
+export function collectionSaturdays(now: number, rules: CollectionRules): string[] {
+  const today = sastDay(now);
+  const set = new Set<string>();
+  const kept = rules.keptSaturdays ?? [];
+  for (const iso of defaultSaturdays(now)) if (!marketClash(iso, rules.events) || kept.includes(iso)) set.add(iso);
   for (const a of rules.addedSaturdays ?? []) set.add(a);
   for (const r of rules.removedSaturdays ?? []) set.delete(r);
   return [...set].filter((iso) => iso >= today && isSaturday(iso)).sort();
+}
+
+/**
+ * Saturdays that must be kept when a market is added: default ones already open for orders that the new market
+ * would otherwise skip (orders may already exist, so they are not removed, the admin just warns).
+ */
+export function saturdaysToKeep(now: number, rules: CollectionRules, newEvents: NonNullable<CollectionRules["events"]>): string[] {
+  const before = new Set(collectionSaturdays(now, rules));
+  const after = new Set(collectionSaturdays(now, { ...rules, events: [...(rules.events ?? []), ...newEvents] }));
+  const today = sastDay(now);
+  return [...before].filter((d) => !after.has(d) && today >= opensOnFor(d, rules));
 }
 
 export function saturdayStatus(iso: string, now: number, rules: CollectionRules): SaturdayStatus {
@@ -130,14 +181,16 @@ export function niceDay(iso: string): string {
 /** "Orders for Saturday 26 Dec open on Tuesday 15 Dec.", or "" when there is nothing to say. */
 export function openingNote(now: number, rules: CollectionRules): string {
   const next = nextOpening(now, rules);
-  return next ? `Orders for ${niceDay(next.saturday)} open on ${niceDay(next.opens)}.` : "";
+  if (!next) return "";
+  const newYear = next.saturday.slice(0, 4) > sastDay(now).slice(0, 4) ? " Back in the new year." : "";
+  return `Orders for ${niceDay(next.saturday)} open on ${niceDay(next.opens)}.${newYear}`;
 }
 
 /**
  * Cancellation and no-show wording, DRAFT from the client's rule (2026-11-18: credit, not refunds).
- * Pending dp-counsel review (CPA s17, advance-booking cancellations). No credit expiry is stated because none has
- * been decided: ask the founder before adding one. Shown in the FAQ, above the order button, and in the order
+ * Pending dp-counsel review (CPA s17, advance-booking cancellations). Credit lasts 2 months (founder and client, 2026-11-18).
+ * Shown in the FAQ, above the order button, and in the order
  * auto-reply (apps-script/Code.gs keeps its own copy: keep them identical).
  */
 export const CANCELLATION_POLICY =
-  "If you cancel before the Wednesday cut-off, or you pay and don't collect, your order becomes credit for another collection Saturday or one of our markets (credit, not a refund).";
+  "If you cancel before the Wednesday cut-off, or you pay and don't collect, your order becomes credit for another collection Saturday or one of our markets, valid for 2 months (credit, not a refund).";

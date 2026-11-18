@@ -9,7 +9,7 @@ import { menuPricingObject, pricedToppings } from "../artifacts/stuffd-bagels/sr
 import { hashKey, ipBucket, normaliseEmail, refund, take, type LimiterEnv, type Rule } from "./limiter-client";
 import { HttpError, json, readJsonObject } from "./http";
 import { niceDay, opensOnFor, saturdayStatus, sastDay } from "../artifacts/stuffd-bagels/src/collection";
-import { isRealDate, publicAvailability, publicPickups, sastToday, secondsToSastMidnight } from "./store";
+import { isRealDate, marketsForRules, publicAvailability, publicPickups, sastToday, secondsToSastMidnight } from "./store";
 
 export interface FormsEnv extends LimiterEnv {
   STUFFD_KV?: KVNamespace;
@@ -151,6 +151,8 @@ async function parseOrder(body: Record<string, unknown>, env: FormsEnv, now: num
     closedDates: avail.closedDates,
     addedSaturdays: avail.addedSaturdays,
     removedSaturdays: avail.removedSaturdays,
+    keptSaturdays: avail.keptSaturdays,
+    events: await marketsForRules(env.STUFFD_KV),
     opensOn: avail.opensOn,
   });
   if (status === "closed_date") throw new HttpError(409, avail.closedMessage || "We're closed on that Saturday. Please choose another.");

@@ -14,6 +14,7 @@ import {
   publicEvents,
   publicPickups,
   readAvailability,
+  keepOpenSaturdays,
   readEvents,
   readPickups,
   withToday,
@@ -71,7 +72,8 @@ async function handleAdmin(request: Request, env: Env, parts: string[]): Promise
     if (events.length >= LIMITS.events) throw new HttpError(400, "Too many events. Remove one first.");
     const newId = crypto.randomUUID();
     await writeEvents(kv, [...events, { id: newId, ...input }]);
-    return json({ ok: true, id: newId });
+    const kept = await keepOpenSaturdays(kv, events, { id: newId, ...input });
+    return json({ ok: true, id: newId, keptSaturdays: kept });
   }
 
   if (resource === "events" && id !== undefined && extra.length === 0) {

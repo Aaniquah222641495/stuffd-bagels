@@ -398,6 +398,7 @@ export default function Home() {
     cutoffTime?: string;
     addedSaturdays?: string[];
     removedSaturdays?: string[];
+    keptSaturdays?: string[];
     opensOn?: Record<string, string>;
   } | null>(null);
 
@@ -579,6 +580,8 @@ export default function Home() {
     closedDates: availability?.closedDates ?? [],
     addedSaturdays: availability?.addedSaturdays ?? [],
     removedSaturdays: availability?.removedSaturdays ?? [],
+    keptSaturdays: availability?.keptSaturdays ?? [],
+    events,
     opensOn: availability?.opensOn ?? {},
   };
   const nowMs = today ? Date.now() : 0; // only after mount, so the prerendered HTML matches the first render

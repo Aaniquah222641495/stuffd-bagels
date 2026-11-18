@@ -66,8 +66,8 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   const form = await page.getByTestId("order-form").textContent();
   assert.ok(form.includes(`Orders for ${nice(sats[0])} close on ${nice(col.cutoffDay(sats[0]))} at 23:59.`), "cut-off line");
   assert.ok(form.includes("Collection times: Saturdays, 10am to 1pm"), "point's times hint");
-  assert.ok(form.includes("becomes credit for another collection Saturday or one of our markets (credit, not a refund)"), "cancellation policy shown before the order is sent");
-  assert.ok(!/market/i.test(form.replace("or one of our markets", "")), "no market wording in the order form apart from the credit policy");
+  assert.ok(form.includes("becomes credit for another collection Saturday or one of our markets, valid for 2 months (credit, not a refund)"), "cancellation policy shown before the order is sent");
+  assert.ok(!/market/i.test(form.replace("or one of our markets, valid for 2 months", "")), "no market wording in the order form apart from the credit policy");
   console.log("  Saturdays offered:", opts.join(", "));
 
   // 3. Validate, send
@@ -188,6 +188,23 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   await page.getByRole("button", { name: "Remove Kenilworth Corner 2" }).click();
   await Promise.all([page.waitForResponse((r) => r.request().method() === "DELETE"), page.getByRole("button", { name: "Yes, remove Kenilworth Corner 2" }).click()]);
   await page.getByTestId("pickups-none-active").waitFor();
+  // markets and collection Saturdays (only while the bundled MGM weekend and the test dates are still in the future)
+  if (Date.now() < Date.parse("2026-12-15T00:00:00+02:00")) {
+    const mk = await (await admin("/events", "POST", { name: "Test Market", venue: "Test hall", start: "2026-12-27", end: "2026-12-27" })).json();
+    await page.reload(); await page.getByTestId("collection-saturdays").waitFor();
+    const skipped = page.getByTestId("skipped-2026-12-26");
+    assert.match(await skipped.textContent(), /Skipped: Test Market that weekend/, "a default Saturday with a market on its Sunday is shown as skipped");
+    assert.ok(!(await page.getByTestId("sat-2026-12-26").count()), "and not in the list");
+    await skipped.getByRole("button", { name: /back on the list/ }).click();
+    assert.equal(await page.getByTestId("sat-2026-12-26").count(), 1, "put back");
+    assert.match(await page.getByTestId("warn-2026-12-26").textContent(), /Test Market is on that weekend/, "a put-back Saturday carries the warning");
+    await page.getByLabel("Saturday to add").fill("2026-12-19"); await page.getByRole("button", { name: "Add Saturday" }).click();
+    assert.match(await page.getByTestId("warn-2026-12-19").textContent(), /MGM '26 is on that weekend/, "a hand-added Saturday on the MGM weekend stays, with a warning");
+    await axeRun(page, "admin with market warnings");
+    await page.screenshot({ path: `${process.env.SHOTS ?? "."}/admin-market-warnings-${w}.png`, fullPage: false });
+    await admin(`/events/${mk.id}`, "DELETE");
+    await page.reload(); await page.getByTestId("collection-saturdays").waitFor();
+  }
   // collection rules
   await page.locator("#cutoff-time").fill("20:00");
   const listed = await page.locator("[data-testid^=sat-]").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid").slice(4)));

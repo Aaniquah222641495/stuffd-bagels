@@ -23,10 +23,10 @@ const POINTS = { pickups: [
 ] };
 // By default the Saturday asked for is put on the list and already open, so the cut-off, closed-date and pickup tests
 // below test only their own rule. Pass plain: true to use the real default list (last Saturday of the month, opens on the 15th).
-async function order(date, now, { availability = {}, pickups = POINTS, body = {}, plain = false } = {}) {
+async function order(date, now, { availability = {}, pickups = POINTS, body = {}, plain = false, events } = {}) {
   if (!plain && typeof date === "string") availability = { addedSaturdays: [date], opensOn: { [date]: "2000-01-01" }, ...availability };
   const lim = await fakeLimiter({ now: () => now });
-  const env = { LIMITER: lim.ns, APPS_SCRIPT_TOKEN: "t".repeat(40), STUFFD_KV: kvWith({ availability: { ordersEnabled: true, closedDates: [], closedMessage: "", ...availability }, pickups }), ADMIN_PASSWORD: "x", APPS_SCRIPT_URL: "http://fake/exec" };
+  const env = { LIMITER: lim.ns, APPS_SCRIPT_TOKEN: "t".repeat(40), STUFFD_KV: kvWith({ availability: { ordersEnabled: true, closedDates: [], closedMessage: "", ...availability }, pickups, ...(events ? { events: { events: events.map((e, i) => ({ id: `e${i}`, venue: "Somewhere", ...e })) } } : {}) }), ADMIN_PASSWORD: "x", APPS_SCRIPT_URL: "http://fake/exec" };
   const payload = { name: "Aisha", phone: "0821234567", email: "a@b.co", pickupId: "p1", pickupDate: date, items: { "Classic Bagel": 1 }, website: "", ...body };
   const req = new Request("http://x/api/order", { method: "POST", headers: { "Content-Type": "application/json", "CF-Connecting-IP": "1.2.3.4" }, body: JSON.stringify(payload) });
   try {
@@ -65,7 +65,8 @@ assert.equal((await order("2026-11-21", sast("2026-11-16"), { availability: { cl
 ok("a closed Saturday is refused with the owner's message; other Saturdays still open");
 
 // 5. The default list: the LAST Saturday of each month, orders open on the 15th at 00:00 SAST (no per-test help: plain)
-const P = { plain: true };
+// events: [] keeps the bundled market list (content.ts) out of these date-rule tests; the market tests below pass their own.
+const P = { plain: true, events: [] };
 assert.equal(col.lastSaturdayOfMonth(2026, 11), "2026-11-28");
 let r5 = await order("2026-11-28", sast("2026-11-14", "23:59:59"), P);
 assert.equal(r5.status, 409); assert.match(r5.body.error, /open on Sun 15 Nov|open on Sunday 15 Nov/);
@@ -163,6 +164,54 @@ ok("pickup point must exist and be active; markets/eventId refused; time note li
 assert.equal((await order("2026-11-28", sast("2026-11-16"), { availability: { ordersEnabled: false, closedMessage: "Back soon" } })).status, 409);
 assert.equal((await order("2026-11-28", sast("2026-11-16"), { availability: { closedDates: ["2026-11-16"] } })).status, 409, "today closed pauses new orders");
 ok("orders switched off, or today a closed date: refused");
+
+// 10b. Markets: a default Saturday is skipped when a market covers it or its Sunday
+const mkt = (start, end = start, name = "Test Market") => ({ name, start, end });
+const NOW = sast("2026-11-16");
+// market on the Saturday itself
+r = await order("2026-11-28", NOW, { ...P, events: [mkt("2026-11-28")] });
+assert.equal(r.status, 409); assert.match(r.body.error, /isn't a collection day/);
+// market on the Sunday only
+assert.equal((await order("2026-11-28", NOW, { ...P, events: [mkt("2026-11-29")] })).status, 409);
+// multi-day market spanning the weekend
+assert.equal((await order("2026-11-28", NOW, { ...P, events: [mkt("2026-11-26", "2026-11-30")] })).status, 409);
+// a market on the Friday only, or the Monday after, does not skip it
+assert.equal((await order("2026-11-28", NOW, { ...P, events: [mkt("2026-11-27")] })).status, 200);
+assert.equal((await order("2026-11-28", NOW, { ...P, events: [mkt("2026-11-30")] })).status, 200);
+// put back overrides the skip
+assert.equal((await order("2026-11-28", NOW, { ...P, events: [mkt("2026-11-28")], availability: { keptSaturdays: ["2026-11-28"] } })).status, 200);
+// the skip follows the bundled list too when the owner has saved none (MGM '26 runs 16-20 Dec: 26 Dec is clear, so no skip)
+assert.equal((await order("2026-12-26", sast("2026-12-16"), { plain: true })).status, 200);
+// and the bundled Luxe Cape Club (31 Oct to 1 Nov) skips Saturday 31 Oct on its own
+assert.equal((await order("2026-10-31", sast("2026-10-20"), { plain: true })).status, 409);
+// hand-added Saturday on a market weekend: kept (not removed) and warned about
+const mgm = [mkt("2026-12-16", "2026-12-20", "MGM '26")];
+assert.equal((await order("2026-12-19", sast("2026-12-01"), { ...P, events: mgm, availability: { addedSaturdays: ["2026-12-19"], opensOn: { "2026-12-19": "2026-12-01" } } })).status, 200, "hand-added Saturday on a market weekend is NOT removed");
+const rMgm = { cutoffTime: "23:59", closedDates: [], events: mgm, addedSaturdays: ["2026-12-19"] };
+assert.ok(col.collectionSaturdays(sast("2026-12-01"), rMgm).includes("2026-12-19"));
+assert.equal(col.saturdayWarning("2026-12-19", rMgm), "MGM '26 is on that weekend");
+assert.equal(col.saturdayWarning("2026-12-26", rMgm), "");
+// the admin lists the skipped default and put back clears it
+const rSkip = { cutoffTime: "23:59", closedDates: [], events: [mkt("2026-11-29", "2026-11-29", "Spring Market")] };
+assert.deepEqual(col.skippedSaturdays(NOW, rSkip), [{ date: "2026-11-28", event: "Spring Market" }]);
+assert.ok(!col.collectionSaturdays(NOW, rSkip).includes("2026-11-28"));
+assert.deepEqual(col.skippedSaturdays(NOW, { ...rSkip, keptSaturdays: ["2026-11-28"] }), []);
+assert.ok(col.collectionSaturdays(NOW, { ...rSkip, keptSaturdays: ["2026-11-28"] }).includes("2026-11-28"));
+assert.equal(col.saturdayWarning("2026-11-28", { ...rSkip, keptSaturdays: ["2026-11-28"] }), "Spring Market is on that weekend", "a put-back Saturday is warned about");
+assert.deepEqual(col.skippedSaturdays(NOW, { ...rSkip, removedSaturdays: ["2026-11-28"] }), [], "a removed Saturday is not also shown as skipped");
+// a market added later: default Saturdays already open are kept (orders may exist), not yet open ones are skipped
+const nm = [{ name: "New Market", start: "2026-11-28", end: "2026-11-28" }];
+assert.deepEqual(col.saturdaysToKeep(sast("2026-11-16"), { cutoffTime: "23:59", closedDates: [] }, nm), ["2026-11-28"], "already open on the 15th: keep it");
+assert.deepEqual(col.saturdaysToKeep(sast("2026-11-10"), { cutoffTime: "23:59", closedDates: [] }, nm), [], "not open yet: the skip applies");
+ok("markets: Saturday and Sunday skip, Friday and Monday do not, put back overrides, hand-added and already-open Saturdays are kept with a warning");
+
+// 10c. Client data: no collection on 26 Dec 2026 (removed in the owner's list), list resumes 30 Jan 2027
+const noDec = { cutoffTime: "23:59", closedDates: [], removedSaturdays: ["2026-12-26"] };
+assert.deepEqual(col.collectionSaturdays(sast("2026-11-16"), noDec).slice(0, 2), ["2026-11-28", "2027-01-30"]);
+assert.equal(col.openingNote(sast("2026-11-26", "08:00:00"), noDec), "Orders for Saturday 30 Jan open on Friday 15 Jan. Back in the new year.");
+assert.equal((await order("2026-12-26", sast("2026-12-16"), { ...P, availability: { removedSaturdays: ["2026-12-26"] } })).status, 409);
+assert.equal((await order("2027-01-30", sast("2027-01-15"), { ...P, availability: { removedSaturdays: ["2026-12-26"] } })).status, 200);
+ok("with 26 Dec removed the list is 28 Nov then 30 Jan, and the page says when January opens");
 
 // 11. Pure helpers the page and admin use
 const rules = { cutoffTime: "23:59", closedDates: [] };

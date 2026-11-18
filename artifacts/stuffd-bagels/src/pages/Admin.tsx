@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { collectionSaturdays, isSaturday, niceDay, opensOnFor, sastDay } from "@/collection";
+import { collectionSaturdays, isSaturday, marketClash, niceDay, opensOnFor, sastDay, saturdayWarning, skippedSaturdays } from "@/collection";
 
 const ACCENT = "var(--sb-blue)";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -12,6 +12,7 @@ interface Availability {
   cutoffTime: string;
   addedSaturdays: string[];
   removedSaturdays: string[];
+  keptSaturdays: string[];
   opensOn: Record<string, string>;
 }
 
@@ -145,6 +146,7 @@ export default function Admin() {
         cutoffTime: data.cutoffTime,
         addedSaturdays: data.addedSaturdays,
         removedSaturdays: data.removedSaturdays,
+        keptSaturdays: data.keptSaturdays,
         opensOn: data.opensOn,
       }),
     });
@@ -174,18 +176,22 @@ export default function Admin() {
   // True when the Saturday is on the built-in list (last Saturday of its month), before any owner changes. "Now" is the
   // Saturday itself, so its own month is always inside the generated window.
   const isDefaultSaturday = (d: string, rules: Availability) =>
-    collectionSaturdays(Date.parse(`${d}T12:00:00Z`), { ...rules, addedSaturdays: [], removedSaturdays: [] }).includes(d);
+    collectionSaturdays(Date.parse(`${d}T12:00:00Z`), { ...rules, addedSaturdays: [], removedSaturdays: [], events: [] }).includes(d);
+
+  // The rules the page and Worker use: the saved lists plus the markets, so skipped Saturdays and warnings match.
+  const rulesFor = (a: Availability) => ({ ...a, events: scheduleEvents.map((e) => ({ name: e.name, start: e.start, end: e.end })) });
 
   // Collection Saturdays: the list is the default (last Saturday of each month) plus what is added, minus what is removed.
   function addSaturday() {
     if (!data || !newSat) return;
     setSatMsg("");
     if (!isSaturday(newSat) || newSat < sastDay(Date.now())) return setSatMsg("Pick a Saturday that has not passed.");
-    if (collectionSaturdays(Date.now(), data).includes(newSat)) return setSatMsg("That Saturday is already on the list.");
+    if (collectionSaturdays(Date.now(), rulesFor(data)).includes(newSat)) return setSatMsg("That Saturday is already on the list.");
     const isDefault = isDefaultSaturday(newSat, data);
     setData({
       ...data,
       removedSaturdays: data.removedSaturdays.filter((x) => x !== newSat),
+      keptSaturdays: isDefault && marketClash(newSat, rulesFor(data).events) ? [...new Set([...data.keptSaturdays, newSat])].sort() : data.keptSaturdays,
       addedSaturdays: isDefault ? data.addedSaturdays : [...new Set([...data.addedSaturdays, newSat])].sort(),
     });
     setNewSat("");
@@ -197,6 +203,7 @@ export default function Admin() {
     setData({
       ...data,
       opensOn,
+      keptSaturdays: data.keptSaturdays.filter((x) => x !== d),
       addedSaturdays: data.addedSaturdays.filter((x) => x !== d),
       removedSaturdays: isDefaultSaturday(d, data) ? [...new Set([...data.removedSaturdays, d])].sort() : data.removedSaturdays,
     });
@@ -205,6 +212,12 @@ export default function Admin() {
   function putBackSaturday(d: string) {
     if (!data) return;
     setData({ ...data, removedSaturdays: data.removedSaturdays.filter((x) => x !== d) });
+  }
+
+  // A Saturday skipped for a market is put back by keeping it (the market is not removed).
+  function keepSkippedSaturday(d: string) {
+    if (!data) return;
+    setData({ ...data, keptSaturdays: [...new Set([...data.keptSaturdays, d])].sort() });
   }
 
   function setOpens(d: string, v: string) {
@@ -240,6 +253,11 @@ export default function Admin() {
     setAddingEvent(false);
     if (res.ok) {
       setNewEvent(BLANK_EVENT);
+      // The Worker keeps any default Saturday that is already open for orders and that this market would skip.
+      const added: { keptSaturdays?: string[] } = await res.json().catch(() => ({}));
+      if (added.keptSaturdays?.length) {
+        setData((d) => (d ? { ...d, keptSaturdays: [...new Set([...d.keptSaturdays, ...added.keptSaturdays!])].sort() } : d));
+      }
       await loadEvents(password);
     } else if (res.status === 429) {
       setEventError(TOO_MANY);
@@ -520,9 +538,16 @@ export default function Admin() {
             Orders for each one open on the day you set (the 15th unless you change it) and close on the Wednesday before.
           </p>
           <div className="space-y-2" data-testid="collection-saturdays">
-            {collectionSaturdays(Date.now(), data).map((d) => (
+            {collectionSaturdays(Date.now(), rulesFor(data)).map((d) => (
               <div key={d} className="flex flex-wrap items-center justify-between gap-3 border-2 border-ink px-4 py-2" data-testid={`sat-${d}`}>
-                <span className="font-bold text-sm">{niceDay(d)}</span>
+                <span className="font-bold text-sm">
+                  {niceDay(d)}
+                  {saturdayWarning(d, rulesFor(data)) && (
+                    <span className="block text-xs font-bold text-red-700 mt-1" data-testid={`warn-${d}`}>
+                      Warning: {saturdayWarning(d, rulesFor(data))}. Orders for it are still open.
+                    </span>
+                  )}
+                </span>
                 <label className="flex items-center gap-2 text-xs font-bold tracking-wide">
                   Orders open on
                   <input
@@ -543,7 +568,7 @@ export default function Admin() {
                 </button>
               </div>
             ))}
-            {collectionSaturdays(Date.now(), data).length === 0 && (
+            {collectionSaturdays(Date.now(), rulesFor(data)).length === 0 && (
               <p className="text-xs text-ink/75 italic tracking-wide">No collection Saturdays listed, so ordering is hidden.</p>
             )}
           </div>
@@ -559,6 +584,20 @@ export default function Admin() {
               Add Saturday
             </button>
           </div>
+          {skippedSaturdays(Date.now(), rulesFor(data)).length > 0 && (
+            <div className="mt-4 space-y-2" data-testid="skipped-saturdays">
+              {skippedSaturdays(Date.now(), rulesFor(data)).map((x) => (
+                <div key={x.date} className="flex flex-wrap items-center justify-between gap-3 border-2 border-dashed border-ink px-4 py-2" data-testid={`skipped-${x.date}`}>
+                  <span className="text-sm font-bold">
+                    {niceDay(x.date)} <span className="font-medium text-ink/75">Skipped: {x.event} that weekend</span>
+                  </span>
+                  <button onClick={() => keepSkippedSaturday(x.date)} aria-label={`Put ${niceDay(x.date)} back on the list`} className="underline text-xs font-black tracking-widest uppercase">
+                    Put back
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           {satMsg && <p role="alert" className="text-xs font-bold text-red-700 mt-2">{satMsg}</p>}
           {data.removedSaturdays.filter((d) => d >= sastDay(Date.now())).length > 0 && (
             <p className="text-xs text-ink/75 mt-3 tracking-wide">
