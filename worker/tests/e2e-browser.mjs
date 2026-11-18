@@ -23,7 +23,7 @@ async function axeRun(page, label) {
   console.log(`  axe ${label}: ${res.length}`, res.length ? JSON.stringify(res) : "");
   axeTotal += res.length;
 }
-const rules = { cutoffTime: "23:59", maxWeeksAhead: 4, closedDates: [] };
+const rules = { cutoffTime: "23:59", closedDates: [], ...H.testRules() };
 const nice = col.niceDay;
 
 for (const [w, h] of [[390, 844], [1280, 900]]) {
@@ -108,32 +108,39 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   // 5. Orders off, nearest Saturday closed, every Saturday closed
   await setAvail({ ordersEnabled: false, closedMessage: "Back at the next Saturday" }); await open();
   assert.match(await page.getByTestId("orders-hidden").textContent(), /Back at the next Saturday/); assert.equal(await page.getByTestId("order-form").count(), 0);
-  const near = col.nextCalendarSaturday(Date.now());
+  const near = sats[0];
   await setAvail({ closedDates: [near], closedMessage: "" }); await open();
-  if (sats[0] === near) {
-    assert.match(await page.getByTestId("saturday-note").textContent(), new RegExp(`We're closed on ${nice(near)}\\. You're ordering for ${nice(sats[1])}\\.`));
-    assert.ok(!(await page.locator("[data-testid=select-saturday] option").allTextContents()).includes(nice(near)));
-    await page.getByTestId("order-form").scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS ?? "."}/closed-saturday-${w}.png` });
-  }
+  assert.ok(!(await page.locator("[data-testid=select-saturday] option").allTextContents()).includes(nice(near)), "a closed Saturday is not offered");
+  await page.getByTestId("order-form").scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS ?? "."}/closed-saturday-${w}.png` });
   await setAvail({ closedDates: sats, closedMessage: "" }); await open();
   assert.match(await page.getByTestId("orders-hidden").textContent(), /no Saturday open for orders/i);
   await setAvail({});
 
-  // 6. The page clock at the cut-off edge (the Worker enforces the same rule; see saturday-rules.mjs)
+  // 6. The real default rules on the page clock: last Saturday of the month, opens on the 15th, closes Wednesday 23:59 (the Worker
+  //    enforces the same; see saturday-rules.mjs). No helper-added Saturdays here, only the default list.
+  const plainAvail = (extra = {}) => admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "", ...extra });
+  await plainAvail();
   const edge = async (iso) => { await page.clock.setFixedTime(new Date(iso)); await open(); return page.locator("[data-testid=select-saturday] option").allTextContents(); };
-  let o = await edge("2026-11-18T23:59:30+02:00");
-  assert.equal(o[0], "Saturday 21 Nov"); assert.equal(await page.getByTestId("saturday-note").count(), 0);
-  o = await edge("2026-11-19T00:00:00+02:00");
-  assert.equal(o[0], "Saturday 28 Nov"); assert.ok(!o.includes("Saturday 21 Nov"));
-  assert.equal(await page.getByTestId("saturday-note").textContent(), "Orders for this Saturday closed on Wednesday. You're ordering for Saturday 28 Nov.");
-  await page.getByTestId("order-form").scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS ?? "."}/cutoff-note-${w}.png` });
-  await axeRun(page, "after cut-off note");
-  o = await edge("2026-07-30T00:00:00+02:00"); assert.equal(o[0], "Saturday 8 Aug", "Sat 1 Aug closed on Wed 29 Jul: month end");
-  o = await edge("2026-12-31T00:00:00+02:00"); assert.equal(o[0], "Saturday 9 Jan", "Sat 2 Jan closed Wed 30 Dec: year end");
-  await setAvail({ cutoffTime: "12:00", maxWeeksAhead: 2 });
-  o = await edge("2026-11-18T12:01:00+02:00"); assert.equal(o[0], "Saturday 28 Nov"); assert.equal(o.length, 1, "2 weeks ahead from Wed 18 Nov reaches only Sat 28 Nov");
+  const hidden = async (iso) => { await page.clock.setFixedTime(new Date(iso)); await open(); return page.getByTestId("orders-hidden").textContent(); };
+  assert.match(await hidden("2026-11-14T23:59:30+02:00"), /Orders for Saturday 28 Nov open on Sunday 15 Nov\./, "before the 15th: the date it opens");
+  assert.equal(await page.getByTestId("order-form").count(), 0);
+  await page.getByTestId("orders-hidden").scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS ?? "."}/opens-on-15th-${w}.png` });
+  await axeRun(page, "before the 15th (opens-on note)");
+  let o = await edge("2026-11-15T00:00:00+02:00");
+  assert.deepEqual(o, ["Saturday 28 Nov"], "from the 15th at 00:00 SAST");
+  assert.equal(await page.getByTestId("saturday-note").textContent(), "Orders for Saturday 26 Dec open on Tuesday 15 Dec.", "the next one is announced");
+  await page.getByTestId("order-form").scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS ?? "."}/opens-note-${w}.png` });
+  await axeRun(page, "open Saturday with next-opening note");
+  assert.deepEqual(await edge("2026-11-25T23:59:30+02:00"), ["Saturday 28 Nov"], "Wednesday 23:59 still open");
+  assert.match(await hidden("2026-11-26T00:00:00+02:00"), /Orders for Saturday 26 Dec open on Tuesday 15 Dec\./, "Thursday 00:00 closed; the next opens on the 15th");
+  assert.deepEqual(await edge("2026-12-15T00:00:00+02:00"), ["Saturday 26 Dec"], "December");
+  assert.deepEqual(await edge("2027-01-15T00:00:00+02:00"), ["Saturday 30 Jan"], "year end: January's Saturday");
+  assert.match(await hidden("2026-12-31T12:00:00+02:00"), /Orders for Saturday 30 Jan open on Friday 15 Jan\./);
+  await plainAvail({ cutoffTime: "12:00" });
+  assert.deepEqual(await edge("2026-11-25T12:00:30+02:00"), ["Saturday 28 Nov"]);
   await page.getByTestId("order-form").scrollIntoViewIfNeeded();
   assert.ok((await page.getByTestId("order-form").textContent()).includes("close on Wednesday 25 Nov at 12:00."));
+  assert.match(await hidden("2026-11-25T12:01:00+02:00"), /Orders for Saturday 26 Dec open on Tuesday 15 Dec\./, "owner cut-off 12:00 respected");
   await setAvail({});
 
   // 7. Booking form (unchanged by the order rules)
@@ -181,10 +188,21 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   await Promise.all([page.waitForResponse((r) => r.request().method() === "DELETE"), page.getByRole("button", { name: "Yes, remove Kenilworth Corner 2" }).click()]);
   await page.getByTestId("pickups-none-active").waitFor();
   // collection rules
-  await page.locator("#cutoff-time").fill("20:00"); await page.locator("#weeks-ahead").fill("2");
+  await page.locator("#cutoff-time").fill("20:00");
+  const listed = await page.locator("[data-testid^=sat-]").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid").slice(4)));
+  assert.ok(listed.length >= 5, "the admin lists the collection Saturdays");
+  await page.getByRole("button", { name: `Remove ${nice(listed[0])} from collection Saturdays` }).click();
+  assert.equal(await page.getByTestId(`sat-${listed[0]}`).count(), 0, "removed from the list");
+  const farSat = (() => { const t = Date.now() + 120 * 86400000; let d = new Date(t); while (d.getUTCDay() !== 6) d = new Date(d.getTime() + 86400000); return d.toISOString().slice(0, 10); })();
+  await page.getByLabel("Saturday to add").fill(farSat); await page.getByRole("button", { name: "Add Saturday" }).click();
+  assert.equal(await page.getByTestId(`sat-${farSat}`).count(), 1, "added to the list");
+  const earlier = new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10);
+  await page.getByLabel(`Orders open on, for ${nice(listed[1])}`).fill(earlier);
   await Promise.all([page.waitForResponse((r) => r.url().endsWith("/admin/availability") && r.request().method() === "POST"), page.getByRole("button", { name: "Save Availability and Rules" }).click()]);
   await page.getByText("Saved").waitFor();
-  const pubA = await (await fetch(B + "/api/availability")).json(); assert.equal(pubA.cutoffTime, "20:00"); assert.equal(pubA.maxWeeksAhead, 2);
+  const pubA = await (await fetch(B + "/api/availability")).json(); assert.equal(pubA.cutoffTime, "20:00");
+  assert.ok(!pubA.addedSaturdays.includes(listed[0]) && !pubA.removedSaturdays.includes(listed[1]), "removing an added Saturday just drops it");
+  assert.ok(pubA.addedSaturdays.includes(farSat), "added Saturday saved"); assert.equal(pubA.opensOn[listed[1]], earlier, "opening day saved");
   await page.locator("#collection-rules, #cutoff-time").first().scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS ?? "."}/admin-rules-${w}.png` });
   await axeRun(page, "admin with collection rules");
   await setAvail({});

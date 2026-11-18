@@ -21,7 +21,10 @@ const POINTS = { pickups: [
   { id: "p1", name: "Kenilworth Corner", area: "Main Rd, Kenilworth", days: "Saturdays, 10am to 1pm", active: true },
   { id: "p2", name: "Off Point", area: "Somewhere", days: "", active: false },
 ] };
-async function order(date, now, { availability = {}, pickups = POINTS, body = {} } = {}) {
+// By default the Saturday asked for is put on the list and already open, so the cut-off, closed-date and pickup tests
+// below test only their own rule. Pass plain: true to use the real default list (last Saturday of the month, opens on the 15th).
+async function order(date, now, { availability = {}, pickups = POINTS, body = {}, plain = false } = {}) {
+  if (!plain && typeof date === "string") availability = { addedSaturdays: [date], opensOn: { [date]: "2000-01-01" }, ...availability };
   const lim = await fakeLimiter({ now: () => now });
   const env = { LIMITER: lim.ns, APPS_SCRIPT_TOKEN: "t".repeat(40), STUFFD_KV: kvWith({ availability: { ordersEnabled: true, closedDates: [], closedMessage: "", ...availability }, pickups }), ADMIN_PASSWORD: "x", APPS_SCRIPT_URL: "http://fake/exec" };
   const payload = { name: "Aisha", phone: "0821234567", email: "a@b.co", pickupId: "p1", pickupDate: date, items: { "Classic Bagel": 1 }, website: "", ...body };
@@ -61,13 +64,59 @@ assert.equal(r.status, 409); assert.equal(r.body.error, "Closed that Saturday");
 assert.equal((await order("2026-11-21", sast("2026-11-16"), { availability: { closedDates: ["2026-11-28"] } })).status, 200);
 ok("a closed Saturday is refused with the owner's message; other Saturdays still open");
 
-// 5. Weeks ahead (default 2, editable)
-assert.equal((await order("2026-11-28", sast("2026-11-16"))).status, 200);   // 12 days ahead
-assert.equal((await order("2026-12-05", sast("2026-11-16"))).status, 409);   // 19 days ahead, past the 2-week default
-assert.equal((await order("2026-12-05", sast("2026-11-16"), { availability: { maxWeeksAhead: 4 } })).status, 200);
-assert.equal((await order("2026-12-19", sast("2026-11-16"), { availability: { maxWeeksAhead: 4 } })).status, 409);   // 33 days ahead
-assert.equal((await order("2027-01-09", sast("2026-11-16"), { availability: { maxWeeksAhead: 12 } })).status, 200);
-ok("default 2 weeks ahead; owner can set 4 or 12");
+// 5. The default list: the LAST Saturday of each month, orders open on the 15th at 00:00 SAST (no per-test help: plain)
+const P = { plain: true };
+assert.equal(col.lastSaturdayOfMonth(2026, 11), "2026-11-28");
+let r5 = await order("2026-11-28", sast("2026-11-14", "23:59:59"), P);
+assert.equal(r5.status, 409); assert.match(r5.body.error, /open on Sun 15 Nov|open on Sunday 15 Nov/);
+assert.equal((await order("2026-11-28", sast("2026-11-15", "00:00:00"), P)).status, 200, "the 15th at 00:00 SAST opens it");
+assert.equal((await order("2026-11-28", Date.parse("2026-11-14T21:59:59Z"), P)).status, 409, "21:59:59 UTC on the 14th is still the 14th in SAST");
+assert.equal((await order("2026-11-28", Date.parse("2026-11-14T22:00:00Z"), P)).status, 200, "22:00 UTC on the 14th is 00:00 on the 15th in SAST");
+assert.equal((await order("2026-11-28", sast("2026-11-25", "23:59:59"), P)).status, 200, "Wednesday 23:59 still accepted");
+r5 = await order("2026-11-28", sast("2026-11-26", "00:00:00"), P);
+assert.equal(r5.status, 409); assert.match(r5.body.error, /closed/i, "Thursday 00:00 refused");
+ok("last Saturday of November: refused before the 15th, accepted from 15th 00:00 SAST to Wednesday 23:59:59, refused from Thursday 00:00");
+
+// Other Saturdays are not on the default list
+for (const d of ["2026-11-21", "2026-12-05", "2026-12-12", "2026-11-07"]) assert.equal((await order(d, sast("2026-11-16"), P)).status, d < "2026-11-16" ? 400 : 409, d);
+assert.match((await order("2026-12-05", sast("2026-11-16"), P)).body.error, /isn't a collection day/);
+ok("a Saturday that is not the month's last Saturday is refused (past ones are plain bad requests)");
+
+// December and the year end
+assert.equal(col.lastSaturdayOfMonth(2026, 12), "2026-12-26");
+assert.equal((await order("2026-12-26", sast("2026-12-14", "23:59:59"), P)).status, 409);
+assert.equal((await order("2026-12-26", sast("2026-12-15", "00:00:00"), P)).status, 200);
+assert.equal((await order("2026-12-26", sast("2026-12-23", "23:59:59"), P)).status, 200);
+assert.equal((await order("2026-12-26", sast("2026-12-24", "00:00:00"), P)).status, 409);
+assert.equal(col.lastSaturdayOfMonth(2027, 1), "2027-01-30");
+assert.equal((await order("2027-01-30", sast("2026-12-28"), P)).status, 409, "January's Saturday is listed from December but opens on 15 Jan");
+assert.equal((await order("2027-01-30", sast("2027-01-14", "23:59:59"), P)).status, 409);
+assert.equal((await order("2027-01-30", sast("2027-01-15", "00:00:00"), P)).status, 200);
+ok("December (opens 15 Dec, closes Wed 23 Dec) and the year end (Jan 2027 opens 15 Jan)");
+
+// Months where the last Saturday is the 31st / 29th / 30th / 28th / 26th (leap years too)
+for (const [y, m, d] of [[2026, 10, "2026-10-31"], [2026, 8, "2026-08-29"], [2026, 2, "2026-02-28"], [2026, 1, "2026-01-31"], [2024, 3, "2024-03-30"], [2028, 2, "2028-02-26"], [2024, 2, "2024-02-24"], [2025, 5, "2025-05-31"]]) assert.equal(col.lastSaturdayOfMonth(y, m), d, `${y}-${m}`);
+assert.equal(col.cutoffDay("2026-10-31"), "2026-10-28");
+assert.equal((await order("2026-10-31", sast("2026-10-28", "23:59:30"), P)).status, 200);
+assert.equal((await order("2026-10-31", sast("2026-10-29", "00:00:00"), P)).status, 409);
+assert.equal((await order("2026-08-29", sast("2026-08-26", "23:59:59"), P)).status, 200);
+assert.equal((await order("2026-08-29", sast("2026-08-27", "00:00:00"), P)).status, 409);
+ok("last Saturday of the month for 8 awkward months (31st, 30th, 29th, 28th, leap Feb) and cut-offs near the month end");
+
+// Owner changes: opening day, added Saturdays, removed Saturdays, closed dates, cut-off
+const open20 = { opensOn: { "2026-11-28": "2026-11-20" } };
+assert.equal((await order("2026-11-28", sast("2026-11-19", "23:59:59"), { ...P, availability: open20 })).status, 409);
+assert.equal((await order("2026-11-28", sast("2026-11-20", "00:00:00"), { ...P, availability: open20 })).status, 200);
+assert.equal((await order("2026-11-28", sast("2026-11-03"), { ...P, availability: { opensOn: { "2026-11-28": "2026-11-01" } } })).status, 200, "owner can open earlier than the 15th");
+assert.equal((await order("2026-11-28", sast("2026-11-17"), { ...P, availability: { opensOn: { "2026-11-28": "2026-11-30" } } })).status, 200, "an opening day after the Saturday is ignored (bad data): the 15th is used");
+assert.equal((await order("2026-12-05", sast("2026-11-14", "23:59:59"), { ...P, availability: { addedSaturdays: ["2026-12-05"] } })).status, 409, "an added early-month Saturday opens on the 15th of the month before");
+assert.equal((await order("2026-12-05", sast("2026-11-15", "00:00:00"), { ...P, availability: { addedSaturdays: ["2026-12-05"] } })).status, 200);
+assert.equal((await order("2026-11-28", sast("2026-11-16"), { ...P, availability: { removedSaturdays: ["2026-11-28"] } })).status, 409, "a removed default Saturday is refused");
+assert.equal((await order("2026-11-28", sast("2026-11-16"), { ...P, availability: { closedDates: ["2026-11-28"], closedMessage: "Closed that Saturday" } })).body.error, "Closed that Saturday", "closed dates still work");
+assert.equal((await order("2026-11-28", sast("2026-11-25", "12:00:30"), { ...P, availability: { cutoffTime: "12:00" } })).status, 200);
+assert.equal((await order("2026-11-28", sast("2026-11-25", "12:01:00"), { ...P, availability: { cutoffTime: "12:00" } })).status, 409);
+assert.equal((await order("2026-11-21", sast("2026-11-16"), { ...P, availability: { addedSaturdays: ["2026-11-22"] } })).status, 409, "an added non-Saturday is dropped");
+ok("owner overrides: opening day, added and removed Saturdays, closed dates, cut-off; bad data ignored");
 
 // 6. Cut-off time is editable
 assert.equal((await order("2026-11-21", sast("2026-11-18", "12:00:30"), { availability: { cutoffTime: "12:00" } })).status, 200);
@@ -78,7 +127,7 @@ ok("owner-set cut-off 12:00 and 00:00 respected to the minute");
 
 // 7. Month and year ends (cut-off Wednesday sits in the previous month or year)
 assert.equal(col.cutoffDay("2026-08-01"), "2026-07-29");
-assert.equal((await order("2026-08-01", sast("2026-07-29", "23:59:30"), { availability: { maxWeeksAhead: 4 } })).status, 200);
+assert.equal((await order("2026-08-01", sast("2026-07-29", "23:59:30"), {})).status, 200);
 assert.equal((await order("2026-08-01", sast("2026-07-30", "00:00:00"))).status, 409);
 assert.equal((await order("2026-08-01", sast("2026-07-31", "12:00:00"))).status, 409);
 assert.equal((await order("2026-08-08", sast("2026-07-31", "12:00:00"))).status, 200);
@@ -115,13 +164,20 @@ assert.equal((await order("2026-11-28", sast("2026-11-16"), { availability: { or
 assert.equal((await order("2026-11-28", sast("2026-11-16"), { availability: { closedDates: ["2026-11-16"] } })).status, 409, "today closed pauses new orders");
 ok("orders switched off, or today a closed date: refused");
 
-// 11. Pure helpers the page uses
-const rules = { cutoffTime: "23:59", maxWeeksAhead: 4, closedDates: [] };
-assert.deepEqual(col.availableSaturdays(sast("2026-11-16"), rules), ["2026-11-21", "2026-11-28", "2026-12-05", "2026-12-12"]);
-assert.deepEqual(col.availableSaturdays(sast("2026-11-19", "00:00:00"), rules), ["2026-11-28", "2026-12-05", "2026-12-12"]);
-assert.equal(col.nearestSaturdayNote(sast("2026-11-19", "08:00:00"), rules), "Orders for this Saturday closed on Wednesday. You're ordering for Saturday 28 Nov.");
-assert.equal(col.nearestSaturdayNote(sast("2026-11-16"), rules), "");
-assert.equal(col.nearestSaturdayNote(sast("2026-11-16"), { ...rules, closedDates: ["2026-11-21"] }), "We're closed on Saturday 21 Nov. You're ordering for Saturday 28 Nov.");
-assert.deepEqual(col.availableSaturdays(sast("2026-11-16"), { ...rules, closedDates: ["2026-11-21", "2026-11-28", "2026-12-05", "2026-12-12"] }), []);
-ok("page helpers: available Saturdays roll forward after the cut-off; the explanatory line matches the founder's wording");
+// 11. Pure helpers the page and admin use
+const rules = { cutoffTime: "23:59", closedDates: [] };
+assert.deepEqual(col.collectionSaturdays(sast("2026-11-16"), rules), ["2026-11-28", "2026-12-26", "2027-01-30", "2027-02-27", "2027-03-27", "2027-04-24"]);
+assert.deepEqual(col.collectionSaturdays(sast("2026-11-29"), rules).slice(0, 2), ["2026-12-26", "2027-01-30"], "this month's Saturday drops off once it has passed");
+assert.deepEqual(col.availableSaturdays(sast("2026-11-16"), rules), ["2026-11-28"]);
+assert.deepEqual(col.availableSaturdays(sast("2026-11-14", "23:59:59"), rules), []);
+assert.deepEqual(col.availableSaturdays(sast("2026-11-26", "00:00:00"), rules), [], "after the Wednesday cut-off nothing is open until 15 Dec");
+assert.equal(col.openingNote(sast("2026-11-26", "08:00:00"), rules), "Orders for Saturday 26 Dec open on Tuesday 15 Dec.");
+assert.equal(col.openingNote(sast("2026-11-10"), rules), "Orders for Saturday 28 Nov open on Sunday 15 Nov.");
+assert.equal(col.openingNote(sast("2026-11-16"), rules), "Orders for Saturday 26 Dec open on Tuesday 15 Dec.", "while Nov 28 is open, the next one is announced");
+assert.deepEqual(col.availableSaturdays(sast("2026-11-16"), { ...rules, closedDates: ["2026-11-28"] }), []);
+assert.deepEqual(col.availableSaturdays(sast("2026-11-16"), { ...rules, addedSaturdays: ["2026-11-21"], opensOn: { "2026-11-21": "2026-11-10" } }), ["2026-11-21", "2026-11-28"]);
+assert.equal(col.opensOnFor("2026-12-26", {}), "2026-12-15");
+assert.equal(col.opensOnFor("2026-12-05", {}), "2026-11-15");
+assert.equal(col.opensOnFor("2027-01-02", {}), "2026-12-15");
+ok("page helpers: the default list, who is open when, and the 'opens on' line");
 console.log(`saturday-rules: all ${n} groups passed`);

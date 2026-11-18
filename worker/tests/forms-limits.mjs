@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { bundle, fakeLimiter } from "./_bundle.mjs";
 const { handleForm } = await bundle("worker/forms.ts");
 const sast = (iso, time = "12:00:00") => Date.parse(`${iso}T${time}+02:00`);
-const NOW = sast("2026-11-16"); // a Monday; Saturday 21 Nov is open
+const NOW = sast("2026-11-16"); // a Monday; Saturday 28 Nov (the last of the month, open since the 15th) is the one on the list
 const TOKEN = "k7Vq2mXw9LpR4sTz8NbC3dHf6JyA1eGu0QiO5vWx";
 const fetched = [];
 globalThis.fetch = async (url, init) => { fetched.push({ url, body: JSON.parse(init.body) }); return new Response('{"ok":true}'); };
@@ -13,7 +13,7 @@ const kv = (() => { const m = new Map([["pickups", JSON.stringify({ pickups: [{ 
 async function run(lim, { ip = "203.0.113.5", email = "a@example.com", kind = "order", env = {} } = {}) {
   const e = { LIMITER: lim.ns, STUFFD_KV: kv, ADMIN_PASSWORD: "x", APPS_SCRIPT_URL: "http://fake/exec", APPS_SCRIPT_TOKEN: TOKEN, ...env };
   const body = kind === "order"
-    ? { name: "Aisha", phone: "0821234567", email, pickupId: "p1", pickupDate: "2026-11-21", items: { "Classic Bagel": 1 }, website: "" }
+    ? { name: "Aisha", phone: "0821234567", email, pickupId: "p1", pickupDate: "2026-11-28", items: { "Classic Bagel": 1 }, website: "" }
     : { name: "Sam", phone: "0821234567", email, eventDate: "2026-12-20", venue: "Hall", guests: 20, details: "", website: "" };
   try {
     const res = await handleForm(new Request("http://x/api/" + kind, { method: "POST", headers: { "Content-Type": "application/json", "CF-Connecting-IP": ip }, body: JSON.stringify(body) }), e, kind, NOW);

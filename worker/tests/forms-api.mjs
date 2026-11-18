@@ -6,7 +6,7 @@
 // It sets up its own pickup points and uses a fresh pretend client IP for rate limits. Dates follow the real clock.
 // The exact cut-off and month-end cases live in saturday-rules.mjs (fake clock); this file checks the live HTTP path.
 import assert from "node:assert/strict";
-import { admin, clearRateLimits, col, logged, post, resetPickups, saturdays, setAvail, uniqueEmail } from "./_helpers.mjs";
+import { admin, clearRateLimits, col, logged, post, resetPickups, saturdays, setAvail, testRules, uniqueEmail } from "./_helpers.mjs";
 
 clearRateLimits();
 await setAvail({});
@@ -44,7 +44,7 @@ const cases = [
   ["empty name", { name: "  " }, 400], ["name too long", { name: "x".repeat(61) }, 400], ["note too long", { note: "x".repeat(301) }, 400],
   ["name is a number", { name: 5 }, 400],
   ["a past Saturday", { pickupDate: "2026-01-03" }, 400], ["a Sunday", { pickupDate: addDays(SAT, 1) }, 400], ["a Friday", { pickupDate: addDays(SAT, -1) }, 400],
-  ["a Wednesday", { pickupDate: addDays(SAT, -3) }, 400], ["too far ahead (9 weeks)", { pickupDate: addDays(SAT, 63) }, 409], ["no date", { pickupDate: undefined }, 400],
+  ["a Wednesday", { pickupDate: addDays(SAT, -3) }, 400], ["a Saturday that is not on the collection list (9 weeks on)", { pickupDate: addDays(SAT, 63) }, 409], ["no date", { pickupDate: undefined }, 400],
   ["unknown pickup point", { pickupId: "nope" }, 409], ["switched-off pickup point", { pickupId: P2 }, 409], ["no pickup point", { pickupId: undefined }, 400],
   ["a market instead of a pickup point", { pickupId: undefined, eventId: "mgm-26" }, 400], ["unsafe pickup id", { pickupId: "../x" }, 400],
   ["time note too long", { pickupTime: "x".repeat(41) }, 400],
@@ -72,6 +72,13 @@ r = await post("/api/order", order()); assert.equal(r.status, 409); assert.equal
 r = await post("/api/order", order({ pickupDate: SAT2 })); assert.equal(r.status, 200);
 assert.ok(!(await (await fetch("http://localhost:8787/api/availability")).json()).closedDates.includes(SAT2));
 ok("a closed Saturday is refused with the owner's message; the next one still works");
+
+// 5b. A listed Saturday before its opening day is refused with the date it opens (the 15th rule, live HTTP path)
+const tr = testRules(); const tomorrow = addDays(col.sastDay(Date.now()), 1);
+assert.equal((await setAvail({ opensOn: { ...tr.opensOn, [SAT2]: tomorrow > SAT2 ? SAT2 : tomorrow } })).status, 200);
+if (tomorrow <= SAT2) { r = await post("/api/order", order({ pickupDate: SAT2 })); assert.equal(r.status, 409); assert.match((await r.json()).error, /^Orders for that Saturday open on /); }
+assert.equal((await setAvail({})).status, 200);
+ok("a Saturday on the list but not open yet: 409 naming the day it opens");
 
 // 6. Orders off, today closed
 assert.equal((await setAvail({ ordersEnabled: false, closedMessage: "Back soon" })).status, 200);

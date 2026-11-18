@@ -73,6 +73,8 @@ assert.equal(owner.replyTo, "aisha@example.com");
 assert.equal(customer.to, "aisha@example.com");
 assert.match(customer.subject, /we've got your order SB-ABC234/);
 assert.match(customer.body, /awaiting payment/);
+assert.match(customer.body, /becomes credit for another collection Saturday or one of our markets/, "cancellation policy (DRAFT) is in the order auto-reply");
+assert.ok(customer.htmlBody.includes("credit, not a refund"));
 assert.doesNotMatch(customer.body + customer.htmlBody, /order is confirmed/i);
 assert.ok(customer.htmlBody.includes("&lt;i&gt;please"), "customer text is escaped in the HTML email");
 assert.ok(!customer.htmlBody.includes("<i>please"), "no raw HTML from the customer");
@@ -95,7 +97,9 @@ assert.match(pOwner.body, /Pickup point: Kenilworth Corner, Main Rd, Kenilworth/
 assert.match(pOwner.body, /Collection Saturday: Sat 19 Dec 2026/);
 assert.match(pOwner.body, /Preferred time: 10:30/);
 assert.match(pOwner.body, /Collection times: Saturdays, 10am to 1pm/);
-assert.doesNotMatch(pOwner.body + pCustomer.body, /market/i, "no market wording in order emails");
+assert.doesNotMatch(pOwner.body, /market/i, "no market wording in the owner email");
+// The customer email may mention markets only through the cancellation policy (credit can be used at a market), never as a collection place.
+assert.doesNotMatch(pCustomer.body.replace(/becomes credit for another collection Saturday or one of our markets/, ""), /market/i, "no market wording in order emails apart from the credit policy");
 assert.match(pCustomer.body, /Pickup point: Kenilworth Corner/);
 assert.match(pCustomer.htmlBody, /Pickup point/);
 labelled.length = 0;

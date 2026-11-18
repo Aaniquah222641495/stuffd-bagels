@@ -78,14 +78,15 @@ assert.equal((await admin("/pickups", "POST", { name: "one too many", area: "A" 
 await resetPickups([]);
 ok("at most 30 pickup points");
 
-// Availability: cut-off and weeks ahead are stored, validated, and shown publicly
-let s = await admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "", cutoffTime: "20:30", maxWeeksAhead: 6 });
+// Availability: cut-off and the collection Saturday lists are stored, validated, and shown publicly
+let s = await admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "", cutoffTime: "20:30", addedSaturdays: ["2026-12-05", "2026-12-05"], removedSaturdays: ["2026-11-28"], opensOn: { "2026-12-05": "2026-11-15" } });
 assert.equal(s.status, 200);
-let pubA = await json(await fetch(B + "/api/availability")); assert.equal(pubA.cutoffTime, "20:30"); assert.equal(pubA.maxWeeksAhead, 6);
-for (const body of [{ cutoffTime: "24:00" }, { cutoffTime: "9:00" }, { cutoffTime: 2359 }, { maxWeeksAhead: 0 }, { maxWeeksAhead: 13 }, { maxWeeksAhead: 2.5 }, { maxWeeksAhead: "4" }]) {
+let pubA = await json(await fetch(B + "/api/availability")); assert.equal(pubA.cutoffTime, "20:30"); assert.deepEqual(pubA.addedSaturdays, ["2026-12-05"], "duplicates dropped"); assert.deepEqual(pubA.removedSaturdays, ["2026-11-28"]); assert.deepEqual(pubA.opensOn, { "2026-12-05": "2026-11-15" });
+assert.equal(pubA.maxWeeksAhead, undefined, "the old weeks-ahead setting is gone");
+for (const body of [{ cutoffTime: "24:00" }, { cutoffTime: "9:00" }, { cutoffTime: 2359 }, { addedSaturdays: ["2026-12-04"] }, { addedSaturdays: ["nope"] }, { addedSaturdays: "2026-12-05" }, { removedSaturdays: [20261128] }, { addedSaturdays: Array.from({ length: 25 }, (_, i) => new Date(Date.UTC(2027, 0, 2 + 7 * i)).toISOString().slice(0, 10)) }, { opensOn: { "2026-12-05": "2026-12-06" } }, { opensOn: { "2026-12-04": "2026-11-15" } }, { opensOn: { "2026-12-05": "soon" } }, { opensOn: [] }]) {
   assert.equal((await admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "", ...body })).status, 400, JSON.stringify(body));
 }
 assert.equal((await admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "" })).status, 200, "older callers without the new fields still work");
-pubA = await json(await fetch(B + "/api/availability")); assert.equal(pubA.cutoffTime, "23:59"); assert.equal(pubA.maxWeeksAhead, 2);
-ok("cut-off time and weeks ahead: saved, validated (HH:MM, 1 to 12), defaults 23:59 and 2");
+pubA = await json(await fetch(B + "/api/availability")); assert.equal(pubA.cutoffTime, "23:59"); assert.deepEqual([pubA.addedSaturdays, pubA.removedSaturdays, pubA.opensOn], [[], [], {}], "no lists saved: the built-in last-Saturday default");
+ok("cut-off time and Saturday lists: saved, validated (HH:MM; real Saturdays; opening day not after its Saturday; at most 24), defaults 23:59 and the built-in list");
 console.log(`pickups-api: all ${n} groups passed`);

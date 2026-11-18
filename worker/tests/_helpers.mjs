@@ -30,13 +30,22 @@ export const admin = (p, method = "GET", body, headers = {}) =>
     headers: { "x-admin-password": pw, "CF-Connecting-IP": ip, ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...headers },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-// The site default is 2 weeks ahead (client, 2026-11-18). Most flows here need three open Saturdays whatever day the
-// test runs, so the helper opens 4 weeks unless a test says otherwise. The real default is asserted in
-// saturday-rules.mjs and pickups-api.mjs.
-export const setAvail = (a) => admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "", maxWeeksAhead: 4, ...a });
+// The site default is ONE collection Saturday a month (the last one, orders open on the 15th; client 2026-11-18). Most
+// flows here need three open Saturdays whatever day the test runs, so setAvail adds the next five real Saturdays,
+// already open, unless a test passes its own lists. The real default is asserted in saturday-rules.mjs and e2e step 6.
+export function testRules(now = Date.now()) {
+  const today = col.sastDay(now);
+  const sats = [];
+  for (let d = 0; sats.length < 5; d++) {
+    const iso = new Date(Date.parse(today + "T00:00:00Z") + d * 86400000).toISOString().slice(0, 10);
+    if (col.isSaturday(iso)) sats.push(iso);
+  }
+  return { addedSaturdays: sats, opensOn: Object.fromEntries(sats.map((d) => [d, today])) };
+}
+export const setAvail = (a) => admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "", ...testRules(), ...a });
 
-/** Saturdays open for orders right now under the default rules (real clock). Index 1+ is safely away from any cut-off edge. */
-export const saturdays = () => col.availableSaturdays(Date.now(), { cutoffTime: "23:59", maxWeeksAhead: 4, closedDates: [] });
+/** Saturdays open for orders right now under the test rules (real clock). Index 1+ is safely away from any cut-off edge. */
+export const saturdays = () => col.availableSaturdays(Date.now(), { cutoffTime: "23:59", closedDates: [], ...testRules() });
 
 /** Remove every pickup point, then create the given ones. Returns their ids. */
 export async function resetPickups(points) {
