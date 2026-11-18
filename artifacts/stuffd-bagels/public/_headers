@@ -16,6 +16,11 @@
   X-Robots-Tag: noindex
   Cache-Control: no-store
 
+# Yoco sends the customer here after paying or cancelling (query: r=success|cancel|failure&ref=). Never cached, never indexed.
+/order/result
+  X-Robots-Tag: noindex
+  Cache-Control: no-store
+
 /llms.txt
   Content-Type: text/plain; charset=utf-8
 

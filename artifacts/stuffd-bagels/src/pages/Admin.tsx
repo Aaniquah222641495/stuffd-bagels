@@ -46,6 +46,14 @@ function apiUrl(path: string) {
   return `${BASE}/api${path}`;
 }
 
+interface AttentionItem {
+  ref: string;
+  status: "email_failed" | "mismatch";
+  amountCents: number;
+  checkoutId: string | null;
+  order: unknown;
+}
+
 export default function Admin() {
   const [password, setPassword] = useState(
     () => sessionStorage.getItem("admin_pw") ?? ""
@@ -70,6 +78,7 @@ export default function Admin() {
   const [pickupError, setPickupError] = useState("");
   const [savingPickup, setSavingPickup] = useState(false);
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+  const [attention, setAttention] = useState<AttentionItem[]>([]);
 
   const loadEvents = useCallback(async (pw: string) => {
     const res = await fetch(apiUrl("/admin/events"), {
@@ -83,6 +92,16 @@ export default function Admin() {
       headers: { "x-admin-password": pw },
     });
     if (res.ok) setPickups(await res.json());
+  }, []);
+
+  // Paid orders whose emails could not be sent, and payments that didn't match their order (ADR-0041). Empty is the normal case.
+  const loadAttention = useCallback(async (pw: string) => {
+    try {
+      const res = await fetch(apiUrl("/admin/orders/attention"), { headers: { "x-admin-password": pw } });
+      if (res.ok) setAttention(((await res.json()) as { items?: AttentionItem[] }).items ?? []);
+    } catch {
+      /* the line just doesn't show */
+    }
   }, []);
 
   const load = useCallback(async (pw: string) => {
@@ -110,7 +129,8 @@ export default function Admin() {
     sessionStorage.setItem("admin_pw", pw);
     await loadEvents(pw);
     await loadPickups(pw);
-  }, [loadEvents, loadPickups]);
+    await loadAttention(pw);
+  }, [loadEvents, loadPickups, loadAttention]);
 
   useEffect(() => {
     if (password) load(password);
@@ -427,6 +447,29 @@ export default function Admin() {
       </header>
 
       <main className="max-w-2xl mx-auto px-6 py-10 space-y-10">
+
+        {attention.length > 0 && (
+          <section aria-labelledby="attention-heading" data-testid="orders-attention" className="rounded-2xl border-2 border-red-700 bg-white p-5">
+            <h2 id="attention-heading" className="m-0 text-base font-black text-red-700">
+              {attention.length} paid {attention.length === 1 ? "order needs" : "orders need"} you
+            </h2>
+            <p className="text-sm mt-2 mb-0 text-ink">The customer has paid (check your Yoco app) but we could not send the order emails, or the amount paid did not match. Contact them and fulfil the order by hand.</p>
+            <ul className="list-none p-0 mt-3 mb-0 space-y-3">
+              {attention.map((a) => {
+                const o = (a.order ?? {}) as { name?: string; phone?: string; email?: string; pickupDate?: string; pickupPlace?: string; items?: { name: string; qty: number }[] };
+                return (
+                  <li key={a.ref} className="text-sm border-t border-ink/10 pt-3 [overflow-wrap:anywhere]">
+                    <strong>{a.ref}</strong> · {a.status === "mismatch" ? "amount paid didn't match" : "emails not sent"} · R{(a.amountCents / 100).toFixed(2)}
+                    {o.name && <><br />{o.name} · {o.phone} · {o.email}</>}
+                    {o.items && <><br />{o.items.map((i) => `${i.qty} x ${i.name}`).join(", ")}</>}
+                    {o.pickupPlace && <><br />{o.pickupPlace} on {o.pickupDate}</>}
+                    {a.checkoutId && <><br />Yoco checkout id: {a.checkoutId}</>}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
 
         {/* ── 01 Order Status ───────────────────────────────── */}
         <section>

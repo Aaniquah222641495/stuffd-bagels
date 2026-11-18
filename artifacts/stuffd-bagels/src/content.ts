@@ -67,7 +67,7 @@ export const FAQ = [
   },
   {
     q: "How do I pay for my order? 🤔",
-    a: "Your order is confirmed once it's paid. After you send it, we'll email you how to pay 🙌",
+    a: "You pay on Yoco's secure page when you place your order. It's confirmed once it's paid, and we email you the confirmation 🙌",
     time: "10:44",
   },
   {

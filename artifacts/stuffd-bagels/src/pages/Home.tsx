@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from 
 import { BookingForm } from "@/components/booking-form";
 import { CANCELLATION_POLICY, DEFAULT_CUTOFF, availableSaturdays, cutoffDay, niceDay, openingNote } from "@/collection";
 import {
+  DRAFT_KEY,
   FieldRow,
   Honeypot,
   PrivacyNote,
@@ -9,7 +10,9 @@ import {
   inputClass,
   looksLikeEmail,
   looksLikePhone,
+  newAttemptId,
   postForm,
+  readDraft,
   type Status,
 } from "@/components/order-forms";
 import {
@@ -384,7 +387,6 @@ export default function Home() {
   const [orderErrors, setOrderErrors] = useState<Record<string, string>>({});
   const [orderProblem, setOrderProblem] = useState("");
   const [focusTick, setFocusTick] = useState(0);
-  const [sentOrder, setSentOrder] = useState<{ ref: string; email: string; total: number; place: string; day: string; time: string; lines: string[] } | null>(null);
   const [displayTotal, setDisplayTotal] = useState(0);
   const [detailsInView, setDetailsInView] = useState(false);
   const detailsRef = useRef<HTMLDivElement>(null);
@@ -479,6 +481,42 @@ export default function Home() {
 
   // Set the moment the first click lands (state only updates on the next render), cleared when the answer is back.
   const orderInFlight = useRef(false);
+  const attemptId = useRef<string | null>(null);
+
+  // Back from Yoco's cancel / failure page ("Back to my order"), or the browser's Back button: put the cart and details back.
+  useEffect(() => {
+    const d = readDraft();
+    if (!d) return;
+    const known = (src: Record<string, number> | undefined, allowed: string[]) =>
+      Object.fromEntries(allowed.map((k) => [k, Number.isInteger(src?.[k]) && (src as Record<string, number>)[k] > 0 && (src as Record<string, number>)[k] <= 50 ? (src as Record<string, number>)[k] : 0]));
+    setQuantities(known(d.quantities, Object.keys(menuPricingObject)));
+    setToppingQty(known(d.toppingQty, Object.keys(TOPPINGS)));
+    setName(d.name);
+    setPhone(d.phone);
+    setEmail(d.email);
+    setPickup(d.pickup);
+    setSaturday(d.saturday);
+    setPickupTime(d.pickupTime);
+    setNotes(d.notes);
+    try {
+      sessionStorage.removeItem(DRAFT_KEY);
+    } catch {
+      /* ignore */
+    }
+    if (window.location.hash === "#order") setTimeout(() => document.getElementById("order")?.scrollIntoView({ block: "start" }), 300);
+  }, []);
+
+  // Coming back to this page from Yoco with the browser's Back button (the page is restored from memory): enable the button again.
+  useEffect(() => {
+    const onShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        orderInFlight.current = false;
+        setOrderStatus("idle");
+      }
+    };
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+  }, []);
 
   const submitOrder = async (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -498,6 +536,9 @@ export default function Home() {
     }
     orderInFlight.current = true;
     setOrderStatus("sending");
+    // One id per press of Pay. A repeat of the SAME press (double click, flaky network, coming back from Yoco and pressing again
+    // with the same cart) gets the same payment page back instead of a second one.
+    if (!attemptId.current) attemptId.current = newAttemptId();
     const r = await postForm("/api/order", {
       name,
       phone,
@@ -509,23 +550,32 @@ export default function Home() {
       toppings: Object.fromEntries(Object.entries(toppingQty).filter(([, q]) => q > 0)),
       note: notes,
       website: honey,
+      attemptId: attemptId.current,
     });
     orderInFlight.current = false;
-    if (r.ok) {
-      const lines = [
-        ...Object.entries(quantities).filter(([, q]) => q > 0).map(([i, q]) => `${q} x ${i}`),
-        ...Object.entries(toppingQty).filter(([, q]) => q > 0).map(([t, q]) => `${q} x ${t}`),
-      ];
-      setSentOrder({ ref: r.data?.ref ?? "", email: email.trim(), total, place: `${chosenPoint!.name}, ${chosenPoint!.area}`, day: niceDay(chosenSat!), time: pickupTime.trim(), lines });
-      setOrderStatus("sent");
-    } else {
-      setOrderProblem(failureMessage(r));
-      setOrderStatus("idle");
-      if (r.status === 409) {
-        // A point may have been switched off, or the cut-off passed, since the page loaded: refresh both.
-        loadPickups();
-        loadAvailability();
+    const url = r.ok ? r.data?.redirectUrl : undefined;
+    if (r.ok && typeof url === "string" && /^https?:\/\//.test(url)) {
+      // Keep the cart and the details for "Back to my order" (this tab only). Then go to Yoco from this page, so Yoco sees our address
+      // as the referrer (no server redirect, no rel="noreferrer": Yoco checks it for live payments).
+      try {
+        sessionStorage.setItem(
+          DRAFT_KEY,
+          JSON.stringify({ v: 1, savedAt: Date.now(), ref: r.data?.ref ?? "", quantities, toppingQty, name, phone, email, pickup: chosenPoint!.id, saturday: chosenSat, pickupTime, notes }),
+        );
+      } catch {
+        /* private mode: the customer just retypes */
       }
+      window.location.assign(url);
+      return; // the button stays on "Opening Yoco..." until the page leaves
+    }
+    // Only an unanswered request (status 0) may be retried under the same id; any answer ends that press.
+    if (r.status !== 0) attemptId.current = null;
+    setOrderProblem(r.ok ? "The payment page didn't open. Please try again." : failureMessage(r));
+    setOrderStatus("idle");
+    if (r.status === 409) {
+      // A point may have been switched off, or the cut-off passed, since the page loaded: refresh both.
+      loadPickups();
+      loadAvailability();
     }
   };
 
@@ -544,15 +594,6 @@ export default function Home() {
       const { [k]: _gone, ...rest } = p;
       return rest;
     });
-
-  const startAnotherOrder = () => {
-    setQuantities(Object.fromEntries(Object.keys(menuPricingObject).map((k) => [k, 0])));
-    setToppingQty(Object.fromEntries(Object.keys(TOPPINGS).map((k) => [k, 0])));
-    setNotes("");
-    setSentOrder(null);
-    setOrderStatus("idle");
-    setOrderErrors({});
-  };
 
   const updateQuantity = (item: string, delta: number) => {
     setQuantities((prev) => ({
@@ -935,7 +976,7 @@ export default function Home() {
               index="03"
               label="Checkout"
               title="Your details"
-              note="Fill this in and send. It goes straight to our kitchen."
+              note="Fill this in and pay. Your order goes to our kitchen once it's paid."
             />
 
             <div className="grid grid-cols-1 gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16 lg:items-start">
@@ -944,7 +985,7 @@ export default function Home() {
                   {[
                     ["Pick your bagels", "Choose from the menu above."],
                     ["Add your details", "Your name, number, email, which pickup point and which Saturday."],
-                    ["Send it, then pay", "We email your order to the kitchen and send you a confirmation. Your order is confirmed once it's paid."],
+                    ["Pay on Yoco", "You pay on Yoco's secure page. Your order is confirmed once it's paid, and we email you the confirmation."],
                   ].map(([t, d], i) => (
                     <li key={t} className="grid grid-cols-[3rem_1fr] gap-4 items-start">
                       <span className="font-bubble text-3xl text-blue leading-none">{i + 1}</span>
@@ -973,51 +1014,13 @@ export default function Home() {
               </Reveal>
 
               <section aria-label="Your details" className="min-w-0">
-                {orderStatus === "sent" && sentOrder ? (
-                  <div
-                    ref={(el) => el?.focus()}
-                    tabIndex={-1}
-                    role="status"
-                    data-testid="order-sent"
-                    className="rounded-[22px] bg-photo shadow-soft p-7 sm:p-9 outline-none"
-                  >
-                    <p className="eyebrow m-0 text-blue">Order sent</p>
-                    <h3 className="font-bubble text-4xl leading-none m-0 mt-3">We've got it!</h3>
-                    <p className="inline-block mt-5 mb-0 rounded-full bg-ink text-paper px-4 py-1.5 text-xs font-black uppercase tracking-widest">
-                      Awaiting payment
-                    </p>
-                    <p className="text-base leading-relaxed mt-4 mb-0">
-                      Your order is <strong>confirmed once it's paid</strong>. We'll be in touch with how to pay.
-                    </p>
-                    <ul className="list-none p-0 mt-5 mb-0 border-t border-ink/10">
-                      {sentOrder.lines.map((l) => (
-                        <li key={l} className="py-2.5 border-b border-ink/10 font-semibold">{l}</li>
-                      ))}
-                      <li className="py-2.5 border-b border-ink/10 flex justify-between font-black">
-                        <span>Total</span>
-                        <span>R{sentOrder.total}</span>
-                      </li>
-                    </ul>
-                    <p className="text-sm text-ink/75 leading-relaxed mt-4 mb-0">
-                      Collect at {sentOrder.place} on <strong>{sentOrder.day}</strong>{sentOrder.time ? `, around ${sentOrder.time}` : ""}. We've emailed the details to <strong>{sentOrder.email}</strong>; check your
-                      spam folder if you can't see it.
-                      {sentOrder.ref && <> Your reference is <strong>{sentOrder.ref}</strong>.</>}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={startAnotherOrder}
-                      className="mt-6 rounded-full border-2 border-ink px-6 py-3 font-black uppercase tracking-widest text-sm text-ink transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0.5"
-                    >
-                      Start another order
-                    </button>
-                  </div>
-                ) : hiddenMessage ? (
+                {hiddenMessage ? (
                   <div role="status" data-testid="orders-hidden" className="rounded-[22px] bg-ink text-paper p-7 sm:p-9">
                     <p className="eyebrow m-0 text-sky">Ordering</p>
                     <p className="font-bubble text-2xl sm:text-3xl leading-tight m-0 mt-3 text-balance [overflow-wrap:anywhere]">{hiddenMessage}</p>
                   </div>
                 ) : (
-                  <form onSubmit={submitOrder} noValidate aria-label="Send your order" data-testid="order-form">
+                  <form onSubmit={submitOrder} noValidate aria-label="Pay for your order" data-testid="order-form">
                     {satNote && (
                       <p role="status" data-testid="saturday-note" className="mb-4 rounded-2xl bg-ink text-paper px-4 py-3 text-sm font-bold leading-snug m-0">
                         {satNote}
@@ -1091,13 +1094,13 @@ export default function Home() {
                       </FieldRow>
                     </div>
 
-                    <p className="text-sm mt-4 text-ink/75 leading-relaxed px-1 m-0">
-                      Your order is confirmed once it's paid. After you send it, we'll email you how to pay.
+                    <p className="text-sm mt-4 text-ink/75 leading-relaxed px-1 m-0" data-testid="pay-window-note">
+                      Start your order before Wednesday {rules.cutoffTime}. Once you press the button you have 30 minutes to pay; an unpaid order isn't kept.
                     </p>
                     <p className="text-sm mt-3 text-ink/75 leading-relaxed px-1 m-0" data-testid="cancellation-policy">
-                      {CANCELLATION_POLICY} By sending your order you agree to this.
+                      {CANCELLATION_POLICY} By paying you agree to this.
                     </p>
-                    <PrivacyNote what="We use your name, phone and email only to deal with this order." />
+                    <PrivacyNote what="We use your name, phone and email only to deal with this order. Your card details go to Yoco, never to us." />
 
                     {orderErrors.bagels && itemCount < 1 && (
                       <p role="alert" className="mt-4 mb-0 text-sm font-bold text-error">{orderErrors.bagels}</p>
@@ -1114,9 +1117,11 @@ export default function Home() {
                       className="mt-5 w-full rounded-full text-white border-2 border-ink bg-blue p-4 uppercase tracking-widest transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0.5 font-bebas disabled:cursor-wait"
                       style={{ fontSize: "1.4rem", letterSpacing: "0.12em", boxShadow: "0 5px 0 var(--sb-ink)" }}
                     >
-                      {orderStatus === "sending" ? "Sending your order..." : "Send my order"}
-                      {orderStatus !== "sending" && total > 0 && <span className="ml-3 text-white/90 text-base">· R{total}</span>}
+                      {orderStatus === "sending" ? "Opening Yoco..." : total > 0 ? `Pay R${total} with Yoco` : "Pay with Yoco"}
                     </button>
+                    <p className="text-sm mt-3 mb-0 text-ink/75 leading-relaxed px-1 text-center" data-testid="pay-note">
+                      You'll pay on Yoco's secure page. Your order is confirmed once it's paid.
+                    </p>
                   </form>
                 )}
               </section>

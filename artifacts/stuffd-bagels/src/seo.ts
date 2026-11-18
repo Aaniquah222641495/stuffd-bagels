@@ -87,6 +87,14 @@ export const PAGES: PageMeta[] = [
     description: "How STUFF'D Bagels looks after the details you give us when you order or enquire about an event.",
     jsonLd: [],
   },
+  // Where Yoco sends the customer back to after paying, cancelling or failing: never indexed, not in the sitemap.
+  {
+    path: "/order/result",
+    title: "Your order | STUFF'D Bagels",
+    description: "The result of your STUFF'D Bagels payment.",
+    noindex: true,
+    jsonLd: [],
+  },
   // The owner's admin page: prerendered as a shell (no content), never indexed, not in the sitemap.
   {
     path: "/admin",

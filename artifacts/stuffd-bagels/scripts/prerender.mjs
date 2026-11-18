@@ -3,7 +3,7 @@
 // structured data. React then attaches to this HTML in the browser (hydrateRoot).
 // Live data (this week's events, orders open/closed) still loads in the browser from /api
 // after the page opens, so nothing stale is baked into the HTML.
-import { readFile, writeFile, rm } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -39,6 +39,7 @@ for (const page of [...PAGES, NOT_FOUND]) {
   const html = template
     .replace(/<!--seo-->[\s\S]*?<!--\/seo-->/, headHtml(page))
     .replace('<div id="root"></div>', `<div id="root">${body}</div>`);
+  await mkdir(path.dirname(path.join(out, fileFor(page.path))), { recursive: true }); // /order/result -> order/result.html
   await writeFile(path.join(out, fileFor(page.path)), html);
   console.log(`prerendered ${page.path.padEnd(5)} -> ${fileFor(page.path)} (${Math.round(body.length / 1024)} KB)`);
 }

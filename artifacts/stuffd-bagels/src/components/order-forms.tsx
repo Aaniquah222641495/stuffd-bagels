@@ -7,7 +7,7 @@ export type Status = "idle" | "sending" | "sent";
 export interface PostResult {
   ok: boolean;
   status: number;
-  data: { ok?: boolean; ref?: string; error?: string } | null;
+  data: { ok?: boolean; ref?: string; error?: string; redirectUrl?: string; total?: number } | null;
 }
 
 export async function postForm(url: string, body: unknown): Promise<PostResult> {
@@ -97,4 +97,51 @@ export function PrivacyNote({ what, onDark = false }: { what: string; onDark?: b
       {what} Only STUFF&apos;D Bagels sees it. <a className="font-bold underline underline-offset-2" href="/privacy">Privacy notice</a>.
     </p>
   );
+}
+
+
+/** sessionStorage key for the cart and details saved just before the customer goes to Yoco ("Back to my order" restores it). */
+export const DRAFT_KEY = "sb-order-draft";
+
+export interface OrderDraft {
+  ref: string;
+  quantities: Record<string, number>;
+  toppingQty: Record<string, number>;
+  name: string;
+  phone: string;
+  email: string;
+  pickup: string;
+  saturday: string;
+  pickupTime: string;
+  notes: string;
+}
+
+/** The saved cart, if it is under 2 hours old and well formed. Anything else is ignored (and the key is cleared). */
+export function readDraft(): OrderDraft | null {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as Partial<OrderDraft> & { v?: number; savedAt?: number };
+    const str = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : "");
+    if (d.v !== 1 || typeof d.savedAt !== "number" || Date.now() - d.savedAt > 2 * 60 * 60 * 1000 || typeof d.quantities !== "object" || d.quantities === null) {
+      sessionStorage.removeItem(DRAFT_KEY);
+      return null;
+    }
+    return {
+      ref: str(d.ref, 20), quantities: d.quantities as Record<string, number>, toppingQty: (typeof d.toppingQty === "object" && d.toppingQty ? d.toppingQty : {}) as Record<string, number>,
+      name: str(d.name, 60), phone: str(d.phone, 20), email: str(d.email, 254), pickup: str(d.pickup, 64), saturday: str(d.saturday, 10), pickupTime: str(d.pickupTime, 40), notes: str(d.notes, 300),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** A UUID v4 for one press of the Pay button (the Worker sends it to Yoco as the Idempotency-Key). */
+export function newAttemptId(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
