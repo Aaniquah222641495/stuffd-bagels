@@ -26,18 +26,20 @@ export const menuPricingObject: Record<
   },
   "Cheesy Bagel": {
     price: 85,
-    image: "/card-cheesy.jpg",
+    image: "/card-cheesy.jpg", // 675x900, about 10% tighter crop 2026-11-18 so the bagel fills the card like the others
     avif: "/card-cheesy.avif",
     desc: "Cream Cheese · Cheese",
   },
   "Pizza Bagel": {
     price: 95,
-    image: "/pizza-box.jpeg", // client photo 2026-11-16, left box, cropped tighter to match the other cards; blue backdrop recoloured to the light card surface 2026-11-18 (no avif until re-encoded)
+    image: "/pizza-box.jpeg", // client photo 2026-11-16, left box: rotated -1.5 degrees (box bottom edge level), cut 675x900 (3:4 like card-*.jpg) with the bagel about 88% of the width, blue backdrop recoloured to the light card surface 2026-11-18
+    avif: "/pizza-box.avif",
     desc: "Pepperoni · Cream Cheese · Cheese",
   },
   "Steak'd Bagel": {
     price: 115,
-    image: "/steakd-box.jpeg", // client photo 2026-11-16, right box, cropped tighter to match the other cards; blue backdrop recoloured to the light card surface 2026-11-18 (no avif until re-encoded)
+    image: "/steakd-box.jpeg", // client photo 2026-11-16, right box: rotated +7.5 degrees (box bottom edge level), cut 675x900 (3:4 like card-*.jpg), bagel about 88% of the width, blue backdrop recoloured to the light card surface 2026-11-18
+    avif: "/steakd-box.avif",
     desc: "Birria (Halal Beef) · Cream Cheese · Cheese",
   },
 };
