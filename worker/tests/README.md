@@ -9,7 +9,7 @@ None of these send real email: the "Apps Script" is a fake (`fake-apps-script.mj
 | `forms-limits.mjs` | Worker form rules with fake Durable Objects: token required before forwarding, /64 limit, per-mailbox cap of 3, shared cap of 40, fails closed | Node only |
 | `admin-lockout.mjs` | M2: 12 parallel wrong passwords give 5 x 401 and 7 x 429, /64 rotation does not help, good logins are refunded | wrangler dev |
 | `image-ratios.mjs` | No rendered image is stretched (box ratio vs real ratio, at 390 and 1280, home, privacy, admin) | wrangler dev + Chrome |
-| `saturday-rules.mjs` | The real Worker order code with a fake clock: Wednesday 23:59 vs Thursday 00:00 SAST, Saturday-only, closed Saturday, weeks ahead, owner-set cut-off, month/year/leap-year ends, pickup point checks | Node only |
+| `saturday-rules.mjs` | The real Worker order code with a fake clock: Wednesday 23:59 vs Thursday 00:00 SAST, Saturday-only, closed Saturday, the last-Saturday default list, opens on the 15th, added and removed Saturdays, owner-set cut-off, month/year/leap-year ends, pickup point checks | Node only |
 | `forms-api.mjs` | Live HTTP path: validation, honeypot, closed dates, orders off, point switched off, rate limits | wrangler dev + fake script |
 | `prices.mjs` | Totals come from content.ts on the server; unpriced toppings refused | wrangler dev + fake script |
 | `pickups-api.mjs` | Admin pickup points: auth, validation, limits, edit, on/off, remove; cut-off and weeks-ahead settings | wrangler dev |
