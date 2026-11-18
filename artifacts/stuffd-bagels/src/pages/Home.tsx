@@ -829,8 +829,9 @@ export default function Home() {
             </p>
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-x-4 sm:gap-x-6 gap-y-12">
               {Object.entries(menuPricingObject).map(([item, info], idx, all) => (
-                // An odd last card spans the full row on the 2-column layouts so nothing is left alone.
-                <Reveal key={item} delay={idx * 80} className={idx === all.length - 1 && all.length % 2 === 1 ? "col-span-2 lg:col-span-1" : ""}>
+                // An odd last card sits centred on its own row on the 2-column layouts, the same width as one column
+                // (the grid gap is 1rem, 1.5rem from sm up), so it is not stretched across the row.
+                <Reveal key={item} delay={idx * 80} className={idx === all.length - 1 && all.length % 2 === 1 ? "col-span-2 justify-self-center w-[calc(50%-0.5rem)] sm:w-[calc(50%-0.75rem)] lg:col-span-1 lg:w-auto lg:justify-self-stretch" : ""}>
                   <article className="group h-full flex flex-col" data-testid={`menu-item-${item}`}>
                     {/* The real photos in their boxes (founder 2026-10-28: cut-outs looked less appetising here; the belt keeps them) */}
                     <div className="relative overflow-hidden rounded-[22px] shadow-soft bg-ink/5">
@@ -841,11 +842,11 @@ export default function Home() {
                           alt={item}
                           width={900}
                           height={1200}
-                          className={`block w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.05] ${idx === all.length - 1 && all.length % 2 === 1 ? "aspect-[4/3] lg:aspect-[4/5]" : "aspect-[4/5]"}`}
+                          className={`block w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.05] aspect-[4/5]`}
                         />
                       ) : (
                         // No photo yet: a brand card instead of a stock or AI picture. Set `image` in content.ts to replace it.
-                        <div className="sesame bg-blue text-white flex flex-col items-center justify-center text-center gap-2 aspect-[16/7] lg:aspect-[4/5] px-4">
+                        <div className="sesame bg-blue text-white flex flex-col items-center justify-center text-center gap-2 aspect-[4/5] px-4">
                           <span className="eyebrow text-sky">New on the menu</span>
                           <span className="font-bubble text-4xl sm:text-5xl lg:text-4xl leading-none">Steak&apos;d</span>
                           <span className="text-sm font-medium text-white/90">Photo coming soon</span>
