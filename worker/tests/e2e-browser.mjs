@@ -50,7 +50,9 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   assert.ok(t0.includes("Order by Wednesday, collect on Saturday."), "collection rule on the menu");
   assert.ok(t0.includes("No order needed, come and buy at the cart."), "markets: no order needed");
   assert.ok(t0.includes("Where and when do I collect my order?") && t0.includes("Order by Wednesday, collect on Saturday."), "FAQ states the rule");
-  assert.equal(await page.locator("a[href*='wa.me'][href*='text=']").count(), 0);
+  assert.equal(await page.locator("a[href*='wa.me'], a[href^='tel:']").count(), 0, "no WhatsApp or phone link on the public page (client's number is private)");
+  assert.ok(!/8472|whatsapp/i.test(t0), "no phone number or WhatsApp wording on the public page");
+  assert.equal(await page.locator("a[href^='mailto:stuffd.bagels@gmail.com']").count() >= 2, true, "email is still a contact path");
   await page.getByTestId("orders-hidden").scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS ?? "."}/hidden-${w}.png` });
   await axeRun(page, "ordering hidden (no pickup points)");
 

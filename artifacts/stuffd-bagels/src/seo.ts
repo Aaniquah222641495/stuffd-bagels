@@ -8,7 +8,6 @@ export const SITE_URL = "https://stuffdbagels.netlify.app";
 export const SITE_NAME = "STUFF'D Bagels";
 export const LAST_UPDATED = "2026-11-16";
 const OG_IMAGE = `${SITE_URL}/opengraph.jpg`;
-const PHONE = "+27833008472";
 const EMAIL = "stuffd.bagels@gmail.com";
 
 export interface PageMeta {
@@ -34,7 +33,6 @@ const business = {
   url: `${SITE_URL}/`,
   image: [OG_IMAGE, `${SITE_URL}/hero-bagel.jpeg`],
   logo: `${SITE_URL}/logo-badge.png`,
-  telephone: PHONE,
   email: EMAIL,
   servesCuisine: ["Bagels", "Street food"],
   foundingDate: "2026",

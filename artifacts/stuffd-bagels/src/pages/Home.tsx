@@ -24,7 +24,6 @@ import {
 /** Toppings with a confirmed price (content.ts). Empty until the client confirms them, and then there is no Extras block. */
 const TOPPINGS = pricedToppings();
 
-const BUSINESS_PHONE = "27833008472";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -1205,11 +1204,9 @@ export default function Home() {
                   Anything else?{" "}
                   <a
                     className="font-bold text-blue underline underline-offset-4"
-                    href={`https://wa.me/${BUSINESS_PHONE}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    href={`mailto:${BUSINESS_EMAIL}`}
                   >
-                    WhatsApp us
+                    Email us
                   </a>
                   .
                 </p>
@@ -1227,7 +1224,7 @@ export default function Home() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-sm text-ink">STUFF'D Bagels</div>
-                    <div className="text-[11px] text-ink/75 font-medium">Chat to us on WhatsApp</div>
+                    <div className="text-[11px] text-ink/75 font-medium">Quick answers</div>
                   </div>
                 </div>
 
@@ -1354,9 +1351,6 @@ export default function Home() {
 
           <div className="flex flex-col items-center sm:items-start gap-3">
             <div className="eyebrow mb-1 text-sky">Get in touch</div>
-            <a href="tel:+27833008472" className="text-paper/90 hover:text-white text-sm transition-colors">
-              +27 83 300 8472
-            </a>
             <a href={`mailto:${BUSINESS_EMAIL}`} className="text-paper/90 hover:text-white text-sm transition-colors">
               stuffd.bagels@gmail.com
             </a>
