@@ -32,12 +32,12 @@ export const menuPricingObject: Record<
   },
   "Pizza Bagel": {
     price: 95,
-    image: "/pizza-box.jpeg", // client photo 2026-11-16, left box, cropped tighter to match the other cards (no avif until re-encoded)
+    image: "/pizza-box.jpeg", // client photo 2026-11-16, left box, cropped tighter to match the other cards; blue backdrop recoloured to the light card surface 2026-11-18 (no avif until re-encoded)
     desc: "Pepperoni · Cream Cheese · Cheese",
   },
   "Steak'd Bagel": {
     price: 115,
-    image: "/steakd-box.jpeg", // client photo 2026-11-16, right box, cropped tighter to match the other cards (no avif until re-encoded)
+    image: "/steakd-box.jpeg", // client photo 2026-11-16, right box, cropped tighter to match the other cards; blue backdrop recoloured to the light card surface 2026-11-18 (no avif until re-encoded)
     desc: "Birria (Halal Beef) · Cream Cheese · Cheese",
   },
 };
