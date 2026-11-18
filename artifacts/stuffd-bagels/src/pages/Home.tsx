@@ -119,7 +119,6 @@ const BELT: { src: string; avif?: string; word: string }[] = [
   { src: "/cheesy-bagel.png", word: "Cheesy" },
   { src: "/plain-bagel.png", word: "Classic" },
   { src: "/steakd-bagel.png", word: "Steak'd" }, // cut out of the client's 2026-11-16 box photo (Vision subject lift), same style as the others
-  { src: "/bagel-cutout.webp", word: "Cream cheese" },
   { src: "/hero-bagel.jpeg", word: "Packed right" },
 ];
 
