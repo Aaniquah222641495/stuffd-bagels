@@ -14,6 +14,19 @@ export interface LimiterEnv {
 
 const enc = new TextEncoder();
 
+export const MIN_SALT = 16;
+
+/**
+ * The secret that keys the counter hashes (so raw IP addresses and emails never become object names). A dedicated
+ * LIMITER_SALT secret (16+ characters) is used when set. If it is unset or too short we FALL BACK to what the Worker used
+ * before, ADMIN_PASSWORD (and a fixed string if even that is missing): same protection as today, but rotating the admin
+ * password then resets everyone's counters. Set LIMITER_SALT once in production and leave it alone (go-live runbook).
+ */
+export function limiterSalt(env: { LIMITER_SALT?: string; ADMIN_PASSWORD?: string }): string {
+  if (typeof env.LIMITER_SALT === "string" && env.LIMITER_SALT.length >= MIN_SALT) return env.LIMITER_SALT;
+  return env.ADMIN_PASSWORD ?? "stuffd-forms";
+}
+
 function stub(env: LimiterEnv, key: string): LimiterStub {
   if (!env.LIMITER) throw new Error("limiter not configured");
   return env.LIMITER.get(env.LIMITER.idFromName(key)) as unknown as LimiterStub;

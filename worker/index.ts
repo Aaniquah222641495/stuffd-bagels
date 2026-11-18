@@ -4,7 +4,7 @@
 import { requireAdmin } from "./auth";
 export { Limiter } from "./limiter";
 import { handleForm, handlePayStub } from "./forms";
-import { HttpError, errorResponse, json, readJsonObject } from "./http";
+import { HttpError, errorResponse, json, plainHttpRefused, readJsonObject, withNoindex } from "./http";
 import {
   LIMITS,
   parseAvailabilityInput,
@@ -27,6 +27,12 @@ export interface Env {
   ASSETS: Fetcher;
   STUFFD_KV?: KVNamespace;
   ADMIN_PASSWORD?: string;
+  // Keys the rate-limit counter hashes (worker/limiter-client.ts limiterSalt). Secret, 16+ characters; falls back to ADMIN_PASSWORD if unset.
+  LIMITER_SALT?: string;
+  // "production" (top level of wrangler.jsonc), "preview" (env.preview) or "development" (tests). Unset counts as production.
+  APP_ENV?: string;
+  // "1" on the preview: every page and file gets X-Robots-Tag: noindex, nofollow (the preview must never be indexed).
+  NOINDEX?: string;
   // Web app URL of the client's Google Apps Script (apps-script/Code.gs). Worker secret, set by the founder.
   APPS_SCRIPT_URL?: string;
   // Required shared token (32+ random characters), must match SHARED_TOKEN in the script. No token, no forwarding.
@@ -58,7 +64,7 @@ async function handleAdmin(request: Request, env: Env, parts: string[]): Promise
     methodOnly(request, ["GET", "POST"]);
     const kv = needKv(env);
     if (request.method === "GET") return json(withToday(await readAvailabilitySafe(kv)));
-    const next = parseAvailabilityInput(await readJsonObject(request));
+    const next = parseAvailabilityInput(await readJsonObject(request), await readAvailabilitySafe(kv));
     await writeAvailability(kv, next);
     return json({ ok: true });
   }
@@ -183,8 +189,17 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const { pathname } = new URL(request.url);
-    if (pathname !== "/api" && !pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
+    const url = new URL(request.url);
+    const { pathname } = url;
+    if (pathname !== "/api" && !pathname.startsWith("/api/")) {
+      const res = await env.ASSETS.fetch(request);
+      return env.NOINDEX === "1" ? withNoindex(res) : res;
+    }
+    // The API is HTTPS only (passwords and orders). The zone's "Always Use HTTPS" redirects browsers; this refuses anything that
+    // still arrives over plain HTTP. wrangler dev on this computer is plain HTTP, so loopback is allowed.
+    if (plainHttpRefused(url)) {
+      return errorResponse(new HttpError(403, "HTTPS only"));
+    }
     try {
       const res = await handleApi(request, env, pathname);
       // HEAD: same status and headers, no body.

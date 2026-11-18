@@ -6,7 +6,7 @@
 // Nothing personal is stored here: the rate-limit counters (worker/limiter.ts) sit under keyed hashes of the network and
 // the email address, hold only a number and a reset time, and delete themselves when their window ends.
 import { menuPricingObject, pricedToppings } from "../artifacts/stuffd-bagels/src/content";
-import { hashKey, ipBucket, normaliseEmail, refund, take, type LimiterEnv, type Rule } from "./limiter-client";
+import { hashKey, ipBucket, limiterSalt, normaliseEmail, refund, take, type LimiterEnv, type Rule } from "./limiter-client";
 import { HttpError, json, readJsonObject } from "./http";
 import { niceDay, opensOnFor, saturdayStatus, sastDay } from "../artifacts/stuffd-bagels/src/collection";
 import { isRealDate, marketsForRules, publicAvailability, publicPickups, sastToday, secondsToSastMidnight } from "./store";
@@ -14,6 +14,7 @@ import { isRealDate, marketsForRules, publicAvailability, publicPickups, sastTod
 export interface FormsEnv extends LimiterEnv {
   STUFFD_KV?: KVNamespace;
   ADMIN_PASSWORD?: string;
+  LIMITER_SALT?: string;
   APPS_SCRIPT_URL?: string;
   APPS_SCRIPT_TOKEN?: string;
 }
@@ -195,7 +196,7 @@ function parseBooking(body: Record<string, unknown>): BookingPayload {
  */
 async function rateLimit(request: Request, env: FormsEnv, kind: "order" | "booking", mail: string): Promise<void> {
   const unavailable = () => new HttpError(503, "We can't take this right now. Please try again in a minute.");
-  const secret = env.ADMIN_PASSWORD ?? "stuffd-forms";
+  const secret = limiterSalt(env);
   const midnight = secondsToSastMidnight();
   const steps: { key: string; rule: Rule; refused: string }[] = [
     {

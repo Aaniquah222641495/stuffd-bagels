@@ -121,7 +121,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
 
   // 6. The real default rules on the page clock: last Saturday of the month, opens on the 15th, closes Wednesday 23:59 (the Worker
   //    enforces the same; see saturday-rules.mjs). No helper-added Saturdays here, only the default list.
-  const plainAvail = (extra = {}) => admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "", ...extra });
+  const plainAvail = (extra = {}) => H.resetAvail(extra);
   await plainAvail();
   const edge = async (iso) => { await page.clock.setFixedTime(new Date(iso)); await open(); return page.locator("[data-testid=select-saturday] option").allTextContents(); };
   const hidden = async (iso) => { await page.clock.setFixedTime(new Date(iso)); await open(); return page.getByTestId("orders-hidden").textContent(); };

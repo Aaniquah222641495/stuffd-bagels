@@ -81,3 +81,15 @@ export async function readJsonObject(request: Request): Promise<Record<string, u
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw bad();
   return parsed as Record<string, unknown>;
 }
+
+/** True when an /api request arrived over plain HTTP from the internet. Loopback (wrangler dev on this computer) is allowed. */
+export function plainHttpRefused(url: URL): boolean {
+  return url.protocol !== "https:" && !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+}
+
+/** A copy of an asset response with X-Robots-Tag: noindex, nofollow (preview only). */
+export function withNoindex(res: Response): Response {
+  const out = new Response(res.body, res);
+  out.headers.set("X-Robots-Tag", "noindex, nofollow");
+  return out;
+}

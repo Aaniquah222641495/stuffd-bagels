@@ -1,6 +1,6 @@
 // Admin password check and lockout (ADR-0028 "Password and lockout", acceptance checks 3, 4, 18).
 import { HttpError } from "./http";
-import { hashKey, ipBucket, refund, take, type LimiterEnv, type Rule } from "./limiter-client";
+import { hashKey, ipBucket, limiterSalt, refund, take, type LimiterEnv, type Rule } from "./limiter-client";
 import { secondsToSastMidnight } from "./store";
 
 // Lockout (ADR-0028, M2 of the 2026-11-16 re-test): 5 wrong passwords per 15 minutes, and 30 per day, for each
@@ -10,6 +10,17 @@ export const ADMIN_MAX_FAILS = 5;
 export const ADMIN_LOCK_SECONDS = 900;
 export const ADMIN_MAX_FAILS_PER_DAY = 30;
 const MAX_PASSWORD_LENGTH = 256;
+/** In production the admin password must be at least this long, or admin sign-in is refused outright. */
+export const MIN_PRODUCTION_PASSWORD = 16;
+
+/**
+ * APP_ENV says where this Worker runs: "production" (top level of wrangler.jsonc), "preview" (env.preview) or "development"
+ * (wrangler dev --var APP_ENV:development, used by the tests). Anything else, including unset, is treated as production,
+ * so a forgotten setting can never weaken the rule. Only preview and development may use a short password.
+ */
+export function strictPasswordRequired(env: { APP_ENV?: string }): boolean {
+  return env.APP_ENV !== "preview" && env.APP_ENV !== "development";
+}
 const enc = new TextEncoder();
 
 const sha256 = (s: string) => crypto.subtle.digest("SHA-256", enc.encode(s));
@@ -27,11 +38,16 @@ async function passwordMatches(given: string | null, secret: string): Promise<bo
  * the password is right. So 12 parallel wrong guesses use 5 slots and the other 7 are refused with 429.
  * If the counter cannot be reached the request is refused (503), never let through.
  */
-export async function requireAdmin(request: Request, env: LimiterEnv & { ADMIN_PASSWORD?: string }): Promise<void> {
+export async function requireAdmin(request: Request, env: LimiterEnv & { ADMIN_PASSWORD?: string; LIMITER_SALT?: string; APP_ENV?: string }): Promise<void> {
   const secret = env.ADMIN_PASSWORD;
   if (!secret) throw new HttpError(500, "Server error"); // not configured: say nothing more
+  // Production refuses a weak password for everyone (even the right one), before any counter is touched.
+  if (strictPasswordRequired(env) && secret.length < MIN_PRODUCTION_PASSWORD) {
+    console.error("admin refused: ADMIN_PASSWORD is shorter than " + MIN_PRODUCTION_PASSWORD + " characters in production");
+    throw new HttpError(500, "Server error");
+  }
 
-  const key = `admin:${await hashKey(ipBucket(request.headers.get("CF-Connecting-IP") ?? "unknown"), secret)}`;
+  const key = `admin:${await hashKey(ipBucket(request.headers.get("CF-Connecting-IP") ?? "unknown"), limiterSalt(env))}`;
   const ids = ["15m", "day"];
   const rules: Rule[] = [
     { id: ids[0], limit: ADMIN_MAX_FAILS, windowSec: ADMIN_LOCK_SECONDS },

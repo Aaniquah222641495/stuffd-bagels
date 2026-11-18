@@ -22,7 +22,7 @@ const CONFIG = {
   BUSINESS_NAME: "STUFF'D Bagels",
   // Where order and booking emails go. Empty = the account this script runs as (stuffd.bagels@gmail.com).
   OWNER_EMAIL: '',
-  SITE_URL: 'https://stuffdbagels-preview.thedigitalpantryza.workers.dev', // change to the real address when the domain is live
+  SITE_URL: 'https://stuffdbagels.co.za',
   PHONE_DISPLAY: '083 300 8472',
   TIMEZONE: 'Africa/Johannesburg',
   ORDERS_LABEL: 'Orders',

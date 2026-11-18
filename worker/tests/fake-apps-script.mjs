@@ -12,4 +12,4 @@ http.createServer((req, res) => {
     // Like script.google.com: answer the POST with a redirect that the client follows with GET.
     res.statusCode = 302; res.setHeader("location", "/echo"); res.end();
   });
-}).listen(8799, "127.0.0.1");
+}).listen(Number(process.env.FAKE_PORT ?? 8799), "127.0.0.1");

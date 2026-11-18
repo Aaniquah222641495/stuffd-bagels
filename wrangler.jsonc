@@ -31,6 +31,10 @@
     // Only the API runs the Worker. Everything else is a free static request.
     "run_worker_first": ["/api", "/api/*"]
   },
+  // PRODUCTION (this top level = the Worker `stuffdbagels`): stuffd-kv (live), the Limiter object, and APP_ENV "production", which makes
+  // admin sign-in refuse an ADMIN_PASSWORD shorter than 16 characters. No noindex header here. Secrets for production, set by the
+  // founder WITHOUT --env: ADMIN_PASSWORD, LIMITER_SALT (and later APPS_SCRIPT_URL, APPS_SCRIPT_TOKEN). See go-live-runbook.md.
+  "vars": { "APP_ENV": "production" },
   "kv_namespaces": [{ "binding": "STUFFD_KV", "id": "663cf05928e64e048205ec4dafc1354c" }],
   "durable_objects": { "bindings": [{ "name": "LIMITER", "class_name": "Limiter" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Limiter"] }],
@@ -39,7 +43,17 @@
     "preview": {
       "name": "stuffdbagels-preview",
       "kv_namespaces": [{ "binding": "STUFFD_KV", "id": "6487395497af4da7a4f2b493c3edc8f6" }],
-      "durable_objects": { "bindings": [{ "name": "LIMITER", "class_name": "Limiter" }] }
+      "durable_objects": { "bindings": [{ "name": "LIMITER", "class_name": "Limiter" }] },
+      // The preview is never indexed: NOINDEX makes the Worker add X-Robots-Tag to every page and file, so it must run for all paths
+      // here (a few thousand extra Worker requests a month on the preview only; production keeps static requests free).
+      "vars": { "APP_ENV": "preview", "NOINDEX": "1" },
+      "assets": {
+        "directory": "./artifacts/stuffd-bagels/dist/public",
+        "binding": "ASSETS",
+        "not_found_handling": "404-page",
+        "html_handling": "auto-trailing-slash",
+        "run_worker_first": ["/*"]
+      }
     }
   }
 }

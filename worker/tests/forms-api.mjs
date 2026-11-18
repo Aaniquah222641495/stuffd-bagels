@@ -1,6 +1,6 @@
 // Worker order/booking API test against `wrangler dev`. Setup (three terminals):
 //   1. node worker/tests/fake-apps-script.mjs /tmp/fake.log
-//   2. npx wrangler@4.148.0 dev --port 8787 --var APPS_SCRIPT_URL:http://127.0.0.1:8799/exec --persist-to /tmp/stuffd-state --var APPS_SCRIPT_TOKEN:$TOKEN
+//   2. npx wrangler@4.148.0 dev --port 8787 --var APP_ENV:development --var APPS_SCRIPT_URL:http://127.0.0.1:8799/exec --persist-to /tmp/stuffd-state --var APPS_SCRIPT_TOKEN:$TOKEN
 //   3. rm -f /tmp/fake.log && TOKEN=<same value> node worker/tests/forms-api.mjs /tmp/fake.log
 // TOKEN is the same 32+ character value passed to wrangler dev (the Worker refuses to forward without one).
 // It sets up its own pickup points and uses a fresh pretend client IP for rate limits. Dates follow the real clock.

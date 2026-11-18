@@ -1,7 +1,7 @@
 # Menu and prices: STUFF'D Bagels (Cape Town, South Africa)
 
 Fresh, handmade stuffed bagels. The whole menu is halal. Prices in South African rand (ZAR).
-Last updated: 2026-11-16. Source: https://stuffdbagels.netlify.app/
+Last updated: 2026-11-16. Source: https://stuffdbagels.co.za/
 
 | Bagel | Price | What's in it |
 |---|---|---|

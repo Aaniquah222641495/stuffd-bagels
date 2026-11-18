@@ -4,7 +4,7 @@
 // Update LAST_UPDATED when content changes (it feeds the sitemap).
 import { menuPricingObject, FAQ } from "./content";
 
-export const SITE_URL = "https://stuffdbagels.netlify.app";
+export const SITE_URL = "https://stuffdbagels.co.za";
 export const SITE_NAME = "STUFF'D Bagels";
 export const LAST_UPDATED = "2026-11-16";
 const OG_IMAGE = `${SITE_URL}/opengraph.jpg`;

@@ -114,23 +114,27 @@ export async function publicAvailability(kv: KVNamespace | undefined): Promise<P
   }
 }
 
-export function parseAvailabilityInput(body: Record<string, unknown>): Availability {
+/**
+ * Checks an availability save. Only `ordersEnabled` is required. Any other list or setting that is OMITTED keeps its
+ * stored value (`current`); one that is sent, even as an empty list, replaces it. So a partial save (for example just the
+ * orders switch) can no longer reset the cut-off, the collection Saturdays or the closed dates.
+ */
+export function parseAvailabilityInput(body: Record<string, unknown>, current: Availability): Availability {
   const bad = () => new HttpError(400, "Invalid fields");
   if (typeof body.ordersEnabled !== "boolean") throw bad();
-  const dates = body.closedDates ?? [];
+  const dates = body.closedDates === undefined ? current.closedDates : body.closedDates;
   if (!Array.isArray(dates) || dates.length > LIMITS.closedDates || !dates.every(isRealDate)) throw bad();
-  const message = body.closedMessage ?? "";
+  const message = body.closedMessage === undefined ? current.closedMessage : body.closedMessage;
   if (typeof message !== "string" || message.length > LIMITS.message) throw bad();
-  // Cut-off and the Saturday lists are optional in the request (older callers) and default to the standard rules.
-  const cutoffTime = body.cutoffTime ?? DEFAULT_CUTOFF;
+  const cutoffTime = body.cutoffTime === undefined ? current.cutoffTime : body.cutoffTime;
   if (!isCutoffTime(cutoffTime)) throw bad();
-  const added = body.addedSaturdays ?? [];
-  const removed = body.removedSaturdays ?? [];
+  const added = body.addedSaturdays === undefined ? current.addedSaturdays : body.addedSaturdays;
+  const removed = body.removedSaturdays === undefined ? current.removedSaturdays : body.removedSaturdays;
   if (!Array.isArray(added) || added.length > LIMITS.addedSaturdays || !added.every(isSat)) throw bad();
   if (!Array.isArray(removed) || removed.length > LIMITS.removedSaturdays || !removed.every(isSat)) throw bad();
-  const kept = body.keptSaturdays ?? [];
+  const kept = body.keptSaturdays === undefined ? current.keptSaturdays : body.keptSaturdays;
   if (!Array.isArray(kept) || kept.length > LIMITS.keptSaturdays || !kept.every(isSat)) throw bad();
-  const opens = body.opensOn ?? {};
+  const opens = body.opensOn === undefined ? current.opensOn : body.opensOn;
   if (typeof opens !== "object" || opens === null || Array.isArray(opens)) throw bad();
   const opensEntries = Object.entries(opens as Record<string, unknown>);
   if (opensEntries.length > LIMITS.addedSaturdays + LIMITS.removedSaturdays + 12) throw bad();

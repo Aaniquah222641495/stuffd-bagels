@@ -1,7 +1,7 @@
 // Admin pickup points: auth, validation, limits, add / edit / switch off / remove, and what the public list shows.
 // Setup as in forms-api.mjs. Run: node worker/tests/pickups-api.mjs /tmp/fake.log
 import assert from "node:assert/strict";
-import { B, admin, post, resetPickups, clearRateLimits, ip, col } from "./_helpers.mjs";
+import { B, admin, post, resetAvail, resetPickups, clearRateLimits, ip, col } from "./_helpers.mjs";
 clearRateLimits();
 let n = 0;
 const ok = (name) => console.log("PASS", ++n, name);
@@ -86,12 +86,28 @@ assert.equal(pubA.maxWeeksAhead, undefined, "the old weeks-ahead setting is gone
 for (const body of [{ cutoffTime: "24:00" }, { cutoffTime: "9:00" }, { cutoffTime: 2359 }, { addedSaturdays: ["2026-12-04"] }, { addedSaturdays: ["nope"] }, { addedSaturdays: "2026-12-05" }, { removedSaturdays: [20261128] }, { addedSaturdays: Array.from({ length: 25 }, (_, i) => new Date(Date.UTC(2027, 0, 2 + 7 * i)).toISOString().slice(0, 10)) }, { opensOn: { "2026-12-05": "2026-12-06" } }, { opensOn: { "2026-12-04": "2026-11-15" } }, { opensOn: { "2026-12-05": "soon" } }, { opensOn: [] }]) {
   assert.equal((await admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "", ...body })).status, 400, JSON.stringify(body));
 }
-assert.equal((await admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "" })).status, 200, "older callers without the new fields still work");
-pubA = await json(await fetch(B + "/api/availability")); assert.equal(pubA.cutoffTime, "23:59"); assert.deepEqual([pubA.addedSaturdays, pubA.removedSaturdays, pubA.opensOn], [[], [], {}], "no lists saved: the built-in last-Saturday default");
+// Partial saves keep what they omit (go-live fix 3): only the orders switch and the message are sent, everything else stays.
+s = await admin("/availability", "POST", { ordersEnabled: false, closedMessage: "Back soon" });
+assert.equal(s.status, 200, "older callers without the new fields still work");
+pubA = await json(await fetch(B + "/api/availability?x=" + Math.random()));
+assert.equal(pubA.ordersEnabled, false); assert.equal(pubA.closedMessage, "Back soon");
+assert.equal(pubA.cutoffTime, "20:30", "cut-off kept"); assert.deepEqual(pubA.addedSaturdays, ["2026-12-05"], "added Saturdays kept"); assert.deepEqual(pubA.removedSaturdays, ["2026-11-28"], "removed Saturdays kept"); assert.deepEqual(pubA.opensOn, { "2026-12-05": "2026-11-15" }, "opening days kept");
+s = await admin("/availability", "POST", { ordersEnabled: true, closedDates: ["2026-12-12"], keptSaturdays: ["2026-12-26"] });
+pubA = await json(await fetch(B + "/api/availability?x=" + Math.random()));
+assert.deepEqual(pubA.closedDates, ["2026-12-12"]); assert.deepEqual(pubA.keptSaturdays, ["2026-12-26"]); assert.equal(pubA.closedMessage, "Back soon", "message kept when omitted"); assert.equal(pubA.cutoffTime, "20:30");
+// An empty list that IS sent clears it; an invalid one is still refused and changes nothing
+s = await admin("/availability", "POST", { ordersEnabled: true, addedSaturdays: [], closedDates: [] });
+pubA = await json(await fetch(B + "/api/availability?x=" + Math.random())); assert.deepEqual(pubA.addedSaturdays, [], "sent empty = cleared"); assert.deepEqual(pubA.closedDates, []); assert.deepEqual(pubA.removedSaturdays, ["2026-11-28"], "other lists still kept");
+assert.equal((await admin("/availability", "POST", { ordersEnabled: true, cutoffTime: "25:00" })).status, 400);
+assert.equal((await admin("/availability", "POST", { cutoffTime: "10:00" })).status, 400, "ordersEnabled stays required");
+pubA = await json(await fetch(B + "/api/availability?x=" + Math.random())); assert.equal(pubA.cutoffTime, "20:30", "a refused save changed nothing");
+ok("partial saves: omitted lists and settings keep their stored values; sent-empty clears; invalid refused; ordersEnabled required");
+assert.equal((await resetAvail()).status, 200);
+pubA = await json(await fetch(B + "/api/availability?x=" + Math.random())); assert.equal(pubA.cutoffTime, "23:59"); assert.deepEqual([pubA.addedSaturdays, pubA.removedSaturdays, pubA.opensOn], [[], [], {}], "nothing saved: the built-in last-Saturday default");
 ok("cut-off time and Saturday lists: saved, validated (HH:MM; real Saturdays; opening day not after its Saturday; at most 24), defaults 23:59 and the built-in list");
 // Adding a market: a default Saturday that is already open for orders is kept, not skipped (orders may exist)
 {
-  await admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "" });
+  await resetAvail();
   const now = Date.now(); const today = col.sastDay(now);
   const open = col.collectionSaturdays(now, { cutoffTime: "23:59", closedDates: [], events: [] }).find((d) => col.opensOnFor(d, {}) <= today);
   if (open) {
@@ -104,7 +120,7 @@ ok("cut-off time and Saturday lists: saved, validated (HH:MM; real Saturdays; op
   }
   const bad = [{ keptSaturdays: ["2026-12-04"] }, { keptSaturdays: "2026-12-05" }, { keptSaturdays: ["nope"] }];
   for (const b of bad) assert.equal((await admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "", ...b })).status, 400, JSON.stringify(b));
-  await admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "" });
+  await resetAvail();
   ok(open ? "adding a market keeps an already-open default Saturday; keptSaturdays validated" : "keptSaturdays validated (no default Saturday open today, market keep not exercised)");
 }
 console.log(`pickups-api: all ${n} groups passed`);

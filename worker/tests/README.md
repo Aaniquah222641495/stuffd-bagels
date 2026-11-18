@@ -5,6 +5,7 @@ None of these send real email: the "Apps Script" is a fake (`fake-apps-script.mj
 | File | What it proves | Needs |
 |---|---|---|
 | `../../apps-script/selftest.mjs` | Code.gs logic: subjects, escaping, duplicate guard, quota, token, labels | Node only |
+| `admin-policy.mjs` | Go-live rules: production refuses an admin password under 16 characters (preview and development don't), LIMITER_SALT and its fallback, plain-HTTP /api refused, preview noindex helper | Node only |
 | `limiter-unit.mjs` | Counter logic: IPv6 /64 keys, email normalising, windows, refunds, daily cap, 12 parallel takes allow exactly 5 | Node only |
 | `forms-limits.mjs` | Worker form rules with fake Durable Objects: token required before forwarding, /64 limit, per-mailbox cap of 3, shared cap of 40, fails closed | Node only |
 | `admin-lockout.mjs` | M2: 12 parallel wrong passwords give 5 x 401 and 7 x 429, /64 rotation does not help, good logins are refunded | wrangler dev |
@@ -21,12 +22,14 @@ node apps-script/selftest.mjs
 node worker/tests/saturday-rules.mjs
 node worker/tests/limiter-unit.mjs
 node worker/tests/forms-limits.mjs
+node worker/tests/admin-policy.mjs
 
 # in two terminals. TOKEN is any 32+ character value (the Worker will not forward without one).
 # A fresh --persist-to folder per session keeps the shared daily counters (40 submissions) from carrying over.
-node worker/tests/fake-apps-script.mjs /tmp/fake.log
+FAKE_PORT=8899 node worker/tests/fake-apps-script.mjs /tmp/fake.log   # FAKE_PORT defaults to 8799; change it if that port is busy
 export TOKEN=$(openssl rand -base64 36 | tr -d '/+=\n')
-npx wrangler@4.148.0 dev --port 8787 --persist-to /tmp/stuffd-state --var APPS_SCRIPT_URL:http://127.0.0.1:8799/exec --var APPS_SCRIPT_TOKEN:$TOKEN
+# --var APP_ENV:development is REQUIRED: the top level of wrangler.jsonc is production, which refuses the short test password
+npx wrangler@4.148.0 dev --port 8787 --persist-to /tmp/stuffd-state --var APP_ENV:development --var APPS_SCRIPT_URL:http://127.0.0.1:8899/exec --var APPS_SCRIPT_TOKEN:$TOKEN
 
 # then
 rm -f /tmp/fake.log

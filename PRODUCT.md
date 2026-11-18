@@ -21,7 +21,7 @@ The site's own claim: "Cape Town's first stuffed bagel." A classic New York bage
 - No online payment. Customers pay at the truck by card (Yoco) or cash on collection.
 - Admin page (password sign-in): open or close orders and edit the schedule. When orders are closed, the order form is replaced by a closed message.
 - Private event bookings are handled by WhatsApp.
-- Live at https://stuffdbagels.netlify.app.
+- Live at https://stuffdbagels.co.za (moved from Netlify to Cloudflare Workers, go-live pending).
 
 ## Capabilities and Constraints
 - Single ordering page plus the admin page.

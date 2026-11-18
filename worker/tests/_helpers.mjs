@@ -42,7 +42,11 @@ export function testRules(now = Date.now()) {
   }
   return { addedSaturdays: sats, opensOn: Object.fromEntries(sats.map((d) => [d, today])) };
 }
-export const setAvail = (a) => admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "", ...testRules(), ...a });
+// A save that names every field. The admin API keeps any field a save OMITS (partial saves), so tests that want a clean slate
+// must say so: DEFAULT_AVAIL is the factory state (standard cut-off, the built-in last-Saturday list).
+export const DEFAULT_AVAIL = { ordersEnabled: true, closedDates: [], closedMessage: "", cutoffTime: "23:59", addedSaturdays: [], removedSaturdays: [], keptSaturdays: [], opensOn: {} };
+export const resetAvail = (a = {}) => admin("/availability", "POST", { ...DEFAULT_AVAIL, ...a });
+export const setAvail = (a) => admin("/availability", "POST", { ...DEFAULT_AVAIL, ...testRules(), ...a });
 
 /** Saturdays open for orders right now under the test rules (real clock). Index 1+ is safely away from any cut-off edge. */
 export const saturdays = () => col.availableSaturdays(Date.now(), { cutoffTime: "23:59", closedDates: [], ...testRules() });

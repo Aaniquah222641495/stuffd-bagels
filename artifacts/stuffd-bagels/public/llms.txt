@@ -25,5 +25,5 @@ The whole menu is halal.
 - TikTok: https://tiktok.com/@stuffd.bagels
 
 ## Pages
-- [Home, menu and ordering](https://stuffdbagels.netlify.app/)
-- [Menu and prices (plain text)](https://stuffdbagels.netlify.app/pricing.md)
+- [Home, menu and ordering](https://stuffdbagels.co.za/)
+- [Menu and prices (plain text)](https://stuffdbagels.co.za/pricing.md)
