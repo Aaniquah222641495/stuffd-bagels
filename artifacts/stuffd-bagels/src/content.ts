@@ -44,14 +44,14 @@ export const menuPricingObject: Record<
   },
 };
 
-// Extra toppings. Waiting on the client for which toppings there are and what each costs (founder 2026-11-16:
-// the old boards said Jalapeno +R5, and cheese +R5 before that; the 2026-11-16 board does not list them).
+// Extra toppings. Client confirmed on the go-live checklist, 2026-11-18: Jalapeno +R5. She named no other topping,
+// so Extra Cheese stays null (the old boards once said cheese +R5, but that was never reconfirmed).
 // price: null = not confirmed yet. A topping with a null price is HIDDEN from the order builder and refused by the
 // Worker, so no old price is ever shown or charged. To switch one on, set its price (rand) here: the browser and
-// the Worker both read this list, nothing else needs changing. Names below are the candidates from the old boards.
+// the Worker both read this list, nothing else needs changing.
 export const TOPPINGS: Record<string, number | null> = {
   "Extra Cheese": null,
-  "Extra Jalapeno": null,
+  "Extra Jalapeno": 5, // confirmed by client 2026-11-18
 };
 
 /** Only the toppings that have a confirmed price: what the order builder shows and the Worker accepts. */
@@ -97,6 +97,7 @@ export const EVENTS: MarketEvent[] = [
   { id: "royal-venue-oct", name: "Market weekend", venue: "Royal Venue, Schaapkraal", start: "2026-10-24", end: "2026-10-25" },
   { id: "luxe-cape-club", name: "Luxe Cape Club", venue: "Sans Souci Grounds, Newlands", start: "2026-10-31", end: "2026-11-01" },
   { id: "spring-lovers", name: "Spring Lovers Pop Up", venue: "18 Schaap Rd, Schaapkraal", start: "2026-11-01", end: "2026-11-01" },
+  { id: "summer-social-26", name: "Summer Social '26", venue: "Whitebox by Limitless", start: "2026-12-05", end: "2026-12-05" },
   { id: "mgm-26", name: "MGM '26", venue: "Venue to be announced", start: "2026-12-16", end: "2026-12-20" },
 ];
 

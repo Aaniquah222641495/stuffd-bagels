@@ -3,7 +3,7 @@
 //  - Orders for a Saturday close on the Wednesday before, at the cut-off time (default 23:59, owner-editable).
 //    The cut-off minute itself is still open: with 23:59, an order at 23:59:30 Wednesday is accepted and the
 //    first refused moment is Thursday 00:00:00 (all South African time).
-//  - A Saturday can't be more than `maxWeeksAhead` weeks (default 4) from today, and can't be a closed date.
+//  - A Saturday can't be more than `maxWeeksAhead` weeks (default 2: the client's paydays are the 15th and 25th) from today, and can't be a closed date.
 // South Africa is UTC+2 all year (no daylight saving), so SAST is plain arithmetic on UTC milliseconds.
 // Keep this file free of imports and of TypeScript-only runtime features: tests run it directly in Node.
 
@@ -11,7 +11,7 @@ const SAST_MS = 2 * 3600 * 1000;
 const DAY_MS = 86400000;
 
 export const DEFAULT_CUTOFF = "23:59";
-export const DEFAULT_WEEKS_AHEAD = 4;
+export const DEFAULT_WEEKS_AHEAD = 2;
 export const MAX_WEEKS_AHEAD = 12;
 
 export interface CollectionRules {
