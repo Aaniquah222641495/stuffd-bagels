@@ -23,7 +23,7 @@ async function axeRun(page, label) {
   console.log(`  axe ${label}: ${res.length}`, res.length ? JSON.stringify(res) : "");
   axeTotal += res.length;
 }
-const rules = { cutoffTime: "23:59", maxWeeksAhead: 2, closedDates: [] };
+const rules = { cutoffTime: "23:59", maxWeeksAhead: 4, closedDates: [] };
 const nice = col.niceDay;
 
 for (const [w, h] of [[390, 844], [1280, 900]]) {

@@ -30,7 +30,10 @@ export const admin = (p, method = "GET", body, headers = {}) =>
     headers: { "x-admin-password": pw, "CF-Connecting-IP": ip, ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...headers },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-export const setAvail = (a) => admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "", ...a });
+// The site default is 2 weeks ahead (client, 2026-11-18). Most flows here need three open Saturdays whatever day the
+// test runs, so the helper opens 4 weeks unless a test says otherwise. The real default is asserted in
+// saturday-rules.mjs and pickups-api.mjs.
+export const setAvail = (a) => admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "", maxWeeksAhead: 4, ...a });
 
 /** Saturdays open for orders right now under the default rules (real clock). Index 1+ is safely away from any cut-off edge. */
 export const saturdays = () => col.availableSaturdays(Date.now(), { cutoffTime: "23:59", maxWeeksAhead: 4, closedDates: [] });
