@@ -86,6 +86,6 @@ for (const body of [{ cutoffTime: "24:00" }, { cutoffTime: "9:00" }, { cutoffTim
   assert.equal((await admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "", ...body })).status, 400, JSON.stringify(body));
 }
 assert.equal((await admin("/availability", "POST", { ordersEnabled: true, closedDates: [], closedMessage: "" })).status, 200, "older callers without the new fields still work");
-pubA = await json(await fetch(B + "/api/availability")); assert.equal(pubA.cutoffTime, "23:59"); assert.equal(pubA.maxWeeksAhead, 4);
-ok("cut-off time and weeks ahead: saved, validated (HH:MM, 1 to 12), defaults 23:59 and 4");
+pubA = await json(await fetch(B + "/api/availability")); assert.equal(pubA.cutoffTime, "23:59"); assert.equal(pubA.maxWeeksAhead, 2);
+ok("cut-off time and weeks ahead: saved, validated (HH:MM, 1 to 12), defaults 23:59 and 2");
 console.log(`pickups-api: all ${n} groups passed`);

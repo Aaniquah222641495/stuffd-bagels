@@ -61,13 +61,13 @@ assert.equal(r.status, 409); assert.equal(r.body.error, "Closed that Saturday");
 assert.equal((await order("2026-11-21", sast("2026-11-16"), { availability: { closedDates: ["2026-11-28"] } })).status, 200);
 ok("a closed Saturday is refused with the owner's message; other Saturdays still open");
 
-// 5. Weeks ahead (default 4, editable)
-assert.equal((await order("2026-12-12", sast("2026-11-16"))).status, 200);   // 26 days ahead
-assert.equal((await order("2026-12-19", sast("2026-11-16"))).status, 409);   // 33 days ahead
-assert.equal((await order("2026-12-05", sast("2026-11-16"), { availability: { maxWeeksAhead: 2 } })).status, 409);
-assert.equal((await order("2026-11-28", sast("2026-11-16"), { availability: { maxWeeksAhead: 2 } })).status, 200);
+// 5. Weeks ahead (default 2, editable)
+assert.equal((await order("2026-11-28", sast("2026-11-16"))).status, 200);   // 12 days ahead
+assert.equal((await order("2026-12-05", sast("2026-11-16"))).status, 409);   // 19 days ahead, past the 2-week default
+assert.equal((await order("2026-12-05", sast("2026-11-16"), { availability: { maxWeeksAhead: 4 } })).status, 200);
+assert.equal((await order("2026-12-19", sast("2026-11-16"), { availability: { maxWeeksAhead: 4 } })).status, 409);   // 33 days ahead
 assert.equal((await order("2027-01-09", sast("2026-11-16"), { availability: { maxWeeksAhead: 12 } })).status, 200);
-ok("default 4 weeks ahead; owner can set 2 or 12");
+ok("default 2 weeks ahead; owner can set 4 or 12");
 
 // 6. Cut-off time is editable
 assert.equal((await order("2026-11-21", sast("2026-11-18", "12:00:30"), { availability: { cutoffTime: "12:00" } })).status, 200);

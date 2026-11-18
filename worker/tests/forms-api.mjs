@@ -38,7 +38,7 @@ ok("valid order forwarded with pickup point, Saturday, server total R190, phone 
 // 2. Bad input: nothing forwarded
 const cases = [
   ["unknown item", { items: { "Free Bagel": 1 } }, 400], ["no bagel, extras only", { items: {}, toppings: { "Extra Cheese": 1 } }, 400],
-  ["topping with no confirmed price", { toppings: { "Extra Jalapeno": 1 } }, 400], ["old menu name", { items: { "Plain Bagel": 1 } }, 400],
+  ["topping with no confirmed price", { toppings: { "Extra Cheese": 1 } }, 400], ["old menu name", { items: { "Plain Bagel": 1 } }, 400],
   ["negative qty", { items: { "Pizza Bagel": -1 } }, 400], ["fractional qty", { items: { "Pizza Bagel": 1.5 } }, 400], ["qty over 50", { items: { "Pizza Bagel": 51 } }, 400],
   ["prototype key", { items: { constructor: 1 } }, 400], ["bad email", { email: "nope" }, 400], ["bad phone", { phone: "123" }, 400],
   ["empty name", { name: "  " }, 400], ["name too long", { name: "x".repeat(61) }, 400], ["note too long", { note: "x".repeat(301) }, 400],

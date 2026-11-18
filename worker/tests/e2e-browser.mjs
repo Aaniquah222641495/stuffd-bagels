@@ -23,7 +23,7 @@ async function axeRun(page, label) {
   console.log(`  axe ${label}: ${res.length}`, res.length ? JSON.stringify(res) : "");
   axeTotal += res.length;
 }
-const rules = { cutoffTime: "23:59", maxWeeksAhead: 4, closedDates: [] };
+const rules = { cutoffTime: "23:59", maxWeeksAhead: 2, closedDates: [] };
 const nice = col.niceDay;
 
 for (const [w, h] of [[390, 844], [1280, 900]]) {
@@ -75,6 +75,9 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("data-testid")), "input-name");
   await axeRun(page, "order form with errors");
   await page.getByTestId("btn-increase-Pizza Bagel").click(); await page.getByTestId("btn-increase-Pizza Bagel").click(); await page.getByTestId("btn-increase-Steak'd Bagel").click();
+  assert.equal(await page.locator("[data-testid^=topping-]").count(), 1, "only the priced topping (Jalapeno) is offered");
+  assert.match(await page.getByTestId("topping-Extra Jalapeno").textContent(), /\+R5/); assert.equal(await page.getByTestId("topping-Extra Cheese").count(), 0, "Extra Cheese stays hidden");
+  await page.getByTestId("btn-increase-Extra Jalapeno").click();
   await page.getByTestId("input-name").fill("Aisha Khan"); await page.getByTestId("input-phone").fill("082 123 4567"); await page.getByTestId("input-email").fill(aisha);
   await page.getByTestId("select-saturday").selectOption(sats[1]); await page.getByTestId("input-pickup-time").fill("around 11am"); await page.getByTestId("textarea-notes").fill("No onions please");
   assert.ok(!(await page.getByTestId("order-form").textContent()).includes("Please add your name"), "errors clear as fields are fixed");
@@ -85,9 +88,9 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   await page.getByTestId("order-sent").waitFor();
   assert.equal(nLog(), before + 1);
   const sent = await page.getByTestId("order-sent").textContent();
-  for (const re of [/Order sent/, /Awaiting payment/, /confirmed once it's paid/, /SB-[A-Z2-9]{6}/, /R305/, /Kenilworth Corner, Main Rd, Kenilworth/, new RegExp(nice(sats[1])), /around 11am/, new RegExp(aisha.replace(/\./g, "\\."))]) assert.match(sent, re);
+  for (const re of [/Order sent/, /Awaiting payment/, /confirmed once it's paid/, /SB-[A-Z2-9]{6}/, /R310/, /Kenilworth Corner, Main Rd, Kenilworth/, new RegExp(nice(sats[1])), /around 11am/, new RegExp(aisha.replace(/\./g, "\\."))]) assert.match(sent, re);
   const fwd = lastLog().body;
-  assert.equal(fwd.pickupPlace, "Kenilworth Corner, Main Rd, Kenilworth"); assert.equal(fwd.pickupDate, sats[1]); assert.equal(fwd.pickupTime, "around 11am"); assert.equal(fwd.total, 305);
+  assert.equal(fwd.pickupPlace, "Kenilworth Corner, Main Rd, Kenilworth"); assert.equal(fwd.pickupDate, sats[1]); assert.equal(fwd.pickupTime, "around 11am"); assert.equal(fwd.total, 310); assert.deepEqual(fwd.items.find((i) => i.name === "Extra Jalapeno"), { name: "Extra Jalapeno", qty: 1, unit: 5, line: 5 });
   await page.screenshot({ path: `${process.env.SHOTS ?? "."}/order2-sent-${w}.png` }); await axeRun(page, "order sent");
 
   // 4. A point switched off after the page loaded: clear message, list refreshes
