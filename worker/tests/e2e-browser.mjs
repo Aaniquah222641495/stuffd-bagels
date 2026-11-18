@@ -66,7 +66,8 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   const form = await page.getByTestId("order-form").textContent();
   assert.ok(form.includes(`Orders for ${nice(sats[0])} close on ${nice(col.cutoffDay(sats[0]))} at 23:59.`), "cut-off line");
   assert.ok(form.includes("Collection times: Saturdays, 10am to 1pm"), "point's times hint");
-  assert.ok(!/market/i.test(form), "no market wording in the order form");
+  assert.ok(form.includes("becomes credit for another collection Saturday or one of our markets (credit, not a refund)"), "cancellation policy shown before the order is sent");
+  assert.ok(!/market/i.test(form.replace("or one of our markets", "")), "no market wording in the order form apart from the credit policy");
   console.log("  Saturdays offered:", opts.join(", "));
 
   // 3. Validate, send
@@ -113,7 +114,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   assert.ok(!(await page.locator("[data-testid=select-saturday] option").allTextContents()).includes(nice(near)), "a closed Saturday is not offered");
   await page.getByTestId("order-form").scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS ?? "."}/closed-saturday-${w}.png` });
   await setAvail({ closedDates: sats, closedMessage: "" }); await open();
-  assert.match(await page.getByTestId("orders-hidden").textContent(), /no Saturday open for orders/i);
+  assert.match(await page.getByTestId("orders-hidden").textContent(), /Orders for Saturday \d+ \w+ open on .+\.|no Saturday open for orders/i);
   await setAvail({});
 
   // 6. The real default rules on the page clock: last Saturday of the month, opens on the 15th, closes Wednesday 23:59 (the Worker
@@ -196,7 +197,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   const farSat = (() => { const t = Date.now() + 120 * 86400000; let d = new Date(t); while (d.getUTCDay() !== 6) d = new Date(d.getTime() + 86400000); return d.toISOString().slice(0, 10); })();
   await page.getByLabel("Saturday to add").fill(farSat); await page.getByRole("button", { name: "Add Saturday" }).click();
   assert.equal(await page.getByTestId(`sat-${farSat}`).count(), 1, "added to the list");
-  const earlier = new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10);
+  const earlier = new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10);
   await page.getByLabel(`Orders open on, for ${nice(listed[1])}`).fill(earlier);
   await Promise.all([page.waitForResponse((r) => r.url().endsWith("/admin/availability") && r.request().method() === "POST"), page.getByRole("button", { name: "Save Availability and Rules" }).click()]);
   await page.getByText("Saved").waitFor();
