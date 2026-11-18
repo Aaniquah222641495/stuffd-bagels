@@ -4,11 +4,10 @@
 // Update LAST_UPDATED when content changes (it feeds the sitemap).
 import { menuPricingObject, FAQ } from "./content";
 
-export const SITE_URL = "https://stuffdbagels.netlify.app";
+export const SITE_URL = "https://stuffdbagels.co.za";
 export const SITE_NAME = "STUFF'D Bagels";
-export const LAST_UPDATED = "2026-10-26";
+export const LAST_UPDATED = "2026-11-16";
 const OG_IMAGE = `${SITE_URL}/opengraph.jpg`;
-const PHONE = "+27724111011";
 const EMAIL = "stuffd.bagels@gmail.com";
 
 export interface PageMeta {
@@ -30,18 +29,17 @@ const business = {
   name: SITE_NAME,
   slogan: "Every bite packed right.",
   description:
-    "Cape Town's first stuffed bagel. Fresh, handmade stuffed bagels from our cart at markets and festivals across Cape Town. Order via WhatsApp, collect at the venue, pay with card (Yoco) or cash.",
+    "Cape Town's first stuffed bagel. Fresh, handmade stuffed bagels from our cart at markets and festivals across Cape Town. Halal menu. Order on the website by Wednesday and collect on Saturday at one of our pickup points, or just buy at the cart at a market. Online orders are confirmed once paid.",
   url: `${SITE_URL}/`,
   image: [OG_IMAGE, `${SITE_URL}/hero-bagel.jpeg`],
   logo: `${SITE_URL}/logo-badge.png`,
-  telephone: PHONE,
   email: EMAIL,
   servesCuisine: ["Bagels", "Street food"],
   foundingDate: "2026",
   currenciesAccepted: "ZAR",
   paymentAccepted: "Cash, Credit Card",
   acceptsReservations: false,
-  priceRange: "R65 - R85",
+  priceRange: `R${Math.min(...Object.values(menuPricingObject).map((i) => i.price))} - R${Math.max(...Object.values(menuPricingObject).map((i) => i.price))}`,
   address: { "@type": "PostalAddress", addressLocality: "Cape Town", addressRegion: "Western Cape", addressCountry: "ZA" },
   areaServed: { "@type": "City", name: "Cape Town" },
   sameAs: ["https://instagram.com/stuffd.bagels", "https://tiktok.com/@stuffd.bagels"],
@@ -55,7 +53,8 @@ const business = {
         "@type": "MenuItem",
         name,
         description: item.desc.replace(/ · /g, ", "),
-        image: `${SITE_URL}${item.image}`,
+        ...(item.image ? { image: `${SITE_URL}${item.image}` } : {}),
+        suitableForDiet: "https://schema.org/HalalDiet",
         offers: { "@type": "Offer", price: item.price, priceCurrency: "ZAR" },
       })),
     },
@@ -67,7 +66,7 @@ export const PAGES: PageMeta[] = [
     path: "/",
     title: "STUFF'D Bagels | Stuffed Bagels in Cape Town",
     description:
-      "Cape Town's first stuffed bagel. Fresh, handmade stuffed bagels at markets and events across Cape Town. Order via WhatsApp.",
+      "Cape Town's first stuffed bagel. Fresh, handmade stuffed bagels at markets and events across Cape Town. Order ahead online.",
     jsonLd: [
       {
         "@context": "https://schema.org",
@@ -81,6 +80,20 @@ export const PAGES: PageMeta[] = [
         ],
       },
     ],
+  },
+  {
+    path: "/privacy",
+    title: "Privacy notice | STUFF'D Bagels",
+    description: "How STUFF'D Bagels looks after the details you give us when you order or enquire about an event.",
+    jsonLd: [],
+  },
+  // The owner's admin page: prerendered as a shell (no content), never indexed, not in the sitemap.
+  {
+    path: "/admin",
+    title: "Admin | STUFF'D Bagels",
+    description: "Owner sign-in for STUFF'D Bagels.",
+    noindex: true,
+    jsonLd: [],
   },
 ];
 

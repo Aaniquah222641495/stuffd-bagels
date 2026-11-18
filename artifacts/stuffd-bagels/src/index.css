@@ -76,6 +76,7 @@
   --color-chat-gray: var(--sb-chat-gray);
   --color-chat-avatar: var(--sb-chat-avatar);
   --color-chat-avatar-ink: var(--sb-chat-avatar-ink);
+  --color-error: var(--sb-error);
   --color-disabled: var(--sb-disabled);
   --color-disabled-border: var(--sb-disabled-border);
 
@@ -95,9 +96,10 @@
   /* 2026 rebrand: blue bubble STUFF'D (cart launch 2 Oct 2026). Approximate hexes from their Instagram. */
   --sb-ink: #16245c;        /* navy: text, borders */
   --sb-paper: #f7f8fc;      /* cool white: page background, like the white cart and boxes (founder 2026-10-26: cream read as yellow) */
-  --sb-blue: #2c48e6;       /* cobalt: brand blue, buttons, ticker (white text on it passes AA) */
-  --sb-blue-dk: #1c33b8;    /* cobalt pressed / borders */
-  --sb-sky: #c9d3ff;        /* pale cobalt: tape, labels on navy (founder 2026-10-26: no yellow) */
+  --sb-blue: #004f94;       /* brand blue (founder 2026-10-26), buttons, ticker; white text on it ~8.5:1 */
+  --sb-blue-dk: #003a6e;    /* brand blue pressed / borders */
+  --sb-error: #b3261e;      /* form errors: 6.6:1 on white */
+  --sb-sky: #cfe1f3;        /* pale brand blue: tape, labels on navy (founder 2026-10-26: no yellow) */
   --sb-photo: #fdfdff;      /* card and polaroid white (cool, matches the page) */
   --sb-tape: color-mix(in srgb, var(--sb-sky) 72%, transparent);
   --sb-shadow: 0 14px 28px -14px color-mix(in srgb, var(--sb-ink) 55%, transparent);
@@ -379,10 +381,14 @@
   rotate: var(--tilt, 0deg);
   transition: rotate 0.5s cubic-bezier(0.16, 1, 0.3, 1), scale 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.polaroid > img,
+/* Descendant, not child: the img sits inside a <picture>, so ".polaroid > img" never matched and the photos
+   were stretched to the frame. The inline aspect-ratio sets the window; cover crops, never stretches. */
+.polaroid img,
 .polaroid .polaroid-photo {
   display: block;
   width: 100%;
+  height: auto;
+  max-width: 100%;
   object-fit: cover;
   background: color-mix(in srgb, var(--sb-ink) 8%, var(--sb-paper));
 }
@@ -410,7 +416,7 @@
   border-bottom: 0;
 }
 .scribble-underline {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12' preserveAspectRatio='none'%3E%3Cpath d='M2 8c30-6 60-6 92-2s70 4 104-3' fill='none' stroke='%232c48e6' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12' preserveAspectRatio='none'%3E%3Cpath d='M2 8c30-6 60-6 92-2s70 4 104-3' fill='none' stroke='%23004f94' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: 0 100%;
   background-size: 100% 0.32em;
@@ -482,3 +488,54 @@
 .motion-ok .reveal .trail-y { transition: transform 1.4s cubic-bezier(0.65, 0, 0.35, 1) 0.25s; }
 .motion-ok .reveal:not(.is-in) .trail-x { transform: scaleX(0); }
 .motion-ok .reveal:not(.is-in) .trail-y { transform: scaleY(0); }
+
+/* ─── Mascot chomp (order section). Two quick bites every 3.2s, crumbs burst from the mouth. ─── */
+.mascot-chomp__img {
+  transform-origin: 30% 85%;
+  animation: chomp 3.2s ease-in-out infinite;
+}
+.mascot-chomp__crumb {
+  position: absolute;
+  left: 41%;
+  top: 47%;
+  width: 7px;
+  height: 7px;
+  border-radius: 45% 55% 50% 40%;
+  background: #c98a3d;
+  opacity: 0;
+  pointer-events: none;
+  animation: crumb 3.2s ease-out infinite;
+}
+.mascot-chomp__crumb--1 { background: #f3e2a6; width: 6px; height: 6px; --dx: -22px; --dy: 46px; animation-delay: 0.05s; }
+.mascot-chomp__crumb--0 { --dx: -10px; --dy: 58px; }
+.mascot-chomp__crumb--2 { --dx: -30px; --dy: 38px; width: 5px; height: 5px; animation-delay: 0.08s; }
+.mascot-chomp__crumb--3 { background: #5f8a3a; width: 4px; height: 4px; --dx: -16px; --dy: 52px; animation-delay: 0.42s; }
+.mascot-chomp__crumb--4 { background: #f3e2a6; --dx: -4px; --dy: 44px; animation-delay: 0.46s; }
+.mascot-chomp__crumb--5 { --dx: -26px; --dy: 62px; width: 5px; height: 5px; animation-delay: 0.5s; }
+
+@keyframes chomp {
+  0%, 46%, 100% { transform: rotate(0) translate(0, 0) scale(1); }
+  /* bite 1: lean in, crunch */
+  6%  { transform: rotate(-3deg) translate(6px, 2px) scale(1.02, 0.98); }
+  10% { transform: rotate(1deg) translate(-2px, 0) scale(0.99, 1.01); }
+  /* bite 2 */
+  18% { transform: rotate(-4deg) translate(8px, 3px) scale(1.03, 0.97); }
+  23% { transform: rotate(1.5deg) translate(-3px, -1px) scale(0.99, 1.01); }
+  /* happy chew */
+  30% { transform: rotate(-1deg) translate(0, -3px); }
+  38% { transform: rotate(1deg) translate(0, 0); }
+}
+@keyframes crumb {
+  0%, 5% { opacity: 0; transform: translate(0, 0) rotate(0) scale(0.6); }
+  8% { opacity: 1; }
+  24% { opacity: 1; transform: translate(var(--dx), var(--dy)) rotate(160deg) scale(1); }
+  32%, 100% { opacity: 0; transform: translate(calc(var(--dx) * 1.2), calc(var(--dy) + 30px)) rotate(240deg) scale(0.8); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mascot-chomp__img, .mascot-chomp__crumb { animation: none; }
+}
+
+/* Events cart graphic: a slow, friendly sway. */
+.cart-bob { transform-origin: 50% 100%; animation: cart-bob 5s ease-in-out infinite; }
+@keyframes cart-bob { 0%, 100% { transform: rotate(-0.8deg); } 50% { transform: rotate(0.8deg) translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .cart-bob { animation: none; } }

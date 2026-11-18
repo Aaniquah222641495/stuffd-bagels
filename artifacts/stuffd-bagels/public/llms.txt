@@ -1,28 +1,29 @@
 # STUFF'D Bagels
 
-> Cape Town's first stuffed bagel. Fresh, handmade stuffed bagels sold from our cart at markets and festivals across Cape Town. Order on WhatsApp, collect at the venue, pay with card (Yoco) or cash.
+> Cape Town's first stuffed bagel. Halal menu. Fresh, handmade stuffed bagels sold from our cart at markets and festivals across Cape Town. Order on the website by Wednesday and collect on Saturday at one of our pickup points, or just buy at the cart at a market. Online orders are confirmed once paid.
 
 Slogan: "Every bite packed right." Cape Town, South Africa. Est. 2026. Street food, pop-up, handmade. No tables, no reservations. More markets, more bagels.
 
 ## Menu (ZAR)
-- Pizza Bagel: R85 (pepperoni, cheese, cream cheese)
-- Jalapeno Bagel: R70 (jalapeno, cheese, cream cheese)
-- Cheesy Bagel: R80 (cheese, cream cheese)
-- Plain Bagel: R65 (cream cheese)
-- Extra topping, cheese or jalapeno: +R5
+The whole menu is halal.
+- Classic Bagel: R65 (cream cheese)
+- Jalapeno Bagel: R75 (jalapeno cream cheese, jalapenos)
+- Cheesy Bagel: R85 (cream cheese, cheese)
+- Pizza Bagel: R95 (pepperoni, cream cheese, cheese)
+- Steak'd Bagel: R115 (birria (halal beef), cream cheese, cheese)
 
 ## How ordering works
-- Pick your bagels on the website, then send the ready-made order message on WhatsApp.
-- Collect at the venue on your pickup date.
-- Pay at the cart with Yoco (card) or cash. No online payment.
-- Private events: message on WhatsApp for a custom quote.
+- Pick your bagels on the website and send the order form. It is emailed to the kitchen and you get an email back.
+- An order is confirmed once it is paid; we email you how to pay.
+- Collection is on Saturdays only, at one of our pickup points. Order by Wednesday for that Saturday.
+- At a market? No order needed: come and buy at the cart.
+- Private events: use the event form on the website for a custom quote.
 
 ## Contact
-- WhatsApp / phone: +27 72 411 1011
 - Email: stuffd.bagels@gmail.com
 - Instagram: https://instagram.com/stuffd.bagels
 - TikTok: https://tiktok.com/@stuffd.bagels
 
 ## Pages
-- [Home, menu and ordering](https://stuffdbagels.netlify.app/)
-- [Menu and prices (plain text)](https://stuffdbagels.netlify.app/pricing.md)
+- [Home, menu and ordering](https://stuffdbagels.co.za/)
+- [Menu and prices (plain text)](https://stuffdbagels.co.za/pricing.md)

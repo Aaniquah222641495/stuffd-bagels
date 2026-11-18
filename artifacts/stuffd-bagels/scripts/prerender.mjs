@@ -25,13 +25,15 @@ const fileFor = (p) => (p === "/" ? "index.html" : p === NOT_FOUND.path ? "404.h
 
 for (const page of [...PAGES, NOT_FOUND]) {
   const routePath = page === NOT_FOUND ? "/this-page-does-not-exist" : page.path;
-  const body = await render(routePath);
+  // /admin reads sessionStorage, so it ships as an empty shell and React renders it in the browser.
+  const body = page.path === "/admin" ? "" : await render(routePath);
   if (body.includes("<script")) throw new Error(`Inline script in ${page.path}: it would break the CSP`);
   if (page.path === "/") {
     // Guard: every menu price in the structured data must be visible in the page.
-    const text = body.replace(/<!-- -->/g, "");
+    const text = body.replace(/<!-- -->/g, "").replace(/&#x27;/g, "'");
     for (const [name, item] of Object.entries(menuPricingObject)) {
-      if (!text.includes(name) || !text.includes(`R${item.price}`)) throw new Error(`Home page doesn't show ${name} at R${item.price}`);
+      const shown = name.replace(" Bagel", ""); // the cards show "Steak'd", not "Steak'd Bagel"
+      if (!text.includes(shown) || !text.includes(`R${item.price}`)) throw new Error(`Home page doesn't show ${name} at R${item.price}`);
     }
   }
   const html = template
@@ -48,6 +50,6 @@ await writeFile(
   path.join(out, "sitemap.xml"),
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`,
 );
-console.log(`sitemap.xml with ${PAGES.length} page(s)`);
+console.log(`sitemap.xml with ${PAGES.filter((p) => !p.noindex).length} page(s)`);
 
 await rm(path.resolve(here, "../dist/server"), { recursive: true, force: true });

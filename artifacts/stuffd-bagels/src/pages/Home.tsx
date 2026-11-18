@@ -1,21 +1,29 @@
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { BookingForm } from "@/components/booking-form";
+import { CANCELLATION_POLICY, DEFAULT_CUTOFF, availableSaturdays, cutoffDay, niceDay, openingNote } from "@/collection";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+  FieldRow,
+  Honeypot,
+  PrivacyNote,
+  failureMessage,
+  inputClass,
+  looksLikeEmail,
+  looksLikePhone,
+  postForm,
+  type Status,
+} from "@/components/order-forms";
 import {
   menuPricingObject,
   FAQ,
-  TOPPINGS,
+  pricedToppings,
   EVENTS,
   upcomingEvents,
   type MarketEvent,
 } from "@/content";
 
-const BUSINESS_PHONE = "27724111011";
+/** Toppings with a confirmed price (content.ts). Empty until the client confirms them, and then there is no Extras block. */
+const TOPPINGS = pricedToppings();
+
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -61,13 +69,23 @@ function calendarUrl(e: { name: string; venue: string; start: string; end: strin
     text: `STUFF'D Bagels at ${e.name}`,
     dates: `${ymd(parseDay(e.start))}/${ymd(end)}`,
     location: e.venue,
-    details: "Find the blue STUFF'D cart. Order ahead on the website and collect at the cart.",
+    details: "Find the blue STUFF'D cart. No order needed, come and buy at the cart.",
   });
   return `https://calendar.google.com/calendar/render?${q.toString()}`;
 }
 
-const EVENT_QUOTE_MSG =
-  "Hi STUFF'D, I'd like a quote to bring the cart to an event.\n\nDate:\nVenue:\nNumber of guests:";
+const isoOf = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/** A pickup point from the owner's list (/api/pickups: active points only). Online orders collect only here. */
+interface Pickup {
+  id: string;
+  name: string;
+  area: string;
+  days: string;
+}
+
+const BUSINESS_EMAIL = "stuffd.bagels@gmail.com";
 
 const FEED = [
   { src: "/ig/feed/ig-12.jpg", alt: "" },
@@ -80,28 +98,46 @@ const FEED = [
 const TICKER_TEXT =
   "STUFF'D BAGELS  ·  CAPE TOWN'S FIRST STUFFED BAGEL  ·  EVERY BITE PACKED RIGHT  ·  MORE MARKETS, MORE BAGELS  ·  ";
 
+/** Bagel cut-out: small AVIF first, transparent PNG fallback for older browsers. */
+function BagelImg({ src, avif, className, ...rest }: React.ImgHTMLAttributes<HTMLImageElement> & { src: string; avif?: string }) {
+  const img = <img src={src} loading="lazy" decoding="async" className={className} {...rest} />;
+  // Explicit avif wins. Without one, a .png has a same-named .avif beside it; a .jpeg has none.
+  const smaller = avif ?? (src.endsWith(".png") ? src.replace(/\.png$/, ".avif") : undefined);
+  if (!smaller) return img;
+  return (
+    <picture className="contents">
+      <source srcSet={smaller} type="image/avif" />
+      {img}
+    </picture>
+  );
+}
+
 /** Round bagel photos for the moving strip under the hero. */
-const BELT = [
-  { src: "/pizza-bagel.jpeg", word: "Pizza" },
-  { src: "/jalapeno-bagel.jpeg", word: "Jalapeno" },
-  { src: "/cheesy-bagel.jpeg", word: "Cheesy" },
-  { src: "/plain-bagel.jpeg", word: "Plain" },
-  { src: "/ig/jalapeno-box.jpg", word: "Cream cheese" },
+const BELT: { src: string; avif?: string; word: string }[] = [
+  { src: "/pizza-bagel.png", word: "Pizza" },
+  { src: "/jalapeno-bagel.png", word: "Jalapeno" },
+  { src: "/cheesy-bagel.png", word: "Cheesy" },
+  { src: "/plain-bagel.png", word: "Classic" },
+  { src: "/steakd-bagel.png", word: "Steak'd" }, // cut out of the client's 2026-11-16 box photo (Vision subject lift), same style as the others
   { src: "/hero-bagel.jpeg", word: "Packed right" },
 ];
 
 const ABOUT_PHOTOS = [
-  { src: "/ig/cart.jpg", alt: "The STUFF'D Bagels cart at a market, blue counter and cloud sign", caption: "find the cart", width: 506, height: 900 },
+  { src: "/ig/cart.jpg", alt: "The STUFF'D Bagels cart at a market, blue counter and cloud sign", caption: "find the cart", width: 506, height: 900, position: "50% 85%" },
+  { src: "/bite-mountains.jpeg", avif: "/bite-mountains.avif", alt: "A woman biting into a STUFF'D jalapeno bagel with the Cape mountains behind her", caption: "jalapeno, mid-bite", width: 760, height: 1013, aspect: "3/4", position: "50% 30%" },
+  { src: "/ig/made-fresh.jpg", alt: "Bagels being stuffed by hand at the STUFF'D cart", caption: "made fresh", width: 506, height: 900, position: "50% 60%" },
   { src: "/ig/chic.jpg", alt: "A customer biting into a STUFF'D bagel at a market", caption: "market day", width: 393, height: 700, position: "50% 40%" },
-  { src: "/ig/boxes.jpg", alt: "Pizza and jalapeno bagels in STUFF'D takeaway boxes", caption: "packed right", width: 769, height: 900 },
+  { src: "/ig/box-of-four.jpg", alt: "A box of four stuffed bagels: cheesy, garlic and pizza", caption: "box of four", width: 675, height: 900 },
   { src: "/ig/unboxing.jpg", alt: "Opening a STUFF'D takeaway box", caption: "the unboxing", width: 450, height: 800, position: "50% 35%" },
-  { src: "/ig/friends.jpg", alt: "Friends sharing STUFF'D bagels on a couch", caption: "bring the crew", width: 720, height: 405 },
-  { src: "/ig/jalapeno-poster.jpg", alt: "Holding a jalapeno stuffed bagel, blue duotone photo", caption: "the jalapeno", width: 719, height: 900 },
+  { src: "/ig/merch.jpg", alt: "A STUFF'D team member holding a fresh pizza bagel", caption: "hot off the cart", width: 675, height: 900, position: "50% 70%" },
+  { src: "/ig/friends.jpg", alt: "Friends sharing STUFF'D bagels on a couch", caption: "bring the crew", width: 720, height: 405, aspect: "4/3", position: "50% 50%" },
+  { src: "/ig/jalapeno-poster.jpg", alt: "Holding a jalapeno stuffed bagel, blue duotone photo", caption: "the jalapeno", width: 719, height: 900, aspect: "4/5", position: "50% 50%" },
 ];
 
 /** Taped polaroid, like the scrapbook posters on their Instagram. `tilt` is the resting angle. */
 function Polaroid({
   src,
+  avif,
   alt,
   caption,
   tilt = 0,
@@ -111,6 +147,7 @@ function Polaroid({
   position = "50% 50%",
 }: {
   src: string;
+  avif?: string;
   alt: string;
   caption: string;
   tilt?: number;
@@ -124,15 +161,18 @@ function Polaroid({
       className="polaroid tape lift m-0"
       style={{ "--tilt": `${tilt}deg`, "--tape-tilt": `${tilt > 0 ? -5 : 4}deg` } as CSSProperties}
     >
-      <img
-        src={src}
-        alt={alt}
-        width={width}
-        height={height}
-        loading="lazy"
-        decoding="async"
-        style={{ aspectRatio: aspect, objectPosition: position }}
-      />
+      <picture className="contents">
+        {avif && <source srcSet={avif} type="image/avif" />}
+        <img
+          src={src}
+          alt={alt}
+          width={width}
+          height={height}
+          loading="lazy"
+          decoding="async"
+          style={{ aspectRatio: aspect, objectPosition: position }}
+        />
+      </picture>
       <figcaption className="font-bubble text-ink text-base sm:text-lg text-center pt-2.5 leading-tight">
         {caption}
       </figcaption>
@@ -163,7 +203,7 @@ function TrailLinks({
         target="_blank"
         rel="noopener noreferrer"
         className={cls}
-        aria-label={`Add ${sched.name} to your calendar`}
+        aria-label={`Add to calendar: ${sched.name}`}
       >
         Add to calendar
       </a>
@@ -331,9 +371,20 @@ export default function Home() {
   const [events, setEvents] = useState<MarketEvent[]>(EVENTS);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [venue, setVenue] = useState(EVENTS[0]?.venue ?? "");
+  const [email, setEmail] = useState("");
+  const [pickup, setPickup] = useState(""); // pickup point id
+  const [saturday, setSaturday] = useState(""); // collection Saturday, YYYY-MM-DD
+  const [pickupTime, setPickupTime] = useState("");
+  const [pickups, setPickups] = useState<Pickup[]>([]);
+  const [pickupsLoaded, setPickupsLoaded] = useState(false);
   const [notes, setNotes] = useState("");
-  const [showModal, setShowModal] = useState(false);
+  const [honey, setHoney] = useState("");
+  const [today, setToday] = useState<string | null>(null);
+  const [orderStatus, setOrderStatus] = useState<Status>("idle");
+  const [orderErrors, setOrderErrors] = useState<Record<string, string>>({});
+  const [orderProblem, setOrderProblem] = useState("");
+  const [focusTick, setFocusTick] = useState(0);
+  const [sentOrder, setSentOrder] = useState<{ ref: string; email: string; total: number; place: string; day: string; time: string; lines: string[] } | null>(null);
   const [displayTotal, setDisplayTotal] = useState(0);
   const [detailsInView, setDetailsInView] = useState(false);
   const detailsRef = useRef<HTMLDivElement>(null);
@@ -341,18 +392,48 @@ export default function Home() {
     ordersEnabled: boolean;
     closedToday: boolean;
     closedMessage: string;
+    closedDates?: string[];
+    cutoffTime?: string;
+    addedSaturdays?: string[];
+    removedSaturdays?: string[];
+    keptSaturdays?: string[];
+    opensOn?: Record<string, string>;
   } | null>(null);
 
   useScrollReveal();
 
-  useEffect(() => {
-    const upcoming = upcomingEvents();
-    setEvents(upcoming);
-    if (upcoming.length > 0) setVenue(upcoming[0].venue);
+  const loadAvailability = () =>
     fetch("/api/availability")
-      .then((r) => r.json())
-      .then(setAvailability)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((a) => {
+        if (a && typeof a.ordersEnabled === "boolean") setAvailability(a);
+      })
       .catch(() => {});
+
+  const loadPickups = () =>
+    fetch("/api/pickups")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((list: unknown) => {
+        if (Array.isArray(list)) setPickups(list as Pickup[]);
+      })
+      .catch(() => {})
+      .finally(() => setPickupsLoaded(true));
+
+  useEffect(() => {
+    loadPickups();
+    // Static list first (works with no API), then the live list from the admin if it answers.
+    setToday(isoOf(new Date()));
+    const upcoming = upcomingEvents(EVENTS);
+    setEvents(upcoming);
+    fetch("/api/events")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((list: unknown) => {
+        if (!Array.isArray(list)) return;
+        const live = upcomingEvents(list as MarketEvent[]);
+        setEvents(live);
+      })
+      .catch(() => {});
+    loadAvailability();
   }, []);
 
   // Hide the mobile order bar once the details form is on screen.
@@ -396,22 +477,81 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [total, displayTotal]);
 
-  const handleWhatsAppRedirect = () => {
-    let orderLines = "";
-    Object.entries(quantities).forEach(([item, qty]) => {
-      if (qty > 0)
-        orderLines += `${item} x${qty} - R${qty * menuPricingObject[item].price}\n`;
+  // Set the moment the first click lands (state only updates on the next render), cleared when the answer is back.
+  const orderInFlight = useRef(false);
+
+  const submitOrder = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    if (orderStatus === "sending" || orderInFlight.current || orderingHidden) return;
+    const errs: Record<string, string> = {};
+    if (itemCount < 1) errs.bagels = "Pick at least one bagel above first.";
+    if (!name.trim()) errs.name = "Please add your name.";
+    if (!looksLikePhone(phone)) errs.phone = "Add a phone number we can reach you on, like 082 123 4567.";
+    if (!looksLikeEmail(email)) errs.email = "Add your email so we can send your order details.";
+    if (!chosenPoint) errs.pickup = "Choose where you'll collect from.";
+    if (!chosenSat) errs.saturday = "Choose a Saturday to collect on.";
+    setOrderErrors(errs);
+    setOrderProblem("");
+    if (Object.keys(errs).length) {
+      setFocusTick((n) => n + 1); // the effect below moves focus once the errors are on screen
+      return;
+    }
+    orderInFlight.current = true;
+    setOrderStatus("sending");
+    const r = await postForm("/api/order", {
+      name,
+      phone,
+      email,
+      pickupId: chosenPoint!.id,
+      pickupDate: chosenSat,
+      pickupTime,
+      items: Object.fromEntries(Object.entries(quantities).filter(([, q]) => q > 0)),
+      toppings: Object.fromEntries(Object.entries(toppingQty).filter(([, q]) => q > 0)),
+      note: notes,
+      website: honey,
     });
-    Object.entries(toppingQty).forEach(([t, qty]) => {
-      if (qty > 0) orderLines += `${t} x${qty} - R${qty * TOPPINGS[t]}\n`;
+    orderInFlight.current = false;
+    if (r.ok) {
+      const lines = [
+        ...Object.entries(quantities).filter(([, q]) => q > 0).map(([i, q]) => `${q} x ${i}`),
+        ...Object.entries(toppingQty).filter(([, q]) => q > 0).map(([t, q]) => `${q} x ${t}`),
+      ];
+      setSentOrder({ ref: r.data?.ref ?? "", email: email.trim(), total, place: `${chosenPoint!.name}, ${chosenPoint!.area}`, day: niceDay(chosenSat!), time: pickupTime.trim(), lines });
+      setOrderStatus("sent");
+    } else {
+      setOrderProblem(failureMessage(r));
+      setOrderStatus("idle");
+      if (r.status === 409) {
+        // A point may have been switched off, or the cut-off passed, since the page loaded: refresh both.
+        loadPickups();
+        loadAvailability();
+      }
+    }
+  };
+
+  // After a failed submit, move focus to the first field with an error (or back up to the menu).
+  useEffect(() => {
+    if (focusTick === 0) return;
+    const first = detailsRef.current?.querySelector<HTMLElement>("[aria-invalid='true']");
+    if (first) first.focus();
+    else document.getElementById("order")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focusTick]);
+
+  /** Editing a field clears its own error straight away. */
+  const clearError = (k: string) =>
+    setOrderErrors((p) => {
+      if (!p[k]) return p;
+      const { [k]: _gone, ...rest } = p;
+      return rest;
     });
-    // No domain here until the client owns one (founder 2026-10-26).
-    const message = `NEW ORDER - STUFF'D BAGELS\n\nPickup: ${venue}\nName: ${name}\nPhone: ${phone}\n\nOrder:\n${orderLines}\nTotal: R${total}\n\nNotes: ${notes || "None"}\n\nSent from the STUFF'D Bagels website`;
-    window.open(
-      `https://wa.me/${BUSINESS_PHONE}?text=${encodeURIComponent(message)}`,
-      "_blank",
-    );
-    setShowModal(false);
+
+  const startAnotherOrder = () => {
+    setQuantities(Object.fromEntries(Object.keys(menuPricingObject).map((k) => [k, 0])));
+    setToppingQty(Object.fromEntries(Object.keys(TOPPINGS).map((k) => [k, 0])));
+    setNotes("");
+    setSentOrder(null);
+    setOrderStatus("idle");
+    setOrderErrors({});
   };
 
   const updateQuantity = (item: string, delta: number) => {
@@ -428,11 +568,36 @@ export default function Home() {
   const itemCount = Object.values(quantities).reduce((a, b) => a + b, 0);
   const scheduleCards = events.map(eventToCard);
   const nextUp = scheduleCards[0];
-  const uniqueVenues = Array.from(new Set(scheduleCards.map((s) => s.venue)));
 
-  const ordersDisabled =
+  const ordersOffRaw =
     availability !== null &&
     (!availability.ordersEnabled || availability.closedToday);
+  // Collection: owner pickup points only, on a Saturday that is still open (rules in src/collection.ts, also enforced by the Worker).
+  const rules = {
+    cutoffTime: availability?.cutoffTime ?? DEFAULT_CUTOFF,
+    closedDates: availability?.closedDates ?? [],
+    addedSaturdays: availability?.addedSaturdays ?? [],
+    removedSaturdays: availability?.removedSaturdays ?? [],
+    keptSaturdays: availability?.keptSaturdays ?? [],
+    events,
+    opensOn: availability?.opensOn ?? {},
+  };
+  const nowMs = today ? Date.now() : 0; // only after mount, so the prerendered HTML matches the first render
+  const saturdays = today ? availableSaturdays(nowMs, rules) : [];
+  const chosenSat = saturdays.includes(saturday) ? saturday : saturdays[0];
+  const chosenPoint = pickups.find((p) => p.id === pickup) ?? pickups[0];
+  const satNote = today ? openingNote(nowMs, rules) : "";
+  const cutoffLine = chosenSat ? `Orders for ${niceDay(chosenSat)} close on ${niceDay(cutoffDay(chosenSat))} at ${rules.cutoffTime}.` : "";
+  // Ordering is hidden (not just disabled) when it is switched off, today is closed, there is no active
+  // pickup point, or no Saturday is open. Markets play no part: at a market people just buy at the cart.
+  const hiddenMessage: string | null = ordersOffRaw
+    ? availability?.closedMessage || "Orders are closed right now. See you next time."
+    : pickupsLoaded && pickups.length === 0
+      ? "Online ordering opens soon. We're setting up our pickup points. Questions? Email stuffd.bagels@gmail.com"
+      : today !== null && saturdays.length === 0
+        ? availability?.closedMessage || satNote || "There's no Saturday open for orders right now. Please check back soon."
+        : null;
+  const orderingHidden = hiddenMessage !== null;
 
   return (
     <div className="bg-paper min-h-screen text-ink overflow-x-hidden">
@@ -463,7 +628,7 @@ export default function Home() {
               style={{ "--d": "180ms" } as CSSProperties}
             >
               Classic New York bagels, stuffed with cream cheese and bold
-              fillings. Order ahead, collect at the cart.
+              fillings. Order ahead for Saturday pickup, or find the cart at a market.
             </p>
             <div
               className="hero-pop flex flex-wrap items-center gap-x-7 gap-y-4"
@@ -521,7 +686,7 @@ export default function Home() {
             </div>
             <p className="absolute left-5 bottom-5 sm:left-8 sm:bottom-8 m-0 text-white">
               <span className="eyebrow block text-white/90">On the menu</span>
-              <span className="font-bubble text-2xl sm:text-3xl leading-tight">Pizza · Jalapeno · Cheesy · Plain</span>
+              <span className="font-bubble text-2xl sm:text-3xl leading-tight">Classic · Jalapeno · Cheesy · Pizza · Steak'd</span>
             </p>
             {/* A sesame bagel floating over the seam. Decorative. */}
             <img
@@ -544,14 +709,17 @@ export default function Home() {
             <div key={copy} className="flex items-center gap-8 pr-8 sm:gap-12 sm:pr-12">
               {BELT.map((b) => (
                 <div key={b.word + copy} className="flex items-center gap-8 sm:gap-12 shrink-0">
-                  <img
+                  <BagelImg
                     src={b.src}
+                    avif={b.avif}
                     alt=""
                     width={120}
                     height={120}
-                    loading="lazy"
-                    decoding="async"
-                    className="w-20 h-20 sm:w-28 sm:h-28 rounded-full object-cover shadow-soft"
+                    className={
+                      b.src.endsWith(".png") || b.src.endsWith(".webp")
+                        ? "w-20 h-20 sm:w-28 sm:h-28 rounded-full object-contain bg-sky p-1.5 shadow-soft"
+                        : "w-20 h-20 sm:w-28 sm:h-28 rounded-full object-cover shadow-soft"
+                    }
                   />
                   <span className="font-bubble text-ink text-3xl sm:text-5xl whitespace-nowrap">{b.word}</span>
                 </div>
@@ -569,7 +737,7 @@ export default function Home() {
             label="Markets"
             id="where"
             title="Where we at"
-            note="The cart moves around Cape Town. Pick a market, order ahead and collect."
+            note="The cart moves around Cape Town. No order needed, come and buy at the cart."
           />
 
           {scheduleCards.length === 0 && (
@@ -648,23 +816,42 @@ export default function Home() {
               label="Menu"
               id="order-heading"
               title="Order up"
-              note="Four bagels, stuffed to the edge. Pick yours, then add extras."
+              note="Five bagels, stuffed to the edge. The whole menu is halal."
             />
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 sm:gap-x-6 gap-y-12">
-              {Object.entries(menuPricingObject).map(([item, info], idx) => (
-                <Reveal key={item} delay={idx * 80}>
+            <p className="m-0 mb-8">
+              <span className="inline-block rounded-full border-2 border-ink bg-photo text-ink px-4 py-1.5 text-xs font-black uppercase tracking-widest">
+                Halal menu
+              </span>
+              <span className="ml-3 text-sm font-bold text-ink" data-testid="collection-rule">
+                Order by Wednesday, collect on Saturday.
+              </span>
+            </p>
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-x-4 sm:gap-x-6 gap-y-12">
+              {Object.entries(menuPricingObject).map(([item, info], idx, all) => (
+                // An odd last card sits centred on its own row on the 2-column layouts, the same width as one column
+                // (the grid gap is 1rem, 1.5rem from sm up), so it is not stretched across the row.
+                <Reveal key={item} delay={idx * 80} className={idx === all.length - 1 && all.length % 2 === 1 ? "col-span-2 justify-self-center w-[calc(50%-0.5rem)] sm:w-[calc(50%-0.75rem)] lg:col-span-1 lg:w-auto lg:justify-self-stretch" : ""}>
                   <article className="group h-full flex flex-col" data-testid={`menu-item-${item}`}>
+                    {/* The real photos in their boxes (founder 2026-10-28: cut-outs looked less appetising here; the belt keeps them) */}
                     <div className="relative overflow-hidden rounded-[22px] shadow-soft bg-ink/5">
-                      <img
-                        src={info.image}
-                        alt={item}
-                        width={900}
-                        height={1200}
-                        loading="lazy"
-                        decoding="async"
-                        className="block w-full aspect-[4/5] object-cover transition-transform duration-700 ease-out group-hover:scale-[1.05]"
-                      />
+                      {info.image ? (
+                        <BagelImg
+                          src={info.image}
+                          avif={info.avif}
+                          alt={item}
+                          width={900}
+                          height={1200}
+                          className={`block w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.05] aspect-[4/5]`}
+                        />
+                      ) : (
+                        // No photo yet: a brand card instead of a stock or AI picture. Set `image` in content.ts to replace it.
+                        <div className="sesame bg-blue text-white flex flex-col items-center justify-center text-center gap-2 aspect-[4/5] px-4">
+                          <span className="eyebrow text-sky">New on the menu</span>
+                          <span className="font-bubble text-4xl sm:text-5xl lg:text-4xl leading-none">Steak&apos;d</span>
+                          <span className="text-sm font-medium text-white/90">Photo coming soon</span>
+                        </div>
+                      )}
                       <span className="absolute top-3 right-3 rounded-full bg-photo text-ink font-bebas text-xl leading-none px-3 pt-1.5 pb-1 shadow-soft">
                         R{info.price}
                       </span>
@@ -682,7 +869,7 @@ export default function Home() {
                     </div>
                     <div className="flex flex-col flex-1 pt-4 gap-3">
                       <div>
-                        <h3 className="font-bubble text-2xl sm:text-[1.7rem] leading-tight m-0 text-ink">
+                        <h3 className="font-bubble text-2xl sm:text-[1.7rem] lg:text-2xl leading-tight m-0 text-ink">
                           {item.replace(" Bagel", "")}
                         </h3>
                         <p className="text-ink/75 text-sm mt-1 leading-snug m-0">{info.desc}</p>
@@ -708,10 +895,11 @@ export default function Home() {
             {/* Extras and the running total, as one receipt */}
             <Reveal className="mt-14">
               <div className="rounded-[22px] bg-photo shadow-soft overflow-hidden">
+                {Object.keys(TOPPINGS).length > 0 && (
                 <div className="px-5 sm:px-7 py-5 grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-center sm:gap-x-10">
                   <div>
                     <p className="font-bubble text-2xl text-ink m-0">Extras</p>
-                    <p className="text-sm text-ink/75 m-0">Add to any bagel, R5 each</p>
+                    <p className="text-sm text-ink/75 m-0">Add to any bagel</p>
                   </div>
                   {Object.entries(TOPPINGS).map(([t, price]) => (
                     <div key={t} className="flex items-center justify-between gap-4" data-testid={`topping-${t}`}>
@@ -728,6 +916,7 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
+                )}
                 <div className="bg-ink text-paper px-5 sm:px-7 py-5 flex items-center justify-between">
                   <span className="eyebrow">
                     {itemCount > 0
@@ -746,16 +935,16 @@ export default function Home() {
               index="03"
               label="Checkout"
               title="Your details"
-              note="We build the order message. You hit send on WhatsApp."
+              note="Fill this in and send. It goes straight to our kitchen."
             />
 
-            <div className="grid gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16 lg:items-start">
+            <div className="grid grid-cols-1 gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16 lg:items-start">
               <Reveal>
                 <ol className="list-none p-0 m-0 grid gap-6">
                   {[
-                    ["Pick your bagels", "Choose from the menu above and add extras."],
-                    ["Add your details", "Your name, number and which market you're collecting from."],
-                    ["Send on WhatsApp", "We open WhatsApp with your order typed out. Pay by card or cash at the cart."],
+                    ["Pick your bagels", "Choose from the menu above."],
+                    ["Add your details", "Your name, number, email, which pickup point and which Saturday."],
+                    ["Send it, then pay", "We email your order to the kitchen and send you a confirmation. Your order is confirmed once it's paid."],
                   ].map(([t, d], i) => (
                     <li key={t} className="grid grid-cols-[3rem_1fr] gap-4 items-start">
                       <span className="font-bubble text-3xl text-blue leading-none">{i + 1}</span>
@@ -766,120 +955,170 @@ export default function Home() {
                     </li>
                   ))}
                 </ol>
-                {/* Our mascot, mid-bite. */}
-                <img
-                  src="/mascot-bite.webp"
-                  alt=""
-                  width={640}
-                  height={640}
-                  loading="lazy"
-                  decoding="async"
-                  className="block w-48 sm:w-60 lg:w-80 mt-8 lg:mt-12 mx-auto lg:mx-0 object-contain"
-                />
+                {/* Our mascot, chomping: two quick bites, crumbs fly, repeat. CSS only, off for reduced motion. */}
+                <div className="mascot-chomp relative block w-48 sm:w-60 lg:w-80 mt-8 lg:mt-12 mx-auto lg:mx-0" aria-hidden="true">
+                  <img
+                    src="/mascot-bite.webp"
+                    alt=""
+                    width={640}
+                    height={640}
+                    loading="lazy"
+                    decoding="async"
+                    className="mascot-chomp__img block w-full object-contain"
+                  />
+                  {[0, 1, 2, 3, 4, 5].map((n) => (
+                    <span key={n} className={`mascot-chomp__crumb mascot-chomp__crumb--${n}`} />
+                  ))}
+                </div>
               </Reveal>
 
-              <section aria-label="Your details">
-                <div className="rounded-[22px] bg-photo shadow-soft divide-y divide-ink/10 overflow-hidden">
-                  {[
-                    {
-                      label: "Name",
-                      type: "text",
-                      placeholder: "Your name",
-                      value: name,
-                      set: setName,
-                      id: "input-name",
-                      auto: "name",
-                    },
-                    {
-                      label: "Phone",
-                      type: "tel",
-                      placeholder: "082 123 4567",
-                      value: phone,
-                      set: setPhone,
-                      id: "input-phone",
-                      auto: "tel",
-                    },
-                  ].map((f) => (
-                    <div key={f.label} className="flex flex-col">
-                      <label htmlFor={f.id} className="eyebrow px-5 pt-4 pb-1 text-ink/75">
-                        {f.label}
-                      </label>
-                      <input
-                        id={f.id}
-                        data-testid={f.id}
-                        type={f.type}
-                        autoComplete={f.auto}
-                        placeholder={f.placeholder}
-                        value={f.value}
-                        onChange={(e) => f.set(e.target.value)}
-                        className="px-5 pb-4 bg-transparent font-semibold text-base outline-none placeholder:text-ink/45 focus-visible:bg-sky/30"
-                      />
-                    </div>
-                  ))}
-                  <div className="flex flex-col">
-                    <label htmlFor="select-venue" className="eyebrow px-5 pt-4 pb-1 text-ink/75">
-                      Pickup location
-                    </label>
-                    <select
-                      id="select-venue"
-                      data-testid="select-venue"
-                      value={venue}
-                      onChange={(e) => setVenue(e.target.value)}
-                      className="px-5 pb-4 bg-transparent font-semibold text-base outline-none appearance-none focus-visible:bg-sky/30"
-                    >
-                      {uniqueVenues.map((v) => (
-                        <option key={v} value={v}>
-                          {v}
-                        </option>
+              <section aria-label="Your details" className="min-w-0">
+                {orderStatus === "sent" && sentOrder ? (
+                  <div
+                    ref={(el) => el?.focus()}
+                    tabIndex={-1}
+                    role="status"
+                    data-testid="order-sent"
+                    className="rounded-[22px] bg-photo shadow-soft p-7 sm:p-9 outline-none"
+                  >
+                    <p className="eyebrow m-0 text-blue">Order sent</p>
+                    <h3 className="font-bubble text-4xl leading-none m-0 mt-3">We've got it!</h3>
+                    <p className="inline-block mt-5 mb-0 rounded-full bg-ink text-paper px-4 py-1.5 text-xs font-black uppercase tracking-widest">
+                      Awaiting payment
+                    </p>
+                    <p className="text-base leading-relaxed mt-4 mb-0">
+                      Your order is <strong>confirmed once it's paid</strong>. We'll be in touch with how to pay.
+                    </p>
+                    <ul className="list-none p-0 mt-5 mb-0 border-t border-ink/10">
+                      {sentOrder.lines.map((l) => (
+                        <li key={l} className="py-2.5 border-b border-ink/10 font-semibold">{l}</li>
                       ))}
-                    </select>
+                      <li className="py-2.5 border-b border-ink/10 flex justify-between font-black">
+                        <span>Total</span>
+                        <span>R{sentOrder.total}</span>
+                      </li>
+                    </ul>
+                    <p className="text-sm text-ink/75 leading-relaxed mt-4 mb-0">
+                      Collect at {sentOrder.place} on <strong>{sentOrder.day}</strong>{sentOrder.time ? `, around ${sentOrder.time}` : ""}. We've emailed the details to <strong>{sentOrder.email}</strong>; check your
+                      spam folder if you can't see it.
+                      {sentOrder.ref && <> Your reference is <strong>{sentOrder.ref}</strong>.</>}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={startAnotherOrder}
+                      className="mt-6 rounded-full border-2 border-ink px-6 py-3 font-black uppercase tracking-widest text-sm text-ink transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0.5"
+                    >
+                      Start another order
+                    </button>
                   </div>
-                  <div className="flex flex-col">
-                    <label htmlFor="textarea-notes" className="eyebrow px-5 pt-4 pb-1 text-ink/75">
-                      Notes
-                    </label>
-                    <textarea
-                      id="textarea-notes"
-                      data-testid="textarea-notes"
-                      placeholder="Any special requests?"
-                      rows={2}
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      className="px-5 pb-4 bg-transparent font-semibold text-base outline-none resize-none placeholder:text-ink/45 focus-visible:bg-sky/30"
-                    />
+                ) : hiddenMessage ? (
+                  <div role="status" data-testid="orders-hidden" className="rounded-[22px] bg-ink text-paper p-7 sm:p-9">
+                    <p className="eyebrow m-0 text-sky">Ordering</p>
+                    <p className="font-bubble text-2xl sm:text-3xl leading-tight m-0 mt-3 text-balance [overflow-wrap:anywhere]">{hiddenMessage}</p>
                   </div>
-                </div>
+                ) : (
+                  <form onSubmit={submitOrder} noValidate aria-label="Send your order" data-testid="order-form">
+                    {satNote && (
+                      <p role="status" data-testid="saturday-note" className="mb-4 rounded-2xl bg-ink text-paper px-4 py-3 text-sm font-bold leading-snug m-0">
+                        {satNote}
+                      </p>
+                    )}
+                    <div className="relative rounded-[22px] bg-photo shadow-soft divide-y divide-ink/10 overflow-hidden">
+                      <Honeypot value={honey} onChange={setHoney} />
+                      <FieldRow label="Name" error={orderErrors.name}>
+                        {(p) => (
+                          <input id={p.id} data-testid="input-name" type="text" name="name" autoComplete="name" maxLength={60}
+                            aria-invalid={p.invalid} aria-describedby={p.describedBy} placeholder="Your name"
+                            value={name} onChange={(e) => { setName(e.target.value); clearError("name"); }} className={inputClass} />
+                        )}
+                      </FieldRow>
+                      <FieldRow label="Phone" error={orderErrors.phone}>
+                        {(p) => (
+                          <input id={p.id} data-testid="input-phone" type="tel" name="tel" autoComplete="tel" maxLength={20}
+                            aria-invalid={p.invalid} aria-describedby={p.describedBy} placeholder="082 123 4567"
+                            value={phone} onChange={(e) => { setPhone(e.target.value); clearError("phone"); }} className={inputClass} />
+                        )}
+                      </FieldRow>
+                      <FieldRow label="Email" error={orderErrors.email}>
+                        {(p) => (
+                          <input id={p.id} data-testid="input-email" type="email" name="email" autoComplete="email" maxLength={254}
+                            aria-invalid={p.invalid} aria-describedby={p.describedBy} placeholder="you@example.com"
+                            value={email} onChange={(e) => { setEmail(e.target.value); clearError("email"); }} className={inputClass} />
+                        )}
+                      </FieldRow>
+                      <FieldRow label="Pickup point" error={orderErrors.pickup} hint={chosenPoint?.days ? `Collection times: ${chosenPoint.days}` : undefined}>
+                        {(p) => (
+                          <div className="relative min-w-0">
+                            <select id={p.id} data-testid="select-venue" aria-invalid={p.invalid} aria-describedby={p.describedBy}
+                              value={chosenPoint?.id ?? ""} onChange={(e) => { setPickup(e.target.value); clearError("pickup"); }} disabled={pickups.length === 0}
+                              className="w-full min-w-0 pl-5 pr-12 pb-4 bg-transparent font-semibold text-base outline-none appearance-none focus-visible:bg-sky/30 text-ink">
+                              {pickups.length === 0 && <option value="">Loading...</option>}
+                              {pickups.map((pt) => (
+                                <option key={pt.id} value={pt.id}>{pt.name} · {pt.area}</option>
+                              ))}
+                            </select>
+                            <svg aria-hidden="true" className="pointer-events-none absolute right-5 top-[0.35rem] w-4 h-4 text-ink/75" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 8l5 5 5-5" /></svg>
+                          </div>
+                        )}
+                      </FieldRow>
+                      <FieldRow label="Collection Saturday" error={orderErrors.saturday} hint={cutoffLine || undefined}>
+                        {(p) => (
+                          <div className="relative min-w-0">
+                            <select id={p.id} data-testid="select-saturday" aria-invalid={p.invalid} aria-describedby={p.describedBy}
+                              value={chosenSat ?? ""} onChange={(e) => { setSaturday(e.target.value); clearError("saturday"); }} disabled={saturdays.length === 0}
+                              className="w-full min-w-0 pl-5 pr-12 pb-4 bg-transparent font-semibold text-base outline-none appearance-none focus-visible:bg-sky/30 text-ink">
+                              {saturdays.length === 0 && <option value="">Loading...</option>}
+                              {saturdays.map((d) => (
+                                <option key={d} value={d}>{niceDay(d)}</option>
+                              ))}
+                            </select>
+                            <svg aria-hidden="true" className="pointer-events-none absolute right-5 top-[0.35rem] w-4 h-4 text-ink/75" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 8l5 5 5-5" /></svg>
+                          </div>
+                        )}
+                      </FieldRow>
+                      <FieldRow label="Preferred time (optional)">
+                        {(p) => (
+                          <input id={p.id} data-testid="input-pickup-time" type="text" maxLength={40} placeholder="e.g. around 11am"
+                            value={pickupTime} onChange={(e) => setPickupTime(e.target.value)} className={inputClass} />
+                        )}
+                      </FieldRow>
+                      <FieldRow label="Notes (optional)">
+                        {(p) => (
+                          <textarea id={p.id} data-testid="textarea-notes" placeholder="Any special requests?" rows={2} maxLength={300}
+                            value={notes} onChange={(e) => setNotes(e.target.value)}
+                            className={`${inputClass} resize-none`} />
+                        )}
+                      </FieldRow>
+                    </div>
 
-                <p className="text-sm mt-4 text-ink/75 leading-relaxed px-1">
-                  No payment online. Tap your card (Yoco) or pay cash at the
-                  cart when you collect.
-                </p>
+                    <p className="text-sm mt-4 text-ink/75 leading-relaxed px-1 m-0">
+                      Your order is confirmed once it's paid. After you send it, we'll email you how to pay.
+                    </p>
+                    <p className="text-sm mt-3 text-ink/75 leading-relaxed px-1 m-0" data-testid="cancellation-policy">
+                      {CANCELLATION_POLICY} By sending your order you agree to this.
+                    </p>
+                    <PrivacyNote what="We use your name, phone and email only to deal with this order." />
 
-                {ordersDisabled && (
-                  <p className="mt-4 rounded-2xl px-4 py-3 text-sm font-bold text-center tracking-wide uppercase bg-ink text-paper">
-                    {availability?.closedMessage || "Orders are closed today. See you at the next market."}
-                  </p>
+                    {orderErrors.bagels && itemCount < 1 && (
+                      <p role="alert" className="mt-4 mb-0 text-sm font-bold text-error">{orderErrors.bagels}</p>
+                    )}
+                    {orderProblem && (
+                      <p role="alert" className="mt-4 mb-0 rounded-2xl border-2 border-error px-4 py-3 text-sm font-bold text-error">
+                        {orderProblem}
+                      </p>
+                    )}
+                    <button
+                      type="submit"
+                      data-testid="btn-place-order"
+                      disabled={orderStatus === "sending"}
+                      className="mt-5 w-full rounded-full text-white border-2 border-ink bg-blue p-4 uppercase tracking-widest transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0.5 font-bebas disabled:cursor-wait"
+                      style={{ fontSize: "1.4rem", letterSpacing: "0.12em", boxShadow: "0 5px 0 var(--sb-ink)" }}
+                    >
+                      {orderStatus === "sending" ? "Sending your order..." : "Send my order"}
+                      {orderStatus !== "sending" && total > 0 && <span className="ml-3 text-white/90 text-base">· R{total}</span>}
+                    </button>
+                  </form>
                 )}
-                <button
-                  data-testid="btn-place-order"
-                  onClick={() => !ordersDisabled && setShowModal(true)}
-                  disabled={ordersDisabled}
-                  className="mt-5 w-full rounded-full text-white border-2 p-4 uppercase tracking-widest transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0.5 font-bebas"
-                  style={{
-                    fontSize: "1.4rem",
-                    letterSpacing: "0.12em",
-                    background: ordersDisabled ? "var(--sb-disabled)" : "var(--sb-blue)",
-                    borderColor: ordersDisabled ? "var(--sb-disabled-border)" : "var(--sb-ink)",
-                    boxShadow: ordersDisabled ? "none" : "0 5px 0 var(--sb-ink)",
-                    cursor: ordersDisabled ? "not-allowed" : "pointer",
-                    opacity: ordersDisabled ? 0.6 : 1,
-                  }}
-                >
-                  {ordersDisabled ? "Orders Closed" : "Get STUFF'D on WhatsApp"}
-                  {!ordersDisabled && total > 0 && (
-                    <span className="ml-3 text-white/90 text-base">· R{total}</span>
-                  )}
-                </button>
               </section>
             </div>
           </div>
@@ -910,7 +1149,7 @@ export default function Home() {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-7 sm:gap-x-5 sm:gap-y-9 px-1">
               {ABOUT_PHOTOS.map((ph, i) => (
                 <Reveal key={ph.src} delay={i * 80} className={i % 3 === 1 ? "sm:translate-y-10" : ""}>
-                  <Polaroid {...ph} tilt={[-3, 2.5, -1.5, 3, -2.5, 1.5][i]} />
+                  <Polaroid {...ph} tilt={[-3, 2.5, -1.5, 3, -2.5, 1.5, 2, -2, 1][i % 9]} />
                 </Reveal>
               ))}
             </div>
@@ -920,16 +1159,7 @@ export default function Home() {
         {/* ─── 05 EVENTS: book the cart ──── */}
         <section aria-labelledby="events" id="book" className={`${WRAP} pt-24 lg:pt-32 scroll-mt-12`}>
           <Reveal>
-            <div className="relative overflow-hidden rounded-[28px] bg-ink text-white px-6 py-12 sm:px-12 lg:px-16 lg:py-16 grid gap-10 lg:grid-cols-[1.15fr_1fr] lg:items-center">
-              <img
-                src="/bagel-cutout.webp"
-                alt=""
-                aria-hidden="true"
-                width={440}
-                height={440}
-                loading="lazy"
-                className="spin-slow hidden lg:block pointer-events-none absolute -right-20 -bottom-24 w-80 opacity-95"
-              />
+            <div className="relative overflow-hidden rounded-[28px] bg-ink text-white px-6 py-12 sm:px-12 lg:px-16 lg:py-16 grid grid-cols-1 gap-10 lg:grid-cols-[1fr_1.05fr] lg:items-start">
               <div className="relative">
                 <p className="eyebrow text-sky m-0 mb-3">05 · Events</p>
                 <h2 id="events" className="font-bubble text-[2.4rem] sm:text-6xl leading-[0.95] m-0 text-balance">
@@ -940,26 +1170,17 @@ export default function Home() {
                   it is and roughly how many people, and we'll put together a
                   custom quote.
                 </p>
-                <a
-                  href={`https://wa.me/${BUSINESS_PHONE}?text=${encodeURIComponent(EVENT_QUOTE_MSG)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-8 inline-flex items-center rounded-full border-2 border-white bg-photo text-blue px-8 py-3.5 font-black uppercase tracking-widest text-sm transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0.5"
-                  style={{ boxShadow: "0 5px 0 var(--sb-blue)" }}
-                >
-                  Get a quote on WhatsApp
-                </a>
+                <img
+                  src="/cart.svg"
+                  alt="The STUFF'D Bagels cart"
+                  width={520}
+                  height={460}
+                  loading="lazy"
+                  className="cart-bob hidden lg:block w-full max-w-[22rem] mt-10"
+                />
               </div>
-              <div className="relative lg:pr-24">
-                <p className="eyebrow text-sky m-0 mb-4">What to send us</p>
-                <ol className="list-none p-0 m-0 border-t border-white/15">
-                  {["The date and time", "The venue or area", "How many guests"].map((t, i) => (
-                    <li key={t} className="flex items-baseline gap-4 py-4 border-b border-white/15">
-                      <span className="font-bubble text-sky text-xl w-6">{i + 1}</span>
-                      <span className="font-bold text-lg">{t}</span>
-                    </li>
-                  ))}
-                </ol>
+              <div className="relative">
+                <BookingForm />
               </div>
             </div>
           </Reveal>
@@ -983,11 +1204,9 @@ export default function Home() {
                   Anything else?{" "}
                   <a
                     className="font-bold text-blue underline underline-offset-4"
-                    href={`https://wa.me/${BUSINESS_PHONE}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    href={`mailto:${BUSINESS_EMAIL}`}
                   >
-                    WhatsApp us
+                    Email us
                   </a>
                   .
                 </p>
@@ -1005,7 +1224,7 @@ export default function Home() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-sm text-ink">STUFF'D Bagels</div>
-                    <div className="text-[11px] text-ink/75 font-medium">Chat to us on WhatsApp</div>
+                    <div className="text-[11px] text-ink/75 font-medium">Quick answers</div>
                   </div>
                 </div>
 
@@ -1087,7 +1306,7 @@ export default function Home() {
             href="https://instagram.com/stuffd.bagels"
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="See more of STUFF'D Bagels on Instagram"
+            aria-label="@stuffd.bagels: see more of STUFF'D Bagels on Instagram"
             className="group grid grid-cols-3 lg:grid-cols-6"
           >
             {FEED.map((f) => (
@@ -1132,10 +1351,7 @@ export default function Home() {
 
           <div className="flex flex-col items-center sm:items-start gap-3">
             <div className="eyebrow mb-1 text-sky">Get in touch</div>
-            <a href="tel:+27724111011" className="text-paper/90 hover:text-white text-sm transition-colors">
-              +27 72 411 1011
-            </a>
-            <a href="mailto:stuffd.bagels@gmail.com" className="text-paper/90 hover:text-white text-sm transition-colors">
+            <a href={`mailto:${BUSINESS_EMAIL}`} className="text-paper/90 hover:text-white text-sm transition-colors">
               stuffd.bagels@gmail.com
             </a>
             <div className="text-paper/90 text-sm mt-1">Cape Town, South Africa</div>
@@ -1169,7 +1385,9 @@ export default function Home() {
         </div>
 
         <div className="border-t border-paper/15 py-4 px-6 lg:px-10 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
-          <div className="text-paper/90 tracking-widest uppercase">© 2026 Stuff'd Bagels · Cape Town</div>
+          <div className="text-paper/90 tracking-widest uppercase">
+            © 2026 Stuff'd Bagels · Cape Town · <a href="/privacy" className="underline underline-offset-4 hover:text-white">Privacy</a>
+          </div>
           <a
             href="https://digitalpantry.co.za"
             target="_blank"
@@ -1182,8 +1400,8 @@ export default function Home() {
       </footer>
 
       {/* MOBILE ORDER BAR: shows once something is picked, hides when the form is on screen */}
-      {itemCount > 0 && !detailsInView && !ordersDisabled && (
-        <div className="lg:hidden fixed inset-x-3 bottom-3 z-30">
+      {itemCount > 0 && !detailsInView && !orderingHidden && (
+        <aside aria-label="Your order so far" className="lg:hidden fixed inset-x-3 bottom-3 z-30">
           <a
             href="#details"
             className="flex items-center justify-between rounded-full border-2 border-ink bg-blue text-white pl-5 pr-2 py-2"
@@ -1196,42 +1414,8 @@ export default function Home() {
               Checkout
             </span>
           </a>
-        </div>
+        </aside>
       )}
-
-      {/* MODAL */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="border-0 rounded-[22px] bg-paper max-w-[92vw] w-[400px] p-0 overflow-hidden [&>button]:text-white! [&>button]:bg-transparent! [&>button]:opacity-100">
-          <div className="p-6 bg-blue">
-            <DialogHeader>
-              <DialogTitle className="font-bubble text-white leading-tight text-2xl">
-                Handing you over to WhatsApp
-              </DialogTitle>
-            </DialogHeader>
-          </div>
-          <div className="p-6">
-            <DialogDescription className="font-medium text-sm text-ink/75 leading-relaxed">
-              We've built your order message for you. When WhatsApp opens, hit{" "}
-              <strong className="text-ink">Send</strong> to place your order
-              with our kitchen.
-            </DialogDescription>
-            {total > 0 && (
-              <div className="mt-4 rounded-xl p-4 bg-ink text-paper flex justify-between items-center">
-                <span className="eyebrow">Order total</span>
-                <span className="font-bebas text-2xl">R{total}</span>
-              </div>
-            )}
-            <button
-              data-testid="btn-whatsapp-send"
-              onClick={handleWhatsAppRedirect}
-              className="mt-4 w-full rounded-full text-white border-2 border-ink bg-blue p-4 uppercase tracking-widest active:scale-[0.98] transition-transform font-bebas"
-              style={{ fontSize: "1.2rem", boxShadow: "0 4px 0 var(--sb-ink)" }}
-            >
-              Open WhatsApp & Send
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
