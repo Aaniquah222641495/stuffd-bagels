@@ -13,7 +13,9 @@
  *   1. emails the owner  "New order: <name>, <day>"  (paid, confirmed)  or  "Booking enquiry: <name>, <date>",
  *   2. emails the customer a short branded reply from the owner's address ("order confirmed" for orders),
  *   3. puts the owner email under the Gmail label "Orders" or "Bookings".
- * Nothing is stored except the emails themselves (and short-lived duplicate and quota counters).
+ * Nothing is stored except the emails themselves, short-lived duplicate and quota counters, and one small pickup
+ * reminder per paid order (first name, email, pickup details, items) in Script Properties. The reminder is emailed to the
+ * customer at about 08:00 on the collection day and then deleted; a reminder whose day has passed is deleted unsent.
  *
  * The Worker may send the same paid order more than once (it retries if this script was slow): a paid order is
  * de-duplicated by its reference for 6 hours, the longest Google's CacheService allows, so it is emailed once.
@@ -36,6 +38,8 @@ const CONFIG = {
   MAX_BODY_CHARS: 12000,
   DUPLICATE_WINDOW_SECONDS: 600,
   PAID_DUPLICATE_WINDOW_SECONDS: 21600, // 6 hours, the maximum CacheService allows
+  // Pickup-day reminder (founder 2026-11-19): sent to each paid order's customer on the collection morning.
+  REMINDER_HOUR: 8, // Google runs a daily trigger some time inside this hour (08:00 to 09:00), never exactly on the minute
   // A free Gmail account can send about 100 emails a day; each submission sends 2.
   MIN_QUOTA: 4,
   // Caps kept by the script itself, as a second wall behind the Worker's limits.
@@ -174,6 +178,9 @@ function process_(raw) {
     // 21600 s (6 hours) is the longest CacheService keeps a value (Apps Script docs). A paid order is held that long; a booking 10 minutes.
     cache.put(dupeKey, '1', a.type === 'order' ? CONFIG.PAID_DUPLICATE_WINDOW_SECONDS : CONFIG.DUPLICATE_WINDOW_SECONDS);
     if (contentKey) cache.put(contentKey, '1', CONFIG.DUPLICATE_WINDOW_SECONDS);
+    if (a.type === 'order') {
+      try { saveReminder_(props, a); } catch (err) { console.error('Reminder not saved for ' + a.ref + ': ' + err); }
+    }
   } catch (err) {
     console.error('Owner email failed for ' + a.ref + ': ' + err);
     return { ok: false, error: 'mail' };
@@ -294,7 +301,7 @@ function sendCustomer_(a) {
       .concat(a.items.map(function (i) { return [i.qty + ' x ' + i.name, rand_(i.line)]; }))
       .concat([['Total', rand_(a.total)]]);
     if (a.note) rows.push(['Your note', a.note]);
-    outro = 'Your payment has been received and your order is confirmed. ' + CANCELLATION_POLICY_ + ' Questions? Just reply to this email.';
+    outro = 'Your payment has been received and your order is confirmed. We will email you a reminder on the morning of your collection day. ' + CANCELLATION_POLICY_ + ' Questions? Just reply to this email.';
   } else {
     subject = "STUFF'D: we've got your event enquiry " + a.ref;
     intro = "Thanks for thinking of us, " + f + "! Your event enquiry has landed.";
@@ -418,7 +425,7 @@ function customerHtml_(a) {
       box_('Collect', day_(a.pickupDate, true), [a.pickupPlace, a.pickupTime ? 'Your preferred time: ' + a.pickupTime : '', a.pickupDays]) +
       itemsTable_(a) +
       note_('Your note', a.note) +
-      para_('Questions or need to change something? Just reply to this email.') +
+      para_('We\'ll email you a reminder on the morning of your collection day. Questions or need to change something? Just reply to this email.') +
       para_(CANCELLATION_POLICY_, true));
   }
   return shell_('We\'ve got your event enquiry ' + a.ref + '.', 'Enquiry ' + a.ref,
@@ -507,6 +514,82 @@ function labelNew() {
 }
 
 /* ------------------------------------------------------------------ */
+/* Pickup-day reminder (founder 2026-11-19)                            */
+/* ------------------------------------------------------------------ */
+
+const REMINDER_PREFIX_ = 'rem_';
+
+/** Keeps only what the reminder needs. Overwrites on a resend of the same ref, so one reminder per order. */
+function saveReminder_(props, a) {
+  props.setProperty(REMINDER_PREFIX_ + a.ref, JSON.stringify({
+    ref: a.ref, first: first_(a.name), email: a.email, pickupDate: a.pickupDate, pickupTime: a.pickupTime,
+    pickupPlace: a.pickupPlace, pickupDays: a.pickupDays,
+    items: a.items.map(function (i) { return { name: i.name, qty: i.qty }; })
+  }));
+}
+
+/** Run every morning by the trigger setup() installs. Sends today's reminders, deletes them, deletes any from past days. */
+function sendReminders() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) { console.error('Reminders: busy, the next daily run will not resend these, so check the log'); return; }
+  try {
+    const today = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd');
+    const props = PropertiesService.getScriptProperties();
+    const all = props.getProperties();
+    let sentCount = 0, skipped = 0;
+    Object.keys(all).sort().forEach(function (k) {
+      if (k.indexOf(REMINDER_PREFIX_) !== 0) return;
+      let r;
+      try { r = JSON.parse(all[k]); } catch (err) { props.deleteProperty(k); return; }
+      if (!r || !validDate_(r.pickupDate) || r.pickupDate < today) { props.deleteProperty(k); return; } // missed or broken: never kept
+      if (r.pickupDate > today) return; // a later Saturday
+      // Keep a little quota so a new paid order today can still reach the owner.
+      if (MailApp.getRemainingDailyQuota() < CONFIG.MIN_QUOTA) { skipped++; return; }
+      try {
+        sendReminder_(r);
+        sentCount++;
+        props.deleteProperty(k);
+      } catch (err) {
+        console.error('Reminder failed for ' + r.ref + ': ' + err);
+      }
+    });
+    console.log('Reminders for ' + today + ': sent ' + sentCount + (skipped ? ', NOT sent (email quota low) ' + skipped : ''));
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function reminderItems_(r) {
+  return r.items.map(function (i) { return i.qty + ' x ' + i.name; });
+}
+
+function sendReminder_(r) {
+  const subject = "STUFF'D: collection day! Your order " + r.ref;
+  const when = r.pickupTime ? 'Your preferred time: ' + r.pickupTime : '';
+  const plain = [
+    'Hi ' + r.first + ', today is collection day!', '',
+    'Collect: today, ' + day_(r.pickupDate, true),
+    'Where: ' + r.pickupPlace
+  ].concat(when ? [when] : [], r.pickupDays ? ['Collection times: ' + r.pickupDays] : [],
+    ['', 'Your order ' + r.ref + ':'], reminderItems_(r),
+    ['', "Can't make it or running late? Just reply to this email or call " + CONFIG.PHONE_DISPLAY + '.', '', "STUFF'D Bagels", 'Cape Town', CONFIG.SITE_URL]).join('\n');
+  MailApp.sendEmail({ to: r.email, subject: subject, body: plain, htmlBody: reminderHtml_(r), name: CONFIG.BUSINESS_NAME, replyTo: owner_() });
+}
+
+function reminderHtml_(r) {
+  const c = COLOURS;
+  const items = '<tr><td style="padding:10px 26px 4px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0">' + r.items.map(function (i) {
+    return '<tr><td width="40" style="padding:10px 0;border-bottom:1px solid #dbe3f0;vertical-align:middle"><span style="display:inline-block;min-width:28px;height:28px;line-height:28px;text-align:center;border-radius:14px;background:' + c.blue + ';color:#ffffff;font-family:' + FONT_ + ';font-size:14px;font-weight:900">' + i.qty + '</span></td>' +
+      '<td style="padding:10px 0;border-bottom:1px solid #dbe3f0;font-family:' + BODY_FONT_ + ';font-size:16px;font-weight:700;color:' + c.ink + '">' + esc_(i.name) + '</td></tr>';
+  }).join('') + '</table></td></tr>';
+  return shell_('Today is collection day. ' + r.pickupPlace + '.', 'Order ' + r.ref,
+    h1_('Collection day!', 'Hi ' + r.first + ', your bagels are being stuffed for today.') +
+    box_('Collect today', day_(r.pickupDate, true), [r.pickupPlace, r.pickupTime ? 'Your preferred time: ' + r.pickupTime : '', r.pickupDays]) +
+    items +
+    para_("Can't make it or running late? Just reply to this email or call " + CONFIG.PHONE_DISPLAY + '.'));
+}
+
+/* ------------------------------------------------------------------ */
 /* One-time set-up and self-test (run from the editor, as the owner)   */
 /* ------------------------------------------------------------------ */
 
@@ -518,7 +601,11 @@ function setup() {
     if (t.getHandlerFunction() === 'labelNew') ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('labelNew').timeBased().everyMinutes(5).create();
-  console.log('Labels "' + CONFIG.ORDERS_LABEL + '" and "' + CONFIG.BOOKINGS_LABEL + '" are ready, and the 5-minute labeller is on.');
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'sendReminders') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('sendReminders').timeBased().everyDays(1).atHour(CONFIG.REMINDER_HOUR).inTimezone(CONFIG.TIMEZONE).create();
+  console.log('Labels "' + CONFIG.ORDERS_LABEL + '" and "' + CONFIG.BOOKINGS_LABEL + '" are ready, the 5-minute labeller is on, and pickup reminders go out daily between ' + CONFIG.REMINDER_HOUR + ':00 and ' + (CONFIG.REMINDER_HOUR + 1) + ':00.');
   console.log('Owner emails go to: ' + owner_());
   console.log('Next: Deploy > New deployment > Web app (Execute as: Me, Who has access: Anyone). Then run testOrder and testBooking.');
 }
@@ -534,6 +621,16 @@ function testOrder() {
     items: [{ name: 'Pizza Bagel', qty: 2, unit: 85, line: 170 }, { name: 'Extra Jalapeno', qty: 1, unit: 5, line: 5 }],
     total: 175, note: 'This is a test, please ignore.'
   })));
+}
+/** Sends a pretend pickup reminder to the owner's own address (nothing is saved). */
+function testReminder() {
+  sendReminder_({
+    ref: 'SB-TEST77', first: 'Test', email: owner_(),
+    pickupDate: Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd'), pickupTime: '2pm to 3pm',
+    pickupPlace: 'Test pickup point, Cape Town', pickupDays: '',
+    items: [{ name: 'Pizza Bagel', qty: 2 }, { name: 'Extra Jalapeno', qty: 1 }]
+  });
+  console.log('Test reminder sent to ' + owner_());
 }
 function testBooking() {
   console.log(JSON.stringify(process_({

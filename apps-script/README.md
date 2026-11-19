@@ -51,7 +51,8 @@ address could make your Gmail send email to anybody, so the script refuses to wo
 3. You will see "Google hasn't verified this app". That is normal for your own script. Click **Advanced**, then
    **Go to STUFFD orders (unsafe)**, then **Allow**. It asks for: send email, manage Gmail labels, run on a timer. That is all it uses.
 4. Under **Execution log** at the bottom you should see:
-   `Labels "Orders" and "Bookings" are ready, and the 5-minute labeller is on.`
+   `Labels "Orders" and "Bookings" are ready, the 5-minute labeller is on, and pickup reminders go out daily between 8:00 and 9:00.`
+   (Already set up before 2026-11-19? Paste the new code, then run **setup** once more to add the daily reminder timer. Safe to re-run.)
 5. Open Gmail: the labels **Orders** and **Bookings** are now in the left sidebar (click "More" if they are hidden).
 
 ## Part 3: Publish it as a web app
@@ -62,6 +63,9 @@ address could make your Gmail send email to anybody, so the script refuses to wo
    every order before sending it on, and the script refuses anything without the token from "The token" above.)
 4. Click **Deploy**. Copy the **Web app URL** (it ends in `/exec`).
 5. Paste the URL into a new browser tab. You should see `{"ok":true,...,"status":"running"}`.
+6. **Check Who has access says Anyone** (Deploy > Manage deployments). With "Only myself" the website's emails fail
+   silently while the editor tests still work (found 2026-11-19). From a terminal:
+   `curl -sL -H 'Content-Type: text/plain;charset=utf-8' --data '{}' <the /exec URL>` must print `{"ok":false,"error":"invalid"}`.
 
 ## Part 4: Test it (sends two emails to stuffd.bagels@gmail.com itself)
 1. Back in the editor choose **testOrder** in the function drop-down and click **Run**.
@@ -70,8 +74,10 @@ address could make your Gmail send email to anybody, so the script refuses to wo
    - **STUFF'D: order confirmed SB-...** (what the customer receives: the branded one; the test uses a fresh reference each run).
 3. The owner email carries the **Orders** label straight away or within 5 minutes.
 4. Choose **testBooking** and Run. You get **Booking enquiry: Test Customer, ...**, a customer reply, and the **Bookings** label.
-5. Running **testBooking** twice within 10 minutes does nothing the second time (duplicate guard). Wait, or ignore. (**testOrder** makes a new reference every run, so it always sends.)
-6. Delete the test emails when you are happy.
+5. Choose **testReminder** and Run. You get **STUFF'D: collection day! Your order SB-TEST77**, the pickup-day reminder
+   every paid customer gets between 8:00 and 9:00 on their collection Saturday (nothing is saved by this test).
+6. Running **testBooking** twice within 10 minutes does nothing the second time (duplicate guard). Wait, or ignore. (**testOrder** makes a new reference every run, so it always sends.)
+7. Delete the test emails when you are happy.
 
 ## Part 5: Give the website the address
 Do this for the **preview** first (the founder does this part, with the URL from Part 3). The website needs **both** secrets,

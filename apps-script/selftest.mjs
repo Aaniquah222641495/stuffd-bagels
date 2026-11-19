@@ -220,6 +220,60 @@ propStore.clear();
 // No 'awaiting payment' anywhere in the script.
 assert.ok(!/awaiting payment|AWAITING/i.test(code), "Code.gs has no 'awaiting payment' wording");
 
+// Pickup-day reminder (founder 2026-11-19): saved per paid order, sent on the collection day, then deleted.
+{
+  propStore.clear();
+  const realDate = ctx.Date;
+  const at = (iso) => { ctx.Date = class extends realDate { constructor(...a) { super(...(a.length ? a : [iso])); } static now() { return new realDate(iso).getTime(); } }; };
+  const before = sent.length;
+  const mk = (ref, pickupDate, extra = {}) => ({ ...order, ref, checkoutId: "ch_" + ref.replace("-", ""), pickupDate, pickupTime: "2pm to 3pm", email: ref.toLowerCase() + "@example.com", ...extra });
+  assert.equal(post(mk("SB-REMA11", "2026-11-28")).ok, true);
+  assert.equal(post(mk("SB-REMB22", "2026-12-05")).ok, true);
+  assert.equal(post({ ...booking, ref: "BK-REMC33", email: "remc@example.com" }).ok, true);
+  const saved = JSON.parse(propStore.get("rem_SB-REMA11"));
+  assert.deepEqual(Object.keys(saved).sort(), ["email", "first", "items", "pickupDate", "pickupDays", "pickupPlace", "pickupTime", "ref"], "only what the reminder needs");
+  assert.equal(saved.first, "Aisha", "first name only");
+  assert.ok(!("phone" in saved) && !("note" in saved) && !("checkoutId" in saved), "no phone, note or payment id kept");
+  assert.ok(!propStore.has("rem_BK-REMC33"), "bookings get no reminder");
+  assert.match(sent[before + 1].body, /reminder on the morning of your collection day/, "confirmation tells the customer a reminder is coming");
+  const sentBefore = sent.length;
+  at("2026-11-27T08:15:00+02:00"); ctx.sendReminders();
+  assert.equal(sent.length, sentBefore, "nothing the day before");
+  at("2026-11-28T08:15:00+02:00"); ctx.sendReminders();
+  assert.equal(sent.length, sentBefore + 1, "one reminder on collection day");
+  const rem = sent.at(-1);
+  assert.equal(rem.to, "sb-rema11@example.com");
+  assert.equal(rem.subject, "STUFF'D: collection day! Your order SB-REMA11");
+  assert.equal(rem.replyTo, "stuffd.bagels@gmail.com");
+  assert.match(rem.body, /today is collection day/);
+  assert.match(rem.body, /Where: Kenilworth Corner/);
+  assert.match(rem.body, /Your preferred time: 2pm to 3pm/);
+  assert.match(rem.body, /2 x Pizza Bagel/);
+  assert.ok(rem.htmlBody.includes("/logo-white.png") && rem.htmlBody.includes("Collection day!"), "branded reminder");
+  assert.ok(!rem.htmlBody.includes("<b>Khan"), "no raw customer HTML");
+  assert.ok(!propStore.has("rem_SB-REMA11"), "deleted once sent");
+  assert.ok(propStore.has("rem_SB-REMB22"), "later Saturday kept");
+  ctx.sendReminders();
+  assert.equal(sent.length, sentBefore + 1, "never sent twice");
+  // Low quota on the day: held, not sent, and not deleted (an owner email still has room).
+  assert.equal(post(mk("SB-REMD44", "2026-12-05")).ok, true);
+  const s2 = sent.length;
+  quota = 3; at("2026-12-05T08:15:00+02:00"); ctx.sendReminders();
+  assert.equal(sent.length, s2, "quota below MIN_QUOTA: no reminders");
+  assert.ok(propStore.has("rem_SB-REMB22"));
+  quota = 100; ctx.sendReminders();
+  assert.equal(sent.length, s2 + 2, "both 5 Dec reminders go once quota allows");
+  // A reminder whose day has passed is deleted unsent; a broken one too.
+  assert.equal(post(mk("SB-REME55", "2026-12-12")).ok, true);
+  propStore.set("rem_SB-BROKEN", "{not json");
+  const s3 = sent.length;
+  at("2026-12-13T08:15:00+02:00"); ctx.sendReminders();
+  assert.equal(sent.length, s3, "missed day: not sent late");
+  assert.equal([...propStore.keys()].filter((k) => k.startsWith("rem_")).length, 0, "missed and broken reminders deleted");
+  ctx.Date = realDate;
+  propStore.clear();
+}
+
 // Quota.
 quota = 2;
 assert.equal(post({ ...booking, ref: "BK-CCC333", guests: 13, email: "quota@example.com" }).error, "quota");
