@@ -462,8 +462,49 @@ function labelRecent_() {
   });
 }
 
+/* ------------------------------------------------------------------ */
+/* Inbox folders (founder and client, 2026-11-19)                      */
+/* Files everyday mail into labels so the inbox only holds what needs  */
+/* her. Shopping and Promotions also leave the inbox (archived, never  */
+/* deleted: they stay under their label). Our own emails are skipped.  */
+/* To add a sender, add it to the matching query below.                */
+/* ------------------------------------------------------------------ */
+const FOLDERS_ = [
+  { label: 'Payments', query: 'from:(yoco.com OR capitecbank.co.za)' },
+  { label: 'Markets', query: 'from:bookipi.com OR "Revere Markets"' },
+  { label: 'Accounts', query: 'from:(google.com OR canva.com)' },
+  { label: 'Enquiries', query: 'subject:(sponsorship OR sponsor OR collab OR collaboration OR vacancy OR inquiry OR enquiry OR quote)' },
+  { label: 'Shopping', query: 'from:(shein.com OR sheinnotify.com OR sheinnotice.com OR buffaloex.com OR takealot.com OR temu.com)', archive: true },
+  { label: 'Promotions', query: 'from:uber.com OR category:promotions', archive: true }
+];
+
+/** Labels matching threads; `window` like '2d' limits it to recent mail ('' = everything, for the first run). */
+function organise_(window) {
+  const business = ['Orders', 'Bookings', 'Payments', 'Markets', 'Enquiries'];
+  FOLDERS_.forEach(function (f) {
+    const label = GmailApp.getUserLabelByName(f.label) || GmailApp.createLabel(f.label);
+    let q = '(' + f.query + ') -from:me -label:' + f.label.toLowerCase();
+    // Never hide business mail: promotions skip anything already filed as business.
+    if (f.archive) q += business.map(function (b) { return ' -label:' + b.toLowerCase(); }).join('');
+    if (window) q += ' newer_than:' + window;
+    for (let round = 0; round < 10; round++) { // 10 x 100 threads per label per run keeps us inside Apps Script's time limit
+      const threads = GmailApp.search(q, 0, 100);
+      if (!threads.length) break;
+      label.addToThreads(threads);
+      if (f.archive) GmailApp.moveThreadsToArchive(threads.filter(function (t) { return t.isInInbox(); }));
+      if (threads.length < 100) break;
+    }
+  });
+}
+
+/** Run once from the editor to file all existing mail. Safe to run again. */
+function organiseAll() { organise_(''); }
+
 /** Run by the 5-minute trigger that setup() installs. */
-function labelNew() { labelRecent_(); }
+function labelNew() {
+  labelRecent_();
+  try { organise_('2d'); } catch (err) { console.error('Folders failed (next run retries): ' + err); }
+}
 
 /* ------------------------------------------------------------------ */
 /* One-time set-up and self-test (run from the editor, as the owner)   */
