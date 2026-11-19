@@ -25,7 +25,8 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   await page.goto(B + "/", { waitUntil: "networkidle" }); await page.waitForTimeout(900);
   // 1 single choice
   assert.equal(await page.getByTestId("select-venue").count() + await page.getByTestId("select-saturday").count(), 0);
-  assert.equal(await page.getByTestId("collect-summary").locator("p").nth(1).textContent(), "Strandfontein collection, Strandfontein · Saturday 28 Nov · 1pm to 6pm");
+  assert.equal(await page.getByTestId("collect-summary").locator("p").nth(1).textContent(), "Strandfontein collection");
+  assert.equal(await page.getByTestId("collect-summary").locator("p").nth(2).textContent(), "Sat 28 Nov, 1pm to 6pm");
   // 2 chips, keyboard, clear
   const chips = page.getByTestId("time-chips");
   assert.deepEqual(await chips.locator("label").allTextContents(), ["Any time", "1pm to 2pm", "2pm to 3pm", "3pm to 4pm", "4pm to 5pm", "5pm to 6pm"]);

@@ -13,7 +13,7 @@ let checked = 0, bad = [];
 for (const [w, h] of [[390, 844], [1280, 900]]) {
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, bypassCSP: true, reducedMotion: "reduce", extraHTTPHeaders: process.env.BASE ? {} : { "CF-Connecting-IP": ip } });
   const page = await ctx.newPage();
-  for (const path of process.env.BASE ? ["/", "/privacy", "/admin"] : ["/", "/privacy", "/admin", "/admin#signed-in"]) {
+  for (const path of process.env.BASE ? ["/", "/privacy", "/terms", "/admin"] : ["/", "/privacy", "/terms", "/admin", "/admin#signed-in"]) {
     await page.goto((process.env.BASE ?? B) + path.replace("#signed-in", ""), { waitUntil: "networkidle" });
     if (path.endsWith("#signed-in")) { await page.getByLabel("Admin password").fill(pw); await page.getByRole("button", { name: "Sign In" }).click(); await page.waitForTimeout(1500); }
     await page.evaluate(async () => { for (let y = 0; y < document.body.scrollHeight; y += 400) { window.scrollTo(0, y); await new Promise((r) => setTimeout(r, 60)); } window.scrollTo(0, 0); });

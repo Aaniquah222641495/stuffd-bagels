@@ -87,6 +87,12 @@ export const PAGES: PageMeta[] = [
     description: "How STUFF'D Bagels looks after the details you give us when you order or enquire about an event.",
     jsonLd: [],
   },
+  {
+    path: "/terms",
+    title: "Terms and conditions | STUFF'D Bagels",
+    description: "How ordering, paying, collecting and cancelling a STUFF'D Bagels order works.",
+    jsonLd: [],
+  },
   // Where Yoco sends the customer back to after paying, cancelling or failing: never indexed, not in the sitemap.
   {
     path: "/order/result",

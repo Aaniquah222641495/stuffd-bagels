@@ -118,11 +118,13 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   await page.getByTestId("select-saturday").selectOption(sats[1]); await page.getByTestId("time-chips").locator("label", { hasText: "11am to 12pm" }).click(); await page.getByTestId("textarea-notes").fill("No onions please");
   assert.ok(!(await page.getByTestId("order-form").textContent()).includes("Please add your name"), "errors clear as fields are fixed");
   assert.equal((await page.getByTestId("btn-place-order").textContent()).trim(), "Pay R310 with Yoco");
-  assert.match(await page.getByTestId("pay-note").textContent(), /Pay securely on Yoco\. Your order is confirmed as soon as it's paid\./);
+  const payNote = page.getByTestId("pay-note");
+  assert.match(await payNote.textContent(), /By paying you agree to our Terms and conditions, including credit \(not refunds\) if you cancel or don't collect\./, "one short line; the credit term stays visible (CPA s49)");
+  assert.equal(await payNote.locator('a[href="/terms"]').count(), 1, "links to the Terms page");
   const steps = await page.locator("#details ol").textContent();
   assert.ok(steps.includes("Pay with Yoco") && steps.includes("Pay securely on Yoco. Your order is confirmed straight away and we email you a confirmation."), "step 3 matches paying online");
   assert.ok(!/send it|then pay|how to pay|we'll email you how/i.test(await page.locator("#details").textContent()), "no pay-later wording in the checkout section");
-  assert.match(await page.getByTestId("pay-window-note").textContent(), /Start your order before Wednesday 23:59\./);
+  assert.equal(await page.getByTestId("pay-window-note").count(), 0, "long paragraphs moved to /terms (founder 2026-11-19)");
   assert.ok(!/how to pay|Awaiting payment|Order sent/i.test(await page.locator("body").textContent()), "no 'awaiting payment' wording anywhere on the page");
   await page.getByTestId("order-form").scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS ?? "."}/order3-filled-${w}.png` });
   await axeRun(page, "order form filled (Pay button)");
@@ -234,7 +236,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   const offered = async () => {
     if (await page.getByTestId("select-saturday").count()) return page.locator("[data-testid=select-saturday] option").allTextContents();
     const f = page.getByTestId("saturday-fixed"); if (await f.count()) return [await f.locator("p").nth(1).textContent()];
-    const c = page.getByTestId("collect-summary"); return (await c.count()) ? [/Saturday \d+ \w+/.exec(await c.textContent())[0]] : [];
+    const c = page.getByTestId("collect-summary"); return (await c.count()) ? ["Saturday " + /Sat(?:urday)? (\d+ \w+)/.exec(await c.textContent())[1]] : [];
   };
   const edge = async (iso) => { await page.clock.setFixedTime(new Date(iso)); await open(); return offered(); };
   const hidden = async (iso) => { await page.clock.setFixedTime(new Date(iso)); await open(); return page.getByTestId("orders-hidden").textContent(); };
@@ -265,9 +267,9 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   assert.deepEqual(await edge("2026-11-15T00:00:00+02:00"), ["Saturday 28 Nov"]);
   assert.equal(await page.getByTestId("select-venue").count() + await page.getByTestId("select-saturday").count(), 0, "nothing to choose, so no selects");
   const sum = page.getByTestId("collect-summary");
-  assert.equal(await sum.locator("p").nth(1).textContent(), "Strandfontein collection, Strandfontein \u00b7 Saturday 28 Nov \u00b7 1pm to 6pm");
-  const sumHint = await sum.locator("p").nth(2).textContent();
-  assert.ok(sumHint.includes("Orders for Saturday 28 Nov close on Wednesday 25 Nov at 23:59.") && sumHint.includes("Times to be confirmed."), "cut-off line and the owner's caveat stay");
+  // Short on purpose (founder 2026-11-19): place, then "Sat 28 Nov, 1pm to 6pm"; the area is not repeated when the name has it.
+  assert.equal(await sum.locator("p").nth(1).textContent(), "Strandfontein collection");
+  assert.equal(await sum.locator("p").nth(2).textContent(), "Sat 28 Nov, 1pm to 6pm");
   assert.deepEqual(await page.getByTestId("time-chips").locator("label").allTextContents(), ["Any time", "1pm to 2pm", "2pm to 3pm", "3pm to 4pm", "4pm to 5pm", "5pm to 6pm"], "structured hours 13:00 to 18:00");
   await page.getByTestId("order-form").scrollIntoViewIfNeeded(); await page.screenshot({ path: `${shots}/form-single-choice-${w}.png` });
   await axeRun(page, "single pickup point and Saturday, chips");

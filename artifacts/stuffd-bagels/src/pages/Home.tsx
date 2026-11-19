@@ -1,13 +1,12 @@
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { BookingForm } from "@/components/booking-form";
-import { CANCELLATION_POLICY, DEFAULT_CUTOFF, availableSaturdays, cutoffDay, hoursCaveat, hoursLabel, niceDay, openingNote, pickupHours, timeSlots } from "@/collection";
+import { DEFAULT_CUTOFF, availableSaturdays, cutoffDay, hoursCaveat, hoursLabel, niceDay, openingNote, pickupHours, timeSlots } from "@/collection";
 import {
   DRAFT_KEY,
   FieldRow,
   FixedRow,
   Honeypot,
   TimeChips,
-  PrivacyNote,
   failureMessage,
   inputClass,
   looksLikeEmail,
@@ -1079,8 +1078,10 @@ export default function Home() {
                         <FixedRow
                           label="Collect"
                           testId="collect-summary"
-                          value={[`${chosenPoint.name}, ${chosenPoint.area}`, niceDay(chosenSat), hours ? hoursLabel(hours) : ""].filter(Boolean).join(" \u00b7 ")}
-                          hint={[cutoffLine, hours ? caveat : chosenPoint.days ? `Collection times: ${chosenPoint.days}` : ""].filter(Boolean).join(" ")}
+                          // Kept short (founder 2026-11-19: "too much"): place, then day and hours. The cut-off is
+                          // already said under the form, so it is not repeated here.
+                          value={chosenPoint.area && !chosenPoint.name.toLowerCase().includes(chosenPoint.area.toLowerCase()) ? `${chosenPoint.name}, ${chosenPoint.area}` : chosenPoint.name}
+                          hint={[niceDay(chosenSat).replace(/^(\w{3})\w*/, "$1"), hours ? hoursLabel(hours) : chosenPoint.days].filter(Boolean).join(", ")}
                         />
                       ) : (
                         <>
@@ -1151,13 +1152,6 @@ export default function Home() {
                       )}
                     </div>
 
-                    <p className="text-sm mt-4 text-ink/75 leading-relaxed px-1 m-0" data-testid="pay-window-note">
-                      Start your order before Wednesday {rules.cutoffTime}. Once you press the button you have 30 minutes to pay; an unpaid order isn't kept.
-                    </p>
-                    <p className="text-sm mt-3 text-ink/75 leading-relaxed px-1 m-0" data-testid="cancellation-policy">
-                      {CANCELLATION_POLICY} By paying you agree to this.
-                    </p>
-                    <PrivacyNote what="We use your name, phone and email only to deal with this order. Your card details go to Yoco, never to us." />
 
                     {orderErrors.bagels && itemCount < 1 && (
                       <p role="alert" className="mt-4 mb-0 text-sm font-bold text-error">{orderErrors.bagels}</p>
@@ -1176,8 +1170,10 @@ export default function Home() {
                     >
                       {orderStatus === "sending" ? "Opening Yoco..." : total > 0 ? `Pay R${total} with Yoco` : "Pay with Yoco"}
                     </button>
-                    <p className="text-sm mt-3 mb-0 text-ink/75 leading-relaxed px-1 text-center" data-testid="pay-note">
-                      Pay securely on Yoco. Your order is confirmed as soon as it's paid.
+                    {/* One short line instead of the long paragraphs (founder 2026-11-19). The credit-not-refund term stays visible
+                        here, not only behind the link: CPA s49 wants terms that limit the customer's rights drawn to their attention. */}
+                    <p className="text-[13px] mt-3 mb-0 text-ink/75 leading-relaxed px-1 text-center" data-testid="pay-note">
+                      Secure payment on Yoco. By paying you agree to our <a className="font-bold underline underline-offset-2" href="/terms">Terms and conditions</a>, including credit (not refunds) if you cancel or don't collect. <a className="font-bold underline underline-offset-2" href="/privacy">Privacy notice</a>.
                     </p>
                   </form>
                 )}
