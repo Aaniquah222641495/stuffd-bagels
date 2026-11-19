@@ -1,9 +1,10 @@
 name: CI
 
+# Not triggered on its own: the "Pipeline" workflow (deploy.yml) calls it on every pull request and every push to main,
+# so the build that passes these checks is the same build that gets deployed (ADR-0042).
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,8 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
       - name: Install pnpm (same version as the lockfile was made with)
@@ -23,11 +26,56 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
       - name: Build the website (with prerender)
+        # Same variables as the run sheet's build step. Nothing here is environment-specific: the Worker serves the Turnstile site key
+        # and other per-environment values at run time, so one build is deployed to every environment.
         run: pnpm --filter @workspace/stuffd-bagels run build
         env:
           NODE_ENV: production
-          PORT: "3000"
+          PORT: "5173"
           BASE_PATH: /
+      - name: Keep the built site for the tests and the deploy
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: site-dist
+          path: artifacts/stuffd-bagels/dist/public
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
       - name: Audit dependencies (high and critical)
+        # Not blocking yet: every dependency here is a devDependency of the build and 8 high findings are already open (DEBT).
         run: pnpm audit --audit-level high
         continue-on-error: true
+
+  tests:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: "true"
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Install pnpm (same version as the lockfile was made with)
+        run: npm install -g pnpm@10.34.7 && pnpm -v
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site-dist
+          path: artifacts/stuffd-bagels/dist/public
+      - name: Unit tests and Apps Script self-test (Node only)
+        run: |
+          node apps-script/selftest.mjs
+          node worker/tests/saturday-rules.mjs
+          node worker/tests/limiter-unit.mjs
+          node worker/tests/forms-limits.mjs
+          node worker/tests/admin-policy.mjs
+      - name: API tests (local wrangler dev, fake Apps Script, throwaway password)
+        # Starts the built site on a local Worker; no Cloudflare login, no real secrets, no email.
+        # Left out on purpose: worker/tests/e2e-browser.mjs and image-ratios.mjs (Playwright + axe + Chrome are not repo
+        # dependencies; per the Design rule they stay a local check before a PR is called done).
+        run: bash worker/tests/run-api-tests.sh
