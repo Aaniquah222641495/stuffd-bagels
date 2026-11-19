@@ -1,0 +1,5 @@
+# Changes to the pipeline need the founder's review (ADR-0042). This only blocks a merge once branch protection on main has
+# "Require review from Code Owners" switched on (see DEPLOY.md, one-time setup).
+/.github/ @Aaniquah222641495
+/wrangler.jsonc @Aaniquah222641495
+/DEPLOY.md @Aaniquah222641495

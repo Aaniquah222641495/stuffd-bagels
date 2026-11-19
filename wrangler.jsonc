@@ -14,7 +14,7 @@
 // Bindings are not inherited by environments, so the preview repeats it; the migration is inherited.
 //
 // KV: namespaces created 2026-11-16 in the founder's account (founder yes): stuffd-kv (live) and
-// stuffd-kv-preview. Ids are not secrets. Preview deploy: `npx wrangler@4.148.0 deploy --env preview`.
+// stuffd-kv-preview. Ids are not secrets. Deploys now go through GitHub Actions (DEPLOY.md); by hand: `npx wrangler@4.148.0 deploy --env preview`.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "stuffdbagels",
@@ -48,6 +48,28 @@
       // The preview is never indexed: NOINDEX makes the Worker add X-Robots-Tag to every page and file, so it must run for all paths
       // here (a few thousand extra Worker requests a month on the preview only; production keeps static requests free).
       "vars": { "APP_ENV": "preview", "NOINDEX": "1" },
+      "assets": {
+        "directory": "./artifacts/stuffd-bagels/dist/public",
+        "binding": "ASSETS",
+        "not_found_handling": "404-page",
+        "html_handling": "auto-trailing-slash",
+        "run_worker_first": ["/*"]
+      }
+    },
+    // DEV (CI/CD): a throwaway Worker the pipeline redeploys on every push to a pull-request branch. Latest push wins.
+    // No Apps Script secrets are ever set on it, so the order and booking forms answer "not switched on yet" and no email is sent.
+    // APP_ENV "dev" is treated like production by worker/auth.ts (admin password of 16+ characters), which is the safe side.
+    // KV: not bound yet, so public pages and /api/pickups work (empty), and admin saves answer 503. To switch it on, the founder runs
+    //   npx wrangler@4.148.0 kv namespace create stuffd-kv-dev
+    // and pastes the printed id into the commented line below (remove the // marks). Ids are not secrets.
+    // After PR "order-form-friction" merges, also add its vars here: YOCO_MODE "test", SITE_ORIGIN (this Worker's workers.dev URL) and the
+    // Turnstile TEST site key (a public value that always passes).
+    "dev": {
+      "name": "stuffdbagels-dev",
+      "preview_urls": false,
+      // "kv_namespaces": [{ "binding": "STUFFD_KV", "id": "PASTE_ID_FROM_kv_namespace_create" }],
+      "durable_objects": { "bindings": [{ "name": "LIMITER", "class_name": "Limiter" }] },
+      "vars": { "APP_ENV": "dev", "NOINDEX": "1" },
       "assets": {
         "directory": "./artifacts/stuffd-bagels/dist/public",
         "binding": "ASSETS",

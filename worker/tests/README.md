@@ -17,6 +17,7 @@ None of these send real email: the "Apps Script" is a fake (`fake-apps-script.mj
 | `e2e-browser.mjs` | Browser checks at 390 and 1280 incl. axe: hidden ordering, form, Saturdays, cut-off note, admin screens | wrangler dev + fake script + Chrome |
 
 ## Run
+CI runs the Node-only tests and the four wrangler dev API suites on every pull request (`.github/workflows/ci.yml`). The API suites in one command, after building the site: `bash worker/tests/run-api-tests.sh` (`DEV_PORT` / `FAKE_PORT` if 8787 / 8899 are busy). `e2e-browser.mjs` and `image-ratios.mjs` stay local (Chrome, Playwright, axe).
 ```
 node apps-script/selftest.mjs
 node worker/tests/saturday-rules.mjs

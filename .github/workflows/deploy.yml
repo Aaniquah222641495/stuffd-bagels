@@ -1,0 +1,122 @@
+name: Pipeline
+
+# CI on every pull request and every push to main, then deploys (ADR-0042). Plain-words guide: DEPLOY.md.
+#   pull request (same repo only) -> CI -> dev      (automatic, latest push wins)
+#   push to main                  -> CI -> qa -> production (production waits for the founder's Approve click)
+#   "Run workflow" on main        -> same as a push to main (this is the path for a private repo with no required reviewers)
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  dev:
+    # Never for forks (they get no secrets and no deploy) and never for Dependabot (its runs cannot read environment secrets).
+    needs: ci
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: dev
+      url: https://stuffdbagels-dev.thedigitalpantryza.workers.dev
+    concurrency:
+      group: deploy-dev
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Get the exact build that passed CI
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site-dist
+          path: artifacts/stuffd-bagels/dist/public
+      - name: Deploy to Cloudflare (dev)
+        # The token and account id come from the "dev" GitHub environment's secrets. The pipeline never sets Worker runtime secrets.
+        run: npx --yes wrangler@4.148.0 deploy --env dev --message "$GITHUB_SHA" --tag "${GITHUB_SHA::12}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: "false"
+      - name: Smoke check (read-only)
+        run: bash .github/scripts/smoke.sh https://stuffdbagels-dev.thedigitalpantryza.workers.dev yes
+
+  qa:
+    # The wrangler env key stays "preview" (its Yoco test webhook and secrets are tied to that Worker); GitHub calls it "qa".
+    needs: ci
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: qa
+      url: https://stuffdbagels-preview.thedigitalpantryza.workers.dev
+    concurrency:
+      group: deploy-qa
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Get the exact build that passed CI
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site-dist
+          path: artifacts/stuffd-bagels/dist/public
+      - name: Deploy to Cloudflare (qa)
+        # The token and account id come from the "qa" GitHub environment's secrets. The pipeline never sets Worker runtime secrets.
+        run: npx --yes wrangler@4.148.0 deploy --env preview --message "$GITHUB_SHA" --tag "${GITHUB_SHA::12}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: "false"
+      - name: Smoke check (read-only)
+        run: bash .github/scripts/smoke.sh https://stuffdbagels-preview.thedigitalpantryza.workers.dev yes
+
+  production:
+    # Waits for the founder's Approve click (GitHub environment "production", required reviewer). On a private repo with no required
+    # reviewers, set the repository variable PROD_DEPLOY_ON_PUSH to false: pushes then stop after qa and only "Run workflow" reaches here.
+    needs: [ci, qa]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.PROD_DEPLOY_ON_PUSH != 'false')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: https://stuffdbagels.co.za
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Get the exact build that passed CI
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site-dist
+          path: artifacts/stuffd-bagels/dist/public
+      - name: Deploy to Cloudflare (production)
+        # The token and account id come from the "production" GitHub environment's secrets. The pipeline never sets Worker runtime secrets.
+        run: npx --yes wrangler@4.148.0 deploy --message "$GITHUB_SHA" --tag "${GITHUB_SHA::12}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: "false"
+      - name: Smoke check (read-only)
+        run: bash .github/scripts/smoke.sh https://stuffdbagels.co.za no

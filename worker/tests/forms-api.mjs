@@ -6,7 +6,7 @@
 // It sets up its own pickup points and uses a fresh pretend client IP for rate limits. Dates follow the real clock.
 // The exact cut-off and month-end cases live in saturday-rules.mjs (fake clock); this file checks the live HTTP path.
 import assert from "node:assert/strict";
-import { admin, clearRateLimits, col, logged, post, resetPickups, saturdays, setAvail, testRules, uniqueEmail } from "./_helpers.mjs";
+import { B, admin, clearRateLimits, col, logged, post, resetPickups, saturdays, setAvail, testRules, uniqueEmail } from "./_helpers.mjs";
 
 clearRateLimits();
 await setAvail({});
@@ -62,7 +62,7 @@ ok("honeypot: looks like success, nothing forwarded");
 assert.equal((await post("/api/order", "not json")).status, 400);
 assert.equal((await post("/api/order", order(), { "Content-Type": "text/plain" })).status, 400);
 assert.equal((await post("/api/order", order({ note: "x".repeat(20000) }))).status, 400);
-assert.equal((await fetch("http://localhost:8787/api/order")).status, 405);
+assert.equal((await fetch(B + "/api/order")).status, 405);
 assert.equal((await post("/api/order/pay", { ref: "SB-AAAAAA" })).status, 501);
 ok("bad JSON / content-type / oversize / GET refused; /api/order/pay stub answers 501");
 
@@ -70,7 +70,7 @@ ok("bad JSON / content-type / oversize / GET refused; /api/order/pay stub answer
 assert.equal((await setAvail({ closedDates: [SAT], closedMessage: "Closed that Saturday" })).status, 200);
 r = await post("/api/order", order()); assert.equal(r.status, 409); assert.equal((await r.json()).error, "Closed that Saturday");
 r = await post("/api/order", order({ pickupDate: SAT2 })); assert.equal(r.status, 200);
-assert.ok(!(await (await fetch("http://localhost:8787/api/availability")).json()).closedDates.includes(SAT2));
+assert.ok(!(await (await fetch(B + "/api/availability")).json()).closedDates.includes(SAT2));
 ok("a closed Saturday is refused with the owner's message; the next one still works");
 
 // 5b. A listed Saturday before its opening day is refused with the date it opens (the 15th rule, live HTTP path)
