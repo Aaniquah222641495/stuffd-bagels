@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { BookingForm } from "@/components/booking-form";
-import { CANCELLATION_POLICY, DEFAULT_CUTOFF, availableSaturdays, cutoffDay, niceDay, openingNote } from "@/collection";
+import { CANCELLATION_POLICY, DEFAULT_CUTOFF, availableSaturdays, cutoffDay, hoursCaveat, hoursLabel, niceDay, openingNote, pickupHours, timeSlots } from "@/collection";
 import {
   DRAFT_KEY,
   FieldRow,
+  FixedRow,
   Honeypot,
+  TimeChips,
   PrivacyNote,
   failureMessage,
   inputClass,
@@ -86,6 +88,8 @@ interface Pickup {
   name: string;
   area: string;
   days: string;
+  opens?: string;
+  closes?: string;
 }
 
 const BUSINESS_EMAIL = "stuffd.bagels@gmail.com";
@@ -381,6 +385,8 @@ export default function Home() {
   const [pickups, setPickups] = useState<Pickup[]>([]);
   const [pickupsLoaded, setPickupsLoaded] = useState(false);
   const [notes, setNotes] = useState("");
+  const [noteOpen, setNoteOpen] = useState(false); // the notes box stays folded away until asked for
+  const noteRef = useRef<HTMLTextAreaElement>(null);
   const [honey, setHoney] = useState("");
   const [today, setToday] = useState<string | null>(null);
   const [orderStatus, setOrderStatus] = useState<Status>("idle");
@@ -498,6 +504,7 @@ export default function Home() {
     setSaturday(d.saturday);
     setPickupTime(d.pickupTime);
     setNotes(d.notes);
+    if (d.notes) setNoteOpen(true);
     try {
       sessionStorage.removeItem(DRAFT_KEY);
     } catch {
@@ -545,7 +552,7 @@ export default function Home() {
       email,
       pickupId: chosenPoint!.id,
       pickupDate: chosenSat,
-      pickupTime,
+      pickupTime: chosenTime,
       items: Object.fromEntries(Object.entries(quantities).filter(([, q]) => q > 0)),
       toppings: Object.fromEntries(Object.entries(toppingQty).filter(([, q]) => q > 0)),
       note: notes,
@@ -560,7 +567,7 @@ export default function Home() {
       try {
         sessionStorage.setItem(
           DRAFT_KEY,
-          JSON.stringify({ v: 1, savedAt: Date.now(), ref: r.data?.ref ?? "", quantities, toppingQty, name, phone, email, pickup: chosenPoint!.id, saturday: chosenSat, pickupTime, notes }),
+          JSON.stringify({ v: 1, savedAt: Date.now(), ref: r.data?.ref ?? "", quantities, toppingQty, name, phone, email, pickup: chosenPoint!.id, saturday: chosenSat, pickupTime: chosenTime, notes }),
         );
       } catch {
         /* private mode: the customer just retypes */
@@ -578,6 +585,16 @@ export default function Home() {
       loadAvailability();
     }
   };
+
+  // "Add a note" opens the box and puts the cursor in it.
+  const [noteAsked, setNoteAsked] = useState(false);
+  const openNote = () => {
+    setNoteOpen(true);
+    setNoteAsked(true);
+  };
+  useEffect(() => {
+    if (noteAsked) noteRef.current?.focus();
+  }, [noteAsked]);
 
   // After a failed submit, move focus to the first field with an error (or back up to the menu).
   useEffect(() => {
@@ -627,6 +644,14 @@ export default function Home() {
   const saturdays = today ? availableSaturdays(nowMs, rules) : [];
   const chosenSat = saturdays.includes(saturday) ? saturday : saturdays[0];
   const chosenPoint = pickups.find((p) => p.id === pickup) ?? pickups[0];
+  // Preferred time: one-hour chips from the point's collection hours (none when the hours are not known). A time that
+  // belongs to another point's hours is dropped, so the payload only ever carries a slot of the point being collected from.
+  const slots = chosenPoint ? timeSlots(chosenPoint) : [];
+  const chosenTime = slots.includes(pickupTime) ? pickupTime : "";
+  const hours = chosenPoint ? pickupHours(chosenPoint) : null;
+  const caveat = hoursCaveat(chosenPoint?.days);
+  const onePoint = pickups.length === 1;
+  const oneSat = saturdays.length === 1;
   const satNote = today ? openingNote(nowMs, rules) : "";
   const cutoffLine = chosenSat ? `Orders for ${niceDay(chosenSat)} close on ${niceDay(cutoffDay(chosenSat))} at ${rules.cutoffTime}.` : "";
   // Ordering is hidden (not just disabled) when it is switched off, today is closed, there is no active
@@ -984,8 +1009,8 @@ export default function Home() {
                 <ol className="list-none p-0 m-0 grid gap-6">
                   {[
                     ["Pick your bagels", "Choose from the menu above."],
-                    ["Add your details", "Your name, number, email, which pickup point and which Saturday."],
-                    ["Pay on Yoco", "You pay on Yoco's secure page. Your order is confirmed once it's paid, and we email you the confirmation."],
+                    ["Add your details", "Your name, number and email. Check where and when you collect."],
+                    ["Pay with Yoco", "Pay securely on Yoco. Your order is confirmed straight away and we email you a confirmation."],
                   ].map(([t, d], i) => (
                     <li key={t} className="grid grid-cols-[3rem_1fr] gap-4 items-start">
                       <span className="font-bubble text-3xl text-blue leading-none">{i + 1}</span>
@@ -1020,7 +1045,7 @@ export default function Home() {
                     <p className="font-bubble text-2xl sm:text-3xl leading-tight m-0 mt-3 text-balance [overflow-wrap:anywhere]">{hiddenMessage}</p>
                   </div>
                 ) : (
-                  <form onSubmit={submitOrder} noValidate aria-label="Pay for your order" data-testid="order-form">
+                  <form id="order-form" onSubmit={submitOrder} noValidate aria-label="Pay for your order" data-testid="order-form" className="scroll-mt-10">
                     {satNote && (
                       <p role="status" data-testid="saturday-note" className="mb-4 rounded-2xl bg-ink text-paper px-4 py-3 text-sm font-bold leading-snug m-0">
                         {satNote}
@@ -1049,49 +1074,81 @@ export default function Home() {
                             value={email} onChange={(e) => { setEmail(e.target.value); clearError("email"); }} className={inputClass} />
                         )}
                       </FieldRow>
-                      <FieldRow label="Pickup point" error={orderErrors.pickup} hint={chosenPoint?.days ? `Collection times: ${chosenPoint.days}` : undefined}>
-                        {(p) => (
-                          <div className="relative min-w-0">
-                            <select id={p.id} data-testid="select-venue" aria-invalid={p.invalid} aria-describedby={p.describedBy}
-                              value={chosenPoint?.id ?? ""} onChange={(e) => { setPickup(e.target.value); clearError("pickup"); }} disabled={pickups.length === 0}
-                              className="w-full min-w-0 pl-5 pr-12 pb-4 bg-transparent font-semibold text-base outline-none appearance-none focus-visible:bg-sky/30 text-ink">
-                              {pickups.length === 0 && <option value="">Loading...</option>}
-                              {pickups.map((pt) => (
-                                <option key={pt.id} value={pt.id}>{pt.name} · {pt.area}</option>
-                              ))}
-                            </select>
-                            <svg aria-hidden="true" className="pointer-events-none absolute right-5 top-[0.35rem] w-4 h-4 text-ink/75" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 8l5 5 5-5" /></svg>
-                          </div>
-                        )}
-                      </FieldRow>
-                      <FieldRow label="Collection Saturday" error={orderErrors.saturday} hint={cutoffLine || undefined}>
-                        {(p) => (
-                          <div className="relative min-w-0">
-                            <select id={p.id} data-testid="select-saturday" aria-invalid={p.invalid} aria-describedby={p.describedBy}
-                              value={chosenSat ?? ""} onChange={(e) => { setSaturday(e.target.value); clearError("saturday"); }} disabled={saturdays.length === 0}
-                              className="w-full min-w-0 pl-5 pr-12 pb-4 bg-transparent font-semibold text-base outline-none appearance-none focus-visible:bg-sky/30 text-ink">
-                              {saturdays.length === 0 && <option value="">Loading...</option>}
-                              {saturdays.map((d) => (
-                                <option key={d} value={d}>{niceDay(d)}</option>
-                              ))}
-                            </select>
-                            <svg aria-hidden="true" className="pointer-events-none absolute right-5 top-[0.35rem] w-4 h-4 text-ink/75" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 8l5 5 5-5" /></svg>
-                          </div>
-                        )}
-                      </FieldRow>
-                      <FieldRow label="Preferred time (optional)">
-                        {(p) => (
-                          <input id={p.id} data-testid="input-pickup-time" type="text" maxLength={40} placeholder="e.g. around 11am"
-                            value={pickupTime} onChange={(e) => setPickupTime(e.target.value)} className={inputClass} />
-                        )}
-                      </FieldRow>
-                      <FieldRow label="Notes (optional)">
-                        {(p) => (
-                          <textarea id={p.id} data-testid="textarea-notes" placeholder="Any special requests?" rows={2} maxLength={300}
-                            value={notes} onChange={(e) => setNotes(e.target.value)}
-                            className={`${inputClass} resize-none`} />
-                        )}
-                      </FieldRow>
+                      {onePoint && oneSat && chosenPoint && chosenSat ? (
+                        // One pickup point and one Saturday: nothing to choose, so just say it.
+                        <FixedRow
+                          label="Collect"
+                          testId="collect-summary"
+                          value={[`${chosenPoint.name}, ${chosenPoint.area}`, niceDay(chosenSat), hours ? hoursLabel(hours) : ""].filter(Boolean).join(" \u00b7 ")}
+                          hint={[cutoffLine, hours ? caveat : chosenPoint.days ? `Collection times: ${chosenPoint.days}` : ""].filter(Boolean).join(" ")}
+                        />
+                      ) : (
+                        <>
+                          {onePoint && chosenPoint ? (
+                            <FixedRow
+                              label="Pickup point"
+                              testId="pickup-fixed"
+                              value={`${chosenPoint.name}, ${chosenPoint.area}`}
+                              hint={hours ? caveat || undefined : chosenPoint.days ? `Collection times: ${chosenPoint.days}` : undefined}
+                            />
+                          ) : (
+                            <FieldRow label="Pickup point" error={orderErrors.pickup} hint={chosenPoint?.days ? `Collection times: ${chosenPoint.days}` : undefined}>
+                              {(p) => (
+                                <div className="relative min-w-0">
+                                  <select id={p.id} data-testid="select-venue" aria-invalid={p.invalid} aria-describedby={p.describedBy}
+                                    value={chosenPoint?.id ?? ""} onChange={(e) => { setPickup(e.target.value); setPickupTime(""); clearError("pickup"); }} disabled={pickups.length === 0}
+                                    className="w-full min-w-0 pl-5 pr-12 pb-4 bg-transparent font-semibold text-base outline-none appearance-none focus-visible:bg-sky/30 text-ink">
+                                    {pickups.length === 0 && <option value="">Loading...</option>}
+                                    {pickups.map((pt) => (
+                                      <option key={pt.id} value={pt.id}>{pt.name} · {pt.area}</option>
+                                    ))}
+                                  </select>
+                                  <svg aria-hidden="true" className="pointer-events-none absolute right-5 top-[0.35rem] w-4 h-4 text-ink/75" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 8l5 5 5-5" /></svg>
+                                </div>
+                              )}
+                            </FieldRow>
+                          )}
+                          {oneSat && chosenSat ? (
+                            <FixedRow label="Collection Saturday" testId="saturday-fixed" value={niceDay(chosenSat)} hint={cutoffLine || undefined} />
+                          ) : (
+                            <FieldRow label="Collection Saturday" error={orderErrors.saturday} hint={cutoffLine || undefined}>
+                              {(p) => (
+                                <div className="relative min-w-0">
+                                  <select id={p.id} data-testid="select-saturday" aria-invalid={p.invalid} aria-describedby={p.describedBy}
+                                    value={chosenSat ?? ""} onChange={(e) => { setSaturday(e.target.value); clearError("saturday"); }} disabled={saturdays.length === 0}
+                                    className="w-full min-w-0 pl-5 pr-12 pb-4 bg-transparent font-semibold text-base outline-none appearance-none focus-visible:bg-sky/30 text-ink">
+                                    {saturdays.length === 0 && <option value="">Loading...</option>}
+                                    {saturdays.map((d) => (
+                                      <option key={d} value={d}>{niceDay(d)}</option>
+                                    ))}
+                                  </select>
+                                  <svg aria-hidden="true" className="pointer-events-none absolute right-5 top-[0.35rem] w-4 h-4 text-ink/75" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 8l5 5 5-5" /></svg>
+                                </div>
+                              )}
+                            </FieldRow>
+                          )}
+                        </>
+                      )}
+                      {slots.length > 0 && (
+                        <TimeChips legend="Preferred time (optional)" slots={slots} value={chosenTime} onChange={setPickupTime} />
+                      )}
+                      {noteOpen ? (
+                        <FieldRow label="Note (optional)">
+                          {(p) => (
+                            <textarea id={p.id} ref={noteRef} data-testid="textarea-notes" placeholder="Any special requests?" rows={2} maxLength={300}
+                              value={notes} onChange={(e) => setNotes(e.target.value)}
+                              className={`${inputClass} resize-none`} />
+                          )}
+                        </FieldRow>
+                      ) : (
+                        <div className="px-5 py-2">
+                          <button type="button" data-testid="btn-add-note" aria-expanded={false} onClick={openNote}
+                            className="inline-flex min-h-[44px] items-center gap-2 rounded-full pr-3 text-sm font-bold text-ink underline underline-offset-4 decoration-1 hover:text-blue focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-ink">
+                            <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10 4v12M4 10h12" /></svg>
+                            Add a note
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <p className="text-sm mt-4 text-ink/75 leading-relaxed px-1 m-0" data-testid="pay-window-note">
@@ -1120,7 +1177,7 @@ export default function Home() {
                       {orderStatus === "sending" ? "Opening Yoco..." : total > 0 ? `Pay R${total} with Yoco` : "Pay with Yoco"}
                     </button>
                     <p className="text-sm mt-3 mb-0 text-ink/75 leading-relaxed px-1 text-center" data-testid="pay-note">
-                      You'll pay on Yoco's secure page. Your order is confirmed once it's paid.
+                      Pay securely on Yoco. Your order is confirmed as soon as it's paid.
                     </p>
                   </form>
                 )}
@@ -1406,9 +1463,14 @@ export default function Home() {
 
       {/* MOBILE ORDER BAR: shows once something is picked, hides when the form is on screen */}
       {itemCount > 0 && !detailsInView && !orderingHidden && (
-        <aside aria-label="Your order so far" className="lg:hidden fixed inset-x-3 bottom-3 z-30">
+        <aside
+          aria-label="Your order so far"
+          data-testid="order-bar"
+          className="order-bar lg:hidden fixed inset-x-3 z-30 mx-auto max-w-md"
+          style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+        >
           <a
-            href="#details"
+            href="#order-form"
             className="flex items-center justify-between rounded-full border-2 border-ink bg-blue text-white pl-5 pr-2 py-2"
             style={{ boxShadow: "0 5px 0 var(--sb-ink)" }}
           >

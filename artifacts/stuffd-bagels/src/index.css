@@ -563,3 +563,9 @@
     cursor: not-allowed;
   }
 }
+
+/* Mobile order bar: fixed, so it never moves the page. It slides up once; nothing moves for reduced motion. */
+@keyframes order-bar-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: no-preference) {
+  .order-bar { animation: order-bar-in 0.25s ease-out both; }
+}

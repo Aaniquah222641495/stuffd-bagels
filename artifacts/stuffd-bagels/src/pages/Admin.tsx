@@ -21,10 +21,13 @@ interface PickupPoint {
   name: string;
   area: string;
   days: string;
+  /** Collection hours, "HH:MM". The order form makes one-hour time chips from them. Older points have none. */
+  opens?: string;
+  closes?: string;
   active: boolean;
 }
 
-const BLANK_PICKUP = { name: "", area: "", days: "", active: true };
+const BLANK_PICKUP = { name: "", area: "", days: "", opens: "", closes: "", active: true };
 
 interface ScheduleEvent {
   id: string;
@@ -300,7 +303,7 @@ export default function Admin() {
 
   function startEditPickup(pt: PickupPoint) {
     setEditingId(pt.id);
-    setPickupForm({ name: pt.name, area: pt.area, days: pt.days, active: pt.active });
+    setPickupForm({ name: pt.name, area: pt.area, days: pt.days, opens: pt.opens ?? "", closes: pt.closes ?? "", active: pt.active });
     setPickupError("");
     document.getElementById("pk-name")?.focus();
   }
@@ -315,6 +318,10 @@ export default function Admin() {
     setPickupError("");
     if (!pickupForm.name.trim() || !pickupForm.area.trim()) {
       setPickupError("Fill in the name and the area or address.");
+      return;
+    }
+    if (!!pickupForm.opens !== !!pickupForm.closes || (pickupForm.opens && pickupForm.closes <= pickupForm.opens)) {
+      setPickupError("Set both the opening and closing time, and closing must be after opening. Or leave both empty.");
       return;
     }
     setSavingPickup(true);
@@ -344,7 +351,7 @@ export default function Admin() {
     const res = await fetch(apiUrl(`/admin/pickups/${pt.id}`), {
       method: "PUT",
       headers: adminHeaders,
-      body: JSON.stringify({ name: pt.name, area: pt.area, days: pt.days, active: !pt.active }),
+      body: JSON.stringify({ name: pt.name, area: pt.area, days: pt.days, opens: pt.opens ?? "", closes: pt.closes ?? "", active: !pt.active }),
     });
     if (res.ok) await loadPickups(password);
     else setPickupError(SOMETHING_WRONG);
@@ -736,6 +743,35 @@ export default function Admin() {
                 onChange={(e) => setPickupForm({ ...pickupForm, days: e.target.value })}
               />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="pk-opens" className="block text-[10px] font-black tracking-widest uppercase text-ink/75 mb-1">
+                  Opens (optional)
+                </label>
+                <input
+                  id="pk-opens"
+                  type="time"
+                  className={inputCls}
+                  value={pickupForm.opens}
+                  onChange={(e) => setPickupForm({ ...pickupForm, opens: e.target.value })}
+                />
+              </div>
+              <div>
+                <label htmlFor="pk-closes" className="block text-[10px] font-black tracking-widest uppercase text-ink/75 mb-1">
+                  Closes (optional)
+                </label>
+                <input
+                  id="pk-closes"
+                  type="time"
+                  className={inputCls}
+                  value={pickupForm.closes}
+                  onChange={(e) => setPickupForm({ ...pickupForm, closes: e.target.value })}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-ink/75 -mt-1 m-0">
+              With an opening and closing time, customers can tap a one-hour slot (for example 1pm to 2pm) as their preferred time.
+            </p>
             <label className="flex items-center gap-2 text-xs font-bold tracking-wide cursor-pointer">
               <input
                 id="pk-active"

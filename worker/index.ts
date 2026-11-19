@@ -189,7 +189,7 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
   if (parts.length === 2 && parts[1] === "pickups") {
     methodOnly(request, ["GET", "HEAD"]);
     // Only what customers need: active points, no internal fields.
-    const list = (await publicPickups(env.STUFFD_KV)).map(({ id, name, area, days }) => ({ id, name, area, days }));
+    const list = (await publicPickups(env.STUFFD_KV)).map(({ id, name, area, days, opens, closes }) => ({ id, name, area, days, ...(opens && closes ? { opens, closes } : {}) }));
     return json(list, 200, "public");
   }
   if (parts.length === 2 && (parts[1] === "order" || parts[1] === "booking")) {

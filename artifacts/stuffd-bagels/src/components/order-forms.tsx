@@ -76,6 +76,50 @@ export function FieldRow({
   );
 }
 
+/** A row that only states a fact (there is just one pickup point or Saturday, so there is nothing to choose). */
+export function FixedRow({ label, value, hint, testId }: { label: string; value: string; hint?: string; testId?: string }) {
+  return (
+    <div className="flex flex-col" data-testid={testId}>
+      <p className="eyebrow px-5 pt-4 pb-1 m-0 text-ink/75">{label}</p>
+      <p className={`px-5 m-0 font-semibold text-base leading-snug [overflow-wrap:anywhere] ${hint ? "pb-1" : "pb-4"}`}>{value}</p>
+      {hint && <p className="px-5 pb-3 m-0 text-[13px] leading-snug text-ink/75">{hint}</p>}
+    </div>
+  );
+}
+
+/**
+ * One-tap time chips: a native radio group (arrow keys move and pick, Tab goes in and out as one stop, screen readers
+ * read "1 of 6"). "Any time" is the empty choice, so a pick can always be undone.
+ */
+export function TimeChips({ legend, slots, value, onChange, hint }: { legend: string; slots: string[]; value: string; onChange: (v: string) => void; hint?: string }) {
+  const id = useId();
+  const options: [string, string][] = [["", "Any time"], ...slots.map((t): [string, string] => [t, t])];
+  return (
+    <fieldset className="m-0 min-w-0 border-0 p-0" data-testid="time-chips">
+      <legend className="eyebrow px-5 pt-4 pb-2 text-ink/75">{legend}</legend>
+      <div className="flex flex-wrap gap-2 px-5 pb-4">
+        {options.map(([v, label]) => (
+          <label key={label} className="relative">
+            <input
+              type="radio"
+              name={`${id}-time`}
+              value={v}
+              checked={value === v}
+              onChange={() => onChange(v)}
+              data-testid={v ? "time-chip" : "time-chip-any"}
+              className="peer sr-only"
+            />
+            <span className="inline-flex min-h-[44px] cursor-pointer select-none items-center whitespace-nowrap rounded-full border-2 border-ink bg-paper px-4 text-sm font-bold text-ink peer-checked:bg-blue peer-checked:text-white peer-focus-visible:outline peer-focus-visible:outline-[3px] peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink">
+              {label}
+            </span>
+          </label>
+        ))}
+      </div>
+      {hint && <p className="-mt-2 px-5 pb-3 m-0 text-[13px] leading-snug text-ink/75">{hint}</p>}
+    </fieldset>
+  );
+}
+
 export const inputClass =
   "px-5 pb-4 bg-transparent font-semibold text-base outline-none placeholder:text-ink/45 focus-visible:bg-sky/30";
 

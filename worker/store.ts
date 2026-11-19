@@ -244,17 +244,28 @@ export interface PickupPoint {
   area: string;
   /** Optional collection times, shown as a hint ("Saturdays, 10am to 1pm"). */
   days: string;
+  /** Optional structured collection hours ("HH:MM", 24-hour): the order form turns them into one-hour time chips. Both or neither. */
+  opens?: string;
+  closes?: string;
   active: boolean;
 }
+
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 function cleanPickup(v: unknown): PickupPoint | null {
   const p = asRecord(v);
   if (typeof p.id !== "string" || typeof p.name !== "string" || typeof p.area !== "string") return null;
+  // Points saved before opens/closes existed have neither: they keep working (the form reads the hours from `days`).
+  const hours =
+    typeof p.opens === "string" && typeof p.closes === "string" && HHMM.test(p.opens) && HHMM.test(p.closes) && p.closes > p.opens
+      ? { opens: p.opens, closes: p.closes }
+      : {};
   return {
     id: p.id.slice(0, 64),
     name: p.name.slice(0, LIMITS.pickupName),
     area: p.area.slice(0, LIMITS.pickupArea),
     days: typeof p.days === "string" ? p.days.slice(0, LIMITS.pickupDays) : "",
+    ...hours,
     active: typeof p.active === "boolean" ? p.active : true,
   };
 }
@@ -292,10 +303,18 @@ function textField(v: unknown, max: number, required: boolean): string {
 export function parsePickupInput(body: Record<string, unknown>): Omit<PickupPoint, "id"> {
   const bad = () => new HttpError(400, "Invalid fields");
   if (body.active !== undefined && typeof body.active !== "boolean") throw bad();
+  // Collection hours are optional, but both or neither, as "HH:MM", and closing after opening.
+  const blank = (v: unknown) => v === undefined || v === null || v === "";
+  let hours: { opens: string; closes: string } | Record<string, never> = {};
+  if (!blank(body.opens) || !blank(body.closes)) {
+    if (typeof body.opens !== "string" || typeof body.closes !== "string" || !HHMM.test(body.opens) || !HHMM.test(body.closes) || body.closes <= body.opens) throw bad();
+    hours = { opens: body.opens, closes: body.closes };
+  }
   return {
     name: textField(body.name, LIMITS.pickupName, true),
     area: textField(body.area, LIMITS.pickupArea, true),
     days: textField(body.days, LIMITS.pickupDays, false),
+    ...hours,
     active: body.active ?? true,
   };
 }

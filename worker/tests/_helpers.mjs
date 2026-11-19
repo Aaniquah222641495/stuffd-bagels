@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-export const B = "http://localhost:8787";
+export const B = process.env.SB_BASE ?? "http://localhost:8787"; // SB_BASE: when 8787 is taken by another session
 export const pw = /ADMIN_PASSWORD=(.*)/.exec(fs.readFileSync(path.join(root, ".dev.vars"), "utf8"))[1].trim();
 const col = await import(pathToFileURL(path.join(root, "artifacts/stuffd-bagels/src/collection.ts")).href);
 export { col };

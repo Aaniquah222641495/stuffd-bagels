@@ -26,11 +26,11 @@ const statusOf = async (ref) => (await (await fetch(`${B}/api/order/status?ref=$
 
 // 1. The order opens a Yoco checkout and sends no email
 let a = await startOrder(order({ total: 1, amount: 1 }));
-assert.equal(a.r.status, 200); assert.match(a.j.ref, /^SB-[A-Z2-9]{6}$/); assert.equal(a.j.total, 190); assert.match(a.j.redirectUrl, /^http:\/\/127\.0\.0\.1:8798\/pay\/ch_/);
+assert.equal(a.r.status, 200); assert.match(a.j.ref, /^SB-[A-Z2-9]{6}$/); assert.equal(a.j.total, 190); assert.match(a.j.redirectUrl, new RegExp("^" + (process.env.FAKE_YOCO ?? "http://127.0.0.1:8798").replace(/[.\/]/g, "\\$&") + "\\/pay\\/ch_"));
 let calls = (await yocoCalls()).calls;
 assert.equal(calls.length, 1); assert.equal(calls[0].body.amount, 19000, "R190 in cents; the browser's amount is ignored");
 assert.match(calls[0].headers.authorization, /^Bearer sk_test_/); assert.equal(calls[0].headers["idempotency-key"], a.o.attemptId);
-assert.equal(calls[0].body.metadata.ref, a.j.ref); assert.equal(calls[0].body.successUrl, `http://localhost:8787/order/result?r=success&ref=${a.j.ref}`);
+assert.equal(calls[0].body.metadata.ref, a.j.ref); assert.equal(calls[0].body.successUrl, `${B}/order/result?r=success&ref=${a.j.ref}`);
 assert.ok(!JSON.stringify(calls[0].body).includes("Zainab") && !JSON.stringify(calls[0].body).includes(a.o.email), "no personal data sent to Yoco");
 await sleep(1500);
 assert.equal(logged().length, 0, "the fake Apps Script saw nothing: no email before payment");

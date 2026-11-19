@@ -178,6 +178,84 @@ export function niceDay(iso: string): string {
   return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Collection hours of a pickup point -> one-hour tap slots on the order form (preferred time).
+// New points store "opens" and "closes" ("HH:MM", 24-hour). Older points only have free text in `days`
+// ("Saturdays, 13:00 to 18:00 (times to be confirmed)"), so we read the hours out of that text when we can;
+// if we cannot, the form simply has no time chips (the time is optional anyway).
+// ---------------------------------------------------------------------------------------------
+export interface PickupHoursSource {
+  opens?: string;
+  closes?: string;
+  days?: string;
+}
+
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+const toMin = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+
+/** "1pm", "1:30pm", "12pm", "12am". */
+export function clockLabel(minutes: number): string {
+  const h24 = Math.floor(minutes / 60) % 24;
+  const m = minutes % 60;
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h12}${m ? `:${String(m).padStart(2, "0")}` : ""}${h24 < 12 ? "am" : "pm"}`;
+}
+
+/** Read "13:00 to 18:00", "1pm to 6pm", "10am-1pm" out of free text. null when it is not clear enough to trust. */
+export function hoursFromText(text: string): { opens: string; closes: string } | null {
+  const m = /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|until|-|\u2013)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i.exec(text);
+  if (!m) return null;
+  const [, h1, m1, ap1, h2, m2, ap2] = m;
+  // Needs a colon or am/pm somewhere, or "2 to 5" (could be anything, or a date range) is not a time.
+  if (!m1 && !m2 && !ap1 && !ap2) return null;
+  const to24 = (h: string, mm: string | undefined, ap: string | undefined): number | null => {
+    let hour = Number(h);
+    if (hour > 24 || Number(mm ?? 0) > 59) return null;
+    if (ap) {
+      if (hour < 1 || hour > 12) return null;
+      hour = (hour % 12) + (ap.toLowerCase() === "pm" ? 12 : 0);
+    }
+    return hour * 60 + Number(mm ?? 0);
+  };
+  const end = to24(h2, m2, ap2);
+  let start = to24(h1, m1, ap1);
+  if (end === null || start === null) return null;
+  // "10-1pm": the start borrows the end's am/pm, or is am when that would run backwards.
+  if (!ap1 && ap2 && start >= end) start -= 12 * 60;
+  if (!ap1 && ap2 && start < 0) return null;
+  if (start < 0 || end > 24 * 60 || end <= start) return null;
+  const hh = (n: number) => `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+  return { opens: hh(start), closes: end === 24 * 60 ? "23:59" : hh(end) };
+}
+
+/** Collection hours of a point: the structured fields, else whatever the free text says, else null. */
+export function pickupHours(p: PickupHoursSource): { opens: string; closes: string } | null {
+  if (p.opens && p.closes && HHMM.test(p.opens) && HHMM.test(p.closes) && toMin(p.closes) > toMin(p.opens)) {
+    return { opens: p.opens, closes: p.closes };
+  }
+  return p.days ? hoursFromText(p.days) : null;
+}
+
+/** "1pm to 6pm". */
+export function hoursLabel(h: { opens: string; closes: string }): string {
+  return `${clockLabel(toMin(h.opens))} to ${clockLabel(toMin(h.closes))}`;
+}
+
+/** One-hour slots from opening to closing ("1pm to 2pm" ...). A last part-hour is left out. At most 12. */
+export function timeSlots(p: PickupHoursSource): string[] {
+  const h = pickupHours(p);
+  if (!h) return [];
+  const out: string[] = [];
+  for (let t = toMin(h.opens); t + 60 <= toMin(h.closes) && out.length < 12; t += 60) out.push(`${clockLabel(t)} to ${clockLabel(t + 60)}`);
+  return out;
+}
+
+/** The bracketed part of the free text ("(times to be confirmed)") as a short sentence, so the caveat is not lost. */
+export function hoursCaveat(days: string | undefined): string {
+  const m = /\(([^)]{3,60})\)/.exec(days ?? "");
+  return m ? `${m[1].charAt(0).toUpperCase()}${m[1].slice(1)}.` : "";
+}
+
 /** "Orders for Saturday 26 Dec open on Tuesday 15 Dec.", or "" when there is nothing to say. */
 export function openingNote(now: number, rules: CollectionRules): string {
   const next = nextOpening(now, rules);
