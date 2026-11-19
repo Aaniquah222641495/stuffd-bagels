@@ -289,3 +289,24 @@ console.log("apps-script selftest: all checks passed");
   assert.ok(src("../artifacts/stuffd-bagels/src/content.ts").includes(policy), "FAQ copy matches");
   console.log("cancellation policy: three copies identical");
 }
+
+// Turnstile wiring (D-SB-7): the CSP lets the widget load, both forms post a token, the Worker checks it on both routes, and no secret is in the repo.
+{
+  const fs = await import("node:fs");
+  const src = (f) => fs.readFileSync(new URL(f, import.meta.url), "utf8");
+  const csp = src("../artifacts/stuffd-bagels/public/_headers").match(/Content-Security-Policy: (.*)/)[1];
+  const dir = (name) => (csp.split(";").map((d) => d.trim()).find((d) => d.startsWith(name + " ")) ?? "");
+  assert.ok(dir("script-src").includes("https://challenges.cloudflare.com") && dir("frame-src").includes("https://challenges.cloudflare.com"), "CSP allows the Turnstile script and frame");
+  assert.ok(!dir("script-src").includes("'unsafe-inline'") && !dir("script-src").includes("*"), "script-src stays tight");
+  assert.ok(dir("connect-src") === "connect-src 'self'", "connect-src stays 'self'");
+  const forms = src("../worker/forms.ts");
+  assert.ok(/verifyTurnstile\(request, env, body\.turnstileToken, "order"\)/.test(forms) && /verifyTurnstile\(request, env, body\.turnstileToken, "booking"\)/.test(forms), "Worker checks both routes");
+  assert.ok(forms.indexOf('verifyTurnstile(request, env, body.turnstileToken, "order")') < forms.indexOf("createCheckout(env"), "order: checked before a Yoco checkout");
+  assert.ok(forms.indexOf('verifyTurnstile(request, env, body.turnstileToken, "booking")') < forms.indexOf("await forward(env, payload)"), "booking: checked before the email");
+  assert.ok(src("../artifacts/stuffd-bagels/src/pages/Home.tsx").includes('useTurnstile("order"') && src("../artifacts/stuffd-bagels/src/components/booking-form.tsx").includes('useTurnstile("booking"'), "both forms use the widget");
+  const wr = src("../wrangler.jsonc");
+  assert.ok(!/TURNSTILE_SECRET_KEY"\s*:/.test(wr), "the secret is never a var in wrangler.jsonc");
+  assert.ok(/"vars": \{ "APP_ENV": "production", "TURNSTILE_SITE_KEY": "0x4AAAAAAGIpBftgw-wYSqUM",/.test(wr), "production has the real (public) Turnstile site key, not a documented test key");
+  assert.ok(/"preview": \{[\s\S]*"TURNSTILE_SITE_KEY": "1x00000000000000000000AA"/.test(wr), "preview uses the documented test site key");
+  console.log("turnstile wiring: CSP, both routes, both forms, no secret in config");
+}

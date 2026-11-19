@@ -4,7 +4,7 @@
 import path from "node:path";
 import assert from "node:assert/strict";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { YOCO_TEST_ENV, bundle, fakeLimiter, fakeOrders, fakeYocoFetch } from "./_bundle.mjs";
+import { TS_DUMMY_TOKEN, YOCO_TEST_ENV, bundle, fakeLimiter, fakeOrders, fakeYocoFetch } from "./_bundle.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const { handleForm } = await bundle("worker/forms.ts");
@@ -28,7 +28,7 @@ async function order(date, now, { availability = {}, pickups = POINTS, body = {}
   const lim = await fakeLimiter({ now: () => now });
   const ord = await fakeOrders({ now: () => now });
   const env = { LIMITER: lim.ns, ORDERS: ord.ns, ...YOCO_TEST_ENV, APPS_SCRIPT_TOKEN: "t".repeat(40), STUFFD_KV: kvWith({ availability: { ordersEnabled: true, closedDates: [], closedMessage: "", ...availability }, pickups, ...(events ? { events: { events: events.map((e, i) => ({ id: `e${i}`, venue: "Somewhere", ...e })) } } : {}) }), ADMIN_PASSWORD: "x", APPS_SCRIPT_URL: "http://fake/exec" };
-  const payload = { name: "Aisha", phone: "0821234567", email: "a@b.co", pickupId: "p1", pickupDate: date, items: { "Classic Bagel": 1 }, website: "", attemptId: crypto.randomUUID(), ...body };
+  const payload = { name: "Aisha", phone: "0821234567", email: "a@b.co", pickupId: "p1", pickupDate: date, items: { "Classic Bagel": 1 }, website: "", attemptId: crypto.randomUUID(), turnstileToken: TS_DUMMY_TOKEN, ...body };
   const req = new Request("http://x/api/order", { method: "POST", headers: { "Content-Type": "application/json", "CF-Connecting-IP": "1.2.3.4" }, body: JSON.stringify(payload) });
   try {
     const res = await handleForm(req, env, "order", now);

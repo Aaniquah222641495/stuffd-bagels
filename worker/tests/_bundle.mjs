@@ -71,13 +71,27 @@ export async function fakeOrders(clock = { now: () => Date.now() }, state = { fa
   return { core, svc, state, rows: () => store.all(), ns: { idFromName: (n) => n, get: () => stub } };
 }
 
-/** Yoco settings for Node tests of the order path: a test key that is obviously fake, and a test-mode origin. */
-export const YOCO_TEST_ENV = { YOCO_SECRET_KEY: "sk_test_localfake1234567890", YOCO_WEBHOOK_SECRET: "whsec_" + Buffer.alloc(24, 7).toString("base64"), YOCO_MODE: "test", SITE_ORIGIN: "https://preview.example.workers.dev" };
+/** Cloudflare's documented Turnstile test token: the only token the documented always-pass test secret accepts. */
+export const TS_DUMMY_TOKEN = "XXXX.DUMMY.TOKEN.XXXX";
+export const TS_SITEVERIFY = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+
+/** Answers a siteverify call the way Cloudflare answers for its documented always-pass test secret; null for any other URL. */
+export function fakeSiteverify(url, init) {
+  if (String(url) !== TS_SITEVERIFY) return null;
+  const f = new URLSearchParams(String(init.body));
+  const good = f.get("secret") === "1x0000000000000000000000000000000AA" && f.get("response") === TS_DUMMY_TOKEN;
+  return new Response(JSON.stringify(good ? { success: true, hostname: "example.com", challenge_ts: new Date().toISOString() } : { success: false, "error-codes": ["invalid-input-response"] }));
+}
+
+/** Yoco settings for Node tests of the order path: a test key that is obviously fake, and a test-mode origin. APP_ENV development lets the Turnstile test keys work (never in production). */
+export const YOCO_TEST_ENV = { APP_ENV: "development",  YOCO_SECRET_KEY: "sk_test_localfake1234567890", YOCO_WEBHOOK_SECRET: "whsec_" + Buffer.alloc(24, 7).toString("base64"), YOCO_MODE: "test", SITE_ORIGIN: "https://preview.example.workers.dev" };
 
 /** A fetch that answers Yoco's create-checkout call like Yoco would, and hands every other request to `other`. `calls` records the Yoco ones. */
 export function fakeYocoFetch(other = async () => new Response('{"ok":true}')) {
   const calls = [];
   const f = async (url, init) => {
+    const ts = fakeSiteverify(url, init);
+    if (ts) return ts;
     if (String(url).startsWith("https://payments.yoco.com/api/checkouts")) {
       calls.push({ headers: init.headers, body: JSON.parse(init.body) });
       const id = `ch_${calls.length}${Math.random().toString(16).slice(2, 8)}`;

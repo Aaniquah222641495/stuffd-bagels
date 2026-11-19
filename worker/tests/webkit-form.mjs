@@ -15,12 +15,15 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   console.log(`== webkit ${w}px`);
   await resetPickups([{ name: "Strandfontein collection", area: "Strandfontein", days: "Saturdays, 13:00 to 18:00 (times to be confirmed)", opens: "13:00", closes: "18:00" }]);
   await resetAvail();
-  const ctx = await browser.newContext({ viewport: { width: w, height: h }, bypassCSP: true, extraHTTPHeaders: { "CF-Connecting-IP": H.ip } });
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, bypassCSP: true });
+  // The pretend client network goes on our own /api calls only: a custom header on requests to challenges.cloudflare.com (Turnstile) would break its CORS calls.
+  await ctx.route("**/api/**", (route) => route.continue({ headers: { ...route.request().headers(), "CF-Connecting-IP": H.ip } }));
   // WebKit obeys the CSP "upgrade-insecure-requests" even for http://localhost and then cannot load the page's own files, so for this
   // local check only, the CSP header is dropped from responses. (Production serves it over https, where it is harmless.)
-  await ctx.route("**/*", async (route) => { const r = await route.fetch(); const headers = { ...r.headers() }; delete headers["content-security-policy"]; await route.fulfill({ response: r, headers }); });
+  await ctx.route((u) => u.origin === new URL(B).origin, async (route) => { const r = await route.fetch(); const headers = { ...r.headers() }; delete headers["content-security-policy"]; await route.fulfill({ response: r, headers }); });
   const page = await ctx.newPage();
-  const bad = []; page.on("console", (m) => { if (["error", "warning"].includes(m.type()) && !/status of 400/.test(m.text())) bad.push(m.text()); });
+  // (Turnstile's own console errors are ignored here: this page runs on a pretend 15 Nov clock, which Cloudflare's widget refuses. The widget itself is tested in turnstile-browser.mjs.)
+  const bad = []; page.on("console", (m) => { if (["error", "warning"].includes(m.type()) && !/status of 400/.test(m.text()) && !/Cloudflare Turnstile|WebKitBlobResource/.test(m.text())) bad.push(m.text()); });
   await page.clock.setFixedTime(new Date("2026-11-15T00:00:00+02:00"));
   await page.goto(B + "/", { waitUntil: "networkidle" }); await page.waitForTimeout(900);
   // 1 single choice

@@ -34,11 +34,13 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   clearRateLimits();
   await setAvail({});
   await resetPickups([]);
-  const ctx = await browser.newContext({ viewport: { width: w, height: h }, bypassCSP: true, extraHTTPHeaders: { "CF-Connecting-IP": H.ip } }); // a pretend client network per viewport (rate limits are per network)
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, bypassCSP: true });
+  // The pretend client network goes on our own /api calls only: a custom header on requests to challenges.cloudflare.com (Turnstile) would break its CORS calls.
+  await ctx.route("**/api/**", (route) => route.continue({ headers: { ...route.request().headers(), "CF-Connecting-IP": H.ip } })); // a pretend client network per viewport (rate limits are per network)
   const aisha = mailFor("aisha", w), sam = mailFor("sam", w);
   const page = await ctx.newPage();
   const cdp = await ctx.newCDPSession(page); await cdp.send("Network.enable"); await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
-  const bad = []; page.on("console", (m) => { if (["error", "warning"].includes(m.type()) && !/status of (400|409|503)/.test(m.text())) bad.push(m.text()); }); // the 409 is the deliberate switched-off-point check page.on("pageerror", (e) => bad.push("pageerror " + e.message));
+  const bad = []; page.on("console", (m) => { if (["error", "warning"].includes(m.type()) && !/status of (400|409|503)/.test(m.text()) && !/Turnstile\] Error: 200100/.test(m.text())) bad.push(m.text()); }); // the 409 is the deliberate switched-off-point check page.on("pageerror", (e) => bad.push("pageerror " + e.message));
   const open = async () => { await page.goto(B + "/", { waitUntil: "networkidle" }); await page.waitForTimeout(700); };
 
   // 1. No pickup points: ordering hidden, menu still there, markets are only information
@@ -71,8 +73,8 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   const form = await page.getByTestId("order-form").textContent();
   assert.ok(form.includes(`Orders for ${nice(sats[0])} close on ${nice(col.cutoffDay(sats[0]))} at 23:59.`), "cut-off line");
   assert.ok(form.includes("Collection times: Saturdays, 10am to 1pm"), "with a pickup select, the point's times hint stays");
-  assert.ok(form.includes("becomes credit for another collection Saturday or one of our markets, valid for 2 months (credit, not a refund)"), "cancellation policy shown before the order is sent");
-  assert.ok(!/market/i.test(form.replace("or one of our markets, valid for 2 months", "")), "no market wording in the order form apart from the credit policy");
+  assert.ok(form.includes("including credit (not refunds) if you cancel or don't collect"), "credit-not-refund term shown before the order is sent (full policy is on /terms)");
+  assert.ok(!/market/i.test(form), "no market wording in the order form");
   console.log("  Saturdays offered:", opts.join(", "));
 
   // 2b. Friction changes (founder 2026-11-18): time chips, notes behind a button, single-choice rows are plain text
@@ -274,6 +276,8 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   await page.getByTestId("order-form").scrollIntoViewIfNeeded(); await page.screenshot({ path: `${shots}/form-single-choice-${w}.png` });
   await axeRun(page, "single pickup point and Saturday, chips");
   // payload: the form still posts the same fields; pickupTime is the chip's text. (The request is answered with a fake 400, nothing is created.)
+  // Back to the real clock first: Cloudflare's widget can't issue a token to a browser whose clock is days off (the edge cases above pretend it is 15 Nov).
+  await page.clock.setFixedTime(new Date()); await open();
   let posted = null;
   await page.route("**/api/order", (route) => { posted = route.request().postDataJSON(); route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "test stop" }) }); });
   await page.getByTestId("btn-increase-Pizza Bagel").click();
@@ -281,7 +285,8 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   await page.getByTestId("time-chips").locator("label", { hasText: "2pm to 3pm" }).click();
   await page.getByTestId("btn-place-order").click(); await H.until(() => posted !== null, "the order request");
   assert.equal(posted.pickupTime, "2pm to 3pm"); assert.equal(posted.pickupDate, "2026-11-28"); assert.equal(posted.note, ""); assert.equal(typeof posted.pickupId, "string");
-  assert.deepEqual(Object.keys(posted).sort(), ["attemptId", "email", "items", "name", "note", "phone", "pickupDate", "pickupId", "pickupTime", "toppings", "website"], "same payload fields as before");
+  assert.deepEqual(Object.keys(posted).sort(), ["attemptId", "email", "items", "name", "note", "phone", "pickupDate", "pickupId", "pickupTime", "toppings", "turnstileToken", "website"], "same payload fields as before, plus the Turnstile token");
+  assert.equal(posted.turnstileToken, H.TS_TOKEN, "the Turnstile widget (documented always-pass test key) supplied its test token");
   await page.getByTestId("time-chips").locator("label", { hasText: "Any time" }).click(); posted = null; await page.getByTestId("btn-place-order").click(); await H.until(() => posted !== null, "the second order request");
   assert.equal(posted.pickupTime, "", "Any time sends an empty pickupTime");
   await page.unroute("**/api/order");

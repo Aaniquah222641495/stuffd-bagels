@@ -22,8 +22,12 @@ const runId = Date.now().toString(36);
 /** A new mailbox every call: the Worker caps customer replies per address per day. */
 export const uniqueEmail = (who = "test") => `${who}${runId}n${++mailN}@example.com`;
 
+// Orders and bookings need a Turnstile token. wrangler dev (APP_ENV development) uses Cloudflare's documented always-pass test secret, which accepts only
+// this documented test token, so every test post carries it unless the test sets turnstileToken itself (even to undefined, to test its absence).
+export const TS_TOKEN = "XXXX.DUMMY.TOKEN.XXXX";
+const withTurnstile = (p, body) => (typeof body === "object" && body !== null && (p === "/api/order" || p === "/api/booking") && !("turnstileToken" in body) ? { ...body, turnstileToken: TS_TOKEN } : body);
 export const post = (p, body, headers = {}) =>
-  fetch(B + p, { method: "POST", headers: { "Content-Type": "application/json", "CF-Connecting-IP": ip, ...headers }, body: typeof body === "string" ? body : JSON.stringify(body) });
+  fetch(B + p, { method: "POST", headers: { "Content-Type": "application/json", "CF-Connecting-IP": ip, ...headers }, body: typeof body === "string" ? body : JSON.stringify(withTurnstile(p, body)) });
 export const admin = (p, method = "GET", body, headers = {}) =>
   fetch(B + "/api/admin" + p, {
     method,

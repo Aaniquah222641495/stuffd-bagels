@@ -3,7 +3,7 @@
 // behind a stubbed fetch. Run: node worker/tests/payments-handler.mjs
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
-import { bundle, fakeLimiter, fakeOrders } from "./_bundle.mjs";
+import { TS_DUMMY_TOKEN, bundle, fakeLimiter, fakeOrders, fakeSiteverify } from "./_bundle.mjs";
 const { handleForm } = await bundle("worker/forms.ts");
 const { handleWebhook, handleStatus, handleAttention } = await bundle("worker/payments.ts");
 const { trySend } = await bundle("worker/mailer.ts");
@@ -14,7 +14,7 @@ const clock = { t: NOW, now: () => clock.t };
 const TOKEN = "k7Vq2mXw9LpR4sTz8NbC3dHf6JyA1eGu0QiO5vWx";
 const WH_KEY = crypto.randomBytes(24);
 const WH_SECRET = "whsec_" + WH_KEY.toString("base64");
-const baseEnv = { ADMIN_PASSWORD: "x", APPS_SCRIPT_URL: "http://fake/exec", APPS_SCRIPT_TOKEN: TOKEN, YOCO_SECRET_KEY: "sk_test_localfake1234567890", YOCO_WEBHOOK_SECRET: WH_SECRET, YOCO_MODE: "test", SITE_ORIGIN: "https://stuffdbagels-preview.example.workers.dev" };
+const baseEnv = { APP_ENV: "development", ADMIN_PASSWORD: "x", APPS_SCRIPT_URL: "http://fake/exec", APPS_SCRIPT_TOKEN: TOKEN, YOCO_SECRET_KEY: "sk_test_localfake1234567890", YOCO_WEBHOOK_SECRET: WH_SECRET, YOCO_MODE: "test", SITE_ORIGIN: "https://stuffdbagels-preview.example.workers.dev" };
 const kv = (() => { const m = new Map([["pickups", JSON.stringify({ pickups: [{ id: "p1", name: "Kenilworth Corner", area: "Main Rd", days: "", active: true }] })]]); return { get: async (k) => m.get(k) ?? null, put: async () => {} }; })();
 
 // --- fake Yoco + fake Apps Script behind fetch
@@ -22,6 +22,8 @@ const yoco = { calls: [], mode: "ok", n: 0 };
 const script = { calls: [], fail: 0 };
 globalThis.fetch = async (url, init) => {
   const u = String(url);
+  const ts = fakeSiteverify(url, init);
+  if (ts) return ts;
   if (u.startsWith("https://payments.yoco.com/api/checkouts")) {
     yoco.calls.push({ url: u, headers: init.headers, body: JSON.parse(init.body) });
     if (yoco.mode === "down") return new Response("{}", { status: 500 });
@@ -46,7 +48,7 @@ const ok = (name) => out("PASS", ++n, name);
 
 const UUID = () => crypto.randomUUID();
 let mailN = 0;
-const body = (o = {}) => ({ name: "Aisha Khan", phone: "0821234567", email: `aisha.private${++mailN}@example.com`, pickupId: "p1", pickupDate: "2026-11-28", items: { "Classic Bagel": 1 }, website: "", attemptId: UUID(), ...o });
+const body = (o = {}) => ({ name: "Aisha Khan", phone: "0821234567", email: `aisha.private${++mailN}@example.com`, pickupId: "p1", pickupDate: "2026-11-28", items: { "Classic Bagel": 1 }, website: "", attemptId: UUID(), turnstileToken: TS_DUMMY_TOKEN, ...o });
 let ipN = 0;
 async function ctx() {
   const lim = await fakeLimiter({ now: () => clock.t });
