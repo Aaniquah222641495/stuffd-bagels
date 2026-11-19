@@ -11,6 +11,8 @@ None of these send real email: the "Apps Script" is a fake (`fake-apps-script.mj
 | `orders-core.mjs` | The order state machine with a fake clock: happy path, duplicate / parallel `markPaid` pays once, amount and currency mismatch, unknown checkout, ref fallback, 30-minute expiry and late payment, 48 h / 7 day retention, email retry schedule then `email_failed`, same-attempt idempotency, content hash | Node only |
 | `payments-handler.mjs` | The whole payment path in Node (real order handler, webhook, status, attention, Yoco client, mailer, state machine; fake KV, Durable Objects, Yoco and script): server amount, no personal data to Yoco, double submit, rate-limit refunds, 503 switches, forged / stale / replayed webhooks, mode mismatch, email retries, no personal data in logs | Node only |
 | `payments-api.mjs` | The same paths over HTTP against `wrangler dev` with the fake Yoco (`fake-yoco.mjs`) and fake script, including the real Durable Object alarm sending exactly one email request, and a grep of wrangler's output for personal data | wrangler dev + fake Yoco + fake script |
+| `pickup-slots.mjs` | Collection hours to one-hour time chips: structured opens/closes, old free text ("13:00 to 18:00", "10am to 1pm", "1pm - 6pm"), unclear text gives none; Worker keeps old points and validates new hours | Node only |
+| `webkit-form.mjs` | Order form in WebKit at 390 and 1280 (single-choice line, chips + keyboard, notes, mobile bar, axe). Strips the CSP header locally because WebKit upgrades http://localhost files to https | wrangler dev + fakes |
 | `limiter-unit.mjs` | Counter logic: IPv6 /64 keys, email normalising, windows, refunds, daily cap, 12 parallel takes allow exactly 5 | Node only |
 | `forms-limits.mjs` | Worker form rules with fake Durable Objects: token required before forwarding, /64 limit, per-mailbox cap of 3, shared cap of 40, fails closed | Node only |
 | `admin-lockout.mjs` | M2: 12 parallel wrong passwords give 5 x 401 and 7 x 429, /64 rotation does not help, good logins are refunded | wrangler dev |
@@ -32,6 +34,7 @@ node worker/tests/yoco-verify.mjs
 node worker/tests/yoco-checkout.mjs
 node worker/tests/orders-core.mjs
 node worker/tests/payments-handler.mjs
+node worker/tests/pickup-slots.mjs
 
 # in two terminals. TOKEN is any 32+ character value (the Worker will not forward without one).
 # A fresh --persist-to folder per session keeps the shared daily counters (40 submissions) from carrying over.
@@ -53,6 +56,8 @@ WHSEC=$WHSEC node worker/tests/payments-api.mjs /tmp/fake.log /tmp/wrangler.out 
 ```
 The API tests read the admin password from the git-ignored `.dev.vars`, create their own pickup points and use a fresh pretend
 client IP (the Worker reads CF-Connecting-IP, which wrangler dev lets a test set) for a clean rate-limit slate. They end with no pickup points saved: the site's "no pickup points yet" state.
+
+Ports taken by another session? Set SB_BASE (the Worker URL), FAKE_YOCO (fake Yoco URL) and CDP (Chrome debug URL) for the browser tests.
 
 Browser test: start Chrome with `--remote-debugging-port=9444` (on Apple silicon launch it with `arch -arm64`, a Rosetta Chrome is far
 too slow), then `PW=<path to playwright-core> AXE=<path to axe.min.js> FAKELOG=/tmp/fake.log SHOTS=/tmp node worker/tests/e2e-browser.mjs`.
