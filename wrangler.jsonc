@@ -41,8 +41,9 @@
     "not_found_handling": "404-page",
     // /admin serves admin.html; /admin.html forwards to /admin.
     "html_handling": "auto-trailing-slash",
-    // Only the API runs the Worker. Everything else is a free static request.
-    "run_worker_first": ["/api", "/api/*"]
+    // TEMPORARY until the public launch (founder 2026-11-19: client doesn't want to go live before payments): the Worker runs for
+    // every path so NOINDEX can add X-Robots-Tag. At launch put back ["/api", "/api/*"] and remove NOINDEX from "vars" below.
+    "run_worker_first": ["/*"]
   },
   // PRODUCTION (this top level = the Worker `stuffdbagels`): stuffd-kv (live), the Limiter object, and APP_ENV "production", which makes
   // admin sign-in refuse an ADMIN_PASSWORD shorter than 16 characters. No noindex header here. Secrets for production, set by the
@@ -55,11 +56,11 @@
     { "tag": "v2", "new_sqlite_classes": ["Orders"] }
   ],
   // Production: APP_ENV "production" (admin refuses a password under 16 characters), live Yoco, the real domain. Ordering stays
-  // hidden until a pickup point exists. No noindex here.
+  // hidden until a pickup point exists. NOINDEX is temporary (until the public launch).
   // TURNSTILE_SITE_KEY: the PUBLIC sitekey of the "Stuff'd Bagels forms" widget (Cloudflare dashboard > Turnstile, Managed mode, hostname
   // stuffdbagels.co.za). Not a secret. The matching secret is TURNSTILE_SECRET_KEY, a Worker secret set by the founder, never here: until it is
   // set the Worker refuses every order and booking (fails closed).
-  "vars": { "APP_ENV": "production", "TURNSTILE_SITE_KEY": "0x4AAAAAAGIpBftgw-wYSqUM", "YOCO_MODE": "live", "SITE_ORIGIN": "https://stuffdbagels.co.za" },
+  "vars": { "APP_ENV": "production", "NOINDEX": "1", "TURNSTILE_SITE_KEY": "0x4AAAAAAGIpBftgw-wYSqUM", "YOCO_MODE": "live", "SITE_ORIGIN": "https://stuffdbagels.co.za" }, // NOINDEX: temporary, remove at public launch
   "env": {
     // Preview for the client and the founder: separate Worker, separate KV, separate password.
     "preview": {
