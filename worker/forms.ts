@@ -272,7 +272,7 @@ function knownAttempt(r: { kind: string; ref?: string; redirectUrl?: string; amo
 async function handleOrder(request: Request, env: FormsEnv, body: Record<string, unknown>, now: number): Promise<Response> {
   const attemptId = typeof body.attemptId === "string" && UUID_V4.test(body.attemptId) ? body.attemptId.toLowerCase() : null;
   if (!attemptId) throw bad();
-  precheckTurnstile(env, body.turnstileToken); // not configured (503, logged) or no token (400): before any storage is read
+  precheckTurnstile(env, body.turnstileToken); // not configured (503, logged) or no token (400): refused before parseOrder (which reads KV), the limiter, the orders object, Yoco and email
   const payload = await parseOrder(body, env, now);
   assertOrdersReady(env); // before counting anything: a switched-off site must not use up anyone's allowance
 

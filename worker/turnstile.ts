@@ -67,6 +67,10 @@ export function assertTurnstileReady(env: TurnstileEnv): string {
     console.error("turnstile: TURNSTILE_SECRET_KEY is one of Cloudflare's documented TEST secrets, which is refused in production. Set the real secret: npx wrangler@4.148.0 secret put TURNSTILE_SECRET_KEY");
     throw new HttpError(503, MSG_DOWN);
   }
+  if (!testKeysAllowed(env) && !allowedHostnames(env)) {
+    console.error("turnstile: SITE_ORIGIN is missing or not a valid URL in production, so the token's hostname cannot be checked and every order and booking is refused. Set SITE_ORIGIN in wrangler.jsonc vars.");
+    throw new HttpError(503, MSG_DOWN);
+  }
   return secret;
 }
 

@@ -113,6 +113,14 @@ for (const env of [{ TURNSTILE_SECRET_KEY: undefined }, { TURNSTILE_SECRET_KEY: 
 quiet(); assert.equal(world.siteverify.length, 0);
 ok("production (or unset / unknown APP_ENV) without TURNSTILE_SECRET_KEY: 503 + a clear log line, nothing called or sent");
 
+// 6b. Production without a usable SITE_ORIGIN: the hostname cannot be checked, so refuse (503) and log, send nothing
+reset();
+for (const env of [{ SITE_ORIGIN: undefined }, { SITE_ORIGIN: "" }, { SITE_ORIGIN: "not a url" }]) {
+  for (const kind of ["order", "booking"]) { logs.length = 0; r = await go(kind, { turnstileToken: good(kind) }, { env }); assert.equal(r.status, 503, JSON.stringify(env) + kind); assert.ok(logs.some((l) => /SITE_ORIGIN is missing/.test(l)), "clear line for wrangler tail"); }
+}
+quiet(); assert.equal(world.siteverify.length, 0, "refused before siteverify");
+ok("production without a valid SITE_ORIGIN: 503 + a clear log line, siteverify not called, nothing sent");
+
 // 7. Cloudflare's documented TEST secrets are refused in production, even the always-pass one
 reset();
 for (const secret of ["1x0000000000000000000000000000000AA", "2x0000000000000000000000000000000AA", "3x0000000000000000000000000000000AA"]) {
