@@ -470,12 +470,12 @@ function labelRecent_() {
 /* To add a sender, add it to the matching query below.                */
 /* ------------------------------------------------------------------ */
 const FOLDERS_ = [
-  { label: 'Payments', query: 'from:(yoco.com OR capitecbank.co.za)' },
-  { label: 'Markets', query: 'from:bookipi.com OR "Revere Markets"' },
-  { label: 'Accounts', query: 'from:(google.com OR canva.com)' },
+  { label: 'Payments', query: 'from:(yoco.com OR capitecbank.co.za OR stub.africa)' },
+  { label: 'Markets', query: 'from:(bookipi.com OR reveregroup.co.za OR youngatheart.co.za OR jotform.com) OR "Revere Markets"' },
+  { label: 'Accounts', query: 'from:(google.com OR canva.com OR openai.com)' },
   { label: 'Enquiries', query: 'subject:(sponsorship OR sponsor OR collab OR collaboration OR vacancy OR inquiry OR enquiry OR quote)' },
   { label: 'Shopping', query: 'from:(shein.com OR sheinnotify.com OR sheinnotice.com OR buffaloex.com OR takealot.com OR temu.com)', archive: true },
-  { label: 'Promotions', query: 'from:uber.com OR category:promotions', archive: true }
+  { label: 'Promotions', query: 'from:(uber.com OR sterkinekor.com) OR category:promotions', archive: true }
 ];
 
 /** Labels matching threads; `window` like '2d' limits it to recent mail ('' = everything, for the first run). */
