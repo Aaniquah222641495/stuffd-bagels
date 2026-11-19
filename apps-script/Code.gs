@@ -273,7 +273,7 @@ function sendOwner_(a) {
     ];
   }
   lines.push('', 'Sent from the STUFF\'D Bagels website.');
-  MailApp.sendEmail({ to: owner_(), subject: ownerSubject_(a), body: lines.join('\n'), replyTo: a.email, name: CONFIG.BUSINESS_NAME + ' website' });
+  MailApp.sendEmail({ to: owner_(), subject: ownerSubject_(a), body: lines.join('\n'), htmlBody: ownerHtml_(a), replyTo: a.email, name: CONFIG.BUSINESS_NAME + ' website' });
 }
 
 // DRAFT wording from the client's rule (2026-11-18), pending dp-counsel (CPA s17 advance-booking cancellations).
@@ -300,25 +300,146 @@ function sendCustomer_(a) {
     outro = "We'll look at the date and get back to you with a quote, usually within a couple of days. Nothing is booked until we confirm. Questions? Just reply to this email.";
   }
   const plain = [intro, ''].concat(rows.map(function (r) { return r[0] + ': ' + r[1]; }), ['', outro, '', "STUFF'D Bagels", 'Cape Town', CONFIG.SITE_URL]).join('\n');
-  MailApp.sendEmail({ to: a.email, subject: subject, body: plain, htmlBody: html_(intro, rows, outro), name: CONFIG.BUSINESS_NAME, replyTo: owner_() });
+  MailApp.sendEmail({ to: a.email, subject: subject, body: plain, htmlBody: customerHtml_(a), name: CONFIG.BUSINESS_NAME, replyTo: owner_() });
 }
 
-/** Branded HTML email: inline styles only, no images (they are blocked by default in many mail apps). */
-function html_(intro, rows, outro) {
+/* ------------------------------------------------------------------ */
+/* Branded HTML emails (founder 2026-11-19: STUFF'D branding and logo, */
+/* and a clearer owner email). Inline styles and tables only, so they  */
+/* hold up in Gmail, Apple Mail and Outlook. The logo is an image from */
+/* the website; if a mail app hides images, its alt text still reads   */
+/* STUFF'D in big white letters on the blue bar.                       */
+/* ------------------------------------------------------------------ */
+
+const FONT_ = "'Arial Black','Helvetica Neue',Arial,Helvetica,sans-serif";
+const BODY_FONT_ = "'Helvetica Neue',Arial,Helvetica,sans-serif";
+
+function logoUrl_() { return CONFIG.SITE_URL.replace(/\/$/, '') + '/logo-white.png'; }
+
+/** The shared frame: blue bar with the logo, white card, footer. */
+function shell_(preheader, tag, inner) {
   const c = COLOURS;
-  const tr = rows.map(function (r, i) {
-    const total = r[0] === 'Total';
-    return '<tr><td style="padding:10px 14px;border-top:1px solid #dbe3f0;font-size:14px;color:' + c.ink + ';' + (total ? 'font-weight:900;' : '') + '">' + esc_(r[0]) +
-      '</td><td style="padding:10px 14px;border-top:1px solid #dbe3f0;font-size:14px;color:' + c.ink + ';text-align:right;white-space:pre-wrap;' + (total ? 'font-weight:900;' : 'font-weight:600;') + '">' + esc_(r[1]) + '</td></tr>';
+  return '<!doctype html><html><body style="margin:0;padding:0;background:' + c.paper + '">' +
+    '<div style="display:none;max-height:0;overflow:hidden;opacity:0">' + esc_(preheader) + '</div>' +
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:' + c.paper + '"><tr><td align="center" style="padding:24px 12px">' +
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:' + c.white + ';border:2px solid ' + c.ink + ';border-radius:20px;overflow:hidden">' +
+    '<tr><td style="background:' + c.blue + ';padding:22px 26px">' +
+      '<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>' +
+      '<td style="vertical-align:middle"><img src="' + logoUrl_() + '" width="150" alt="STUFF\'D" style="display:block;width:150px;max-width:150px;height:auto;border:0;color:#ffffff;font-family:' + FONT_ + ';font-size:30px;font-weight:900"></td>' +
+      (tag ? '<td align="right" style="vertical-align:middle"><span style="display:inline-block;background:' + c.white + ';color:' + c.blue + ';font-family:' + FONT_ + ';font-size:11px;font-weight:900;letter-spacing:2px;text-transform:uppercase;padding:7px 12px;border-radius:999px">' + esc_(tag) + '</span></td>' : '') +
+      '</tr></table></td></tr>' +
+    inner +
+    '<tr><td style="padding:18px 26px 22px;border-top:1px solid #dbe3f0;font-family:' + BODY_FONT_ + ';font-size:12px;line-height:1.5;color:#4a5578">' +
+      '<b style="color:' + c.ink + '">STUFF\'D Bagels</b> &middot; Cape Town &middot; ' + esc_(CONFIG.PHONE_DISPLAY) + '<br>' +
+      '<a href="' + esc_(CONFIG.SITE_URL) + '" style="color:' + c.blue + ';font-weight:700;text-decoration:none">' + esc_(CONFIG.SITE_URL.replace(/^https?:\/\//, '')) + '</a>' +
+    '</td></tr></table></td></tr></table></body></html>';
+}
+
+function h1_(text, sub) {
+  const c = COLOURS;
+  return '<tr><td style="padding:26px 26px 6px;font-family:' + FONT_ + ';font-size:26px;line-height:1.15;font-weight:900;color:' + c.ink + '">' + esc_(text) + '</td></tr>' +
+    (sub ? '<tr><td style="padding:0 26px 14px;font-family:' + BODY_FONT_ + ';font-size:16px;line-height:1.5;color:' + c.ink + '">' + esc_(sub) + '</td></tr>' : '');
+}
+
+/** A soft blue box with a small label and big lines: where and when to collect, or the event. */
+function box_(label, big, lines) {
+  const c = COLOURS;
+  return '<tr><td style="padding:8px 26px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:' + c.sky + ';border-radius:14px"><tr><td style="padding:16px 18px;font-family:' + BODY_FONT_ + ';color:' + c.ink + '">' +
+    '<div style="font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:' + c.blue + '">' + esc_(label) + '</div>' +
+    '<div style="font-family:' + FONT_ + ';font-size:22px;font-weight:900;line-height:1.2;margin-top:4px">' + esc_(big) + '</div>' +
+    lines.filter(Boolean).map(function (l) { return '<div style="font-size:15px;line-height:1.5;margin-top:2px">' + esc_(l) + '</div>'; }).join('') +
+    '</td></tr></table></td></tr>';
+}
+
+/** The bagels, one row each with the quantity in a blue circle, then the total. */
+function itemsTable_(a) {
+  const c = COLOURS;
+  const rows = a.items.map(function (i) {
+    return '<tr>' +
+      '<td width="40" style="padding:10px 0;border-bottom:1px solid #dbe3f0;vertical-align:middle"><span style="display:inline-block;min-width:28px;height:28px;line-height:28px;text-align:center;border-radius:14px;background:' + c.blue + ';color:#ffffff;font-family:' + FONT_ + ';font-size:14px;font-weight:900">' + i.qty + '</span></td>' +
+      '<td style="padding:10px 0;border-bottom:1px solid #dbe3f0;font-family:' + BODY_FONT_ + ';font-size:16px;font-weight:700;color:' + c.ink + '">' + esc_(i.name) + '</td>' +
+      '<td align="right" style="padding:10px 0;border-bottom:1px solid #dbe3f0;font-family:' + BODY_FONT_ + ';font-size:15px;color:' + c.ink + ';white-space:nowrap">' + rand_(i.line) + '</td></tr>';
   }).join('');
-  return '<div style="background:' + c.paper + ';padding:24px 12px;font-family:Arial,Helvetica,sans-serif">' +
-    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;margin:0 auto;border-radius:18px;overflow:hidden;background:' + c.white + ';border:2px solid ' + c.ink + '">' +
-    '<tr><td style="background:' + c.blue + ';padding:22px 24px;color:' + c.white + ';font-size:30px;font-weight:900;letter-spacing:1px">STUFF\'D <span style="font-size:13px;font-weight:700;letter-spacing:3px;color:' + c.sky + '">BAGELS</span></td></tr>' +
-    '<tr><td style="padding:24px 24px 8px;font-size:18px;font-weight:700;color:' + c.ink + '">' + esc_(intro) + '</td></tr>' +
-    '<tr><td style="padding:8px 24px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:' + c.paper + ';border-radius:12px">' + tr + '</table></td></tr>' +
-    '<tr><td style="padding:16px 24px 8px;font-size:15px;line-height:1.5;color:' + c.ink + '">' + esc_(outro) + '</td></tr>' +
-    '<tr><td style="padding:8px 24px 24px;font-size:13px;color:#4a5578">STUFF\'D Bagels, Cape Town &middot; ' + esc_(CONFIG.PHONE_DISPLAY) + '</td></tr>' +
-    '</table></div>';
+  return '<tr><td style="padding:10px 26px 4px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0">' + rows +
+    '<tr><td></td><td style="padding:14px 0 0;font-family:' + FONT_ + ';font-size:16px;font-weight:900;color:' + c.ink + '">Total paid</td>' +
+    '<td align="right" style="padding:14px 0 0;font-family:' + FONT_ + ';font-size:24px;font-weight:900;color:' + c.blue + ';white-space:nowrap">' + rand_(a.total) + '</td></tr>' +
+    '</table></td></tr>';
+}
+
+/** Label / value rows (bookings). */
+function factsTable_(rows) {
+  const c = COLOURS;
+  return '<tr><td style="padding:8px 26px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0">' + rows.map(function (r) {
+    return '<tr><td style="padding:9px 0;border-bottom:1px solid #dbe3f0;font-family:' + BODY_FONT_ + ';font-size:13px;font-weight:700;color:#4a5578;vertical-align:top;width:38%">' + esc_(r[0]) + '</td>' +
+      '<td style="padding:9px 0;border-bottom:1px solid #dbe3f0;font-family:' + BODY_FONT_ + ';font-size:15px;font-weight:700;color:' + c.ink + ';white-space:pre-wrap">' + esc_(r[1]) + '</td></tr>';
+  }).join('') + '</table></td></tr>';
+}
+
+/** A highlighted note (the customer's own words). */
+function note_(label, text) {
+  if (!text) return '';
+  return '<tr><td style="padding:8px 26px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#fff6e0;border-left:4px solid #f2b705;border-radius:10px"><tr><td style="padding:12px 16px;font-family:' + BODY_FONT_ + ';color:' + COLOURS.ink + '">' +
+    '<div style="font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#8a6400">' + esc_(label) + '</div>' +
+    '<div style="font-size:15px;line-height:1.5;margin-top:3px;white-space:pre-wrap">' + esc_(text) + '</div></td></tr></table></td></tr>';
+}
+
+function para_(text, small) {
+  return '<tr><td style="padding:10px 26px;font-family:' + BODY_FONT_ + ';font-size:' + (small ? '13px' : '15px') + ';line-height:1.55;color:' + (small ? '#4a5578' : COLOURS.ink) + '">' + esc_(text) + '</td></tr>';
+}
+
+/** Tap-to-contact buttons for the owner. */
+function buttons_(a) {
+  const btn = function (href, label, bg) {
+    return '<td style="padding:4px"><a href="' + esc_(href) + '" style="display:block;text-align:center;background:' + bg + ';color:#ffffff;font-family:' + FONT_ + ';font-size:13px;font-weight:900;text-decoration:none;padding:12px 8px;border-radius:999px">' + label + '</a></td>';
+  };
+  return '<tr><td style="padding:6px 22px 10px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>' +
+    btn('https://wa.me/' + a.phone.replace('+', ''), 'WhatsApp', '#1f8f4e') +
+    btn('tel:' + a.phone, 'Call', COLOURS.ink) +
+    btn('mailto:' + a.email + '?subject=' + encodeURIComponent((a.type === 'order' ? 'Your STUFF\'D order ' : 'Your STUFF\'D enquiry ') + a.ref), 'Email', COLOURS.blue) +
+    '</tr></table></td></tr>';
+}
+
+function customerCard_(a) {
+  const c = COLOURS;
+  return '<tr><td style="padding:14px 26px 4px;font-family:' + BODY_FONT_ + ';color:' + c.ink + '">' +
+    '<div style="font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:' + c.blue + '">Customer</div>' +
+    '<div style="font-family:' + FONT_ + ';font-size:20px;font-weight:900;margin-top:4px">' + esc_(a.name) + '</div>' +
+    '<div style="font-size:15px;margin-top:2px">' + esc_(a.phone) + ' &middot; ' + esc_(a.email) + '</div></td></tr>' + buttons_(a);
+}
+
+function customerHtml_(a) {
+  const f = first_(a.name);
+  if (a.type === 'order') {
+    return shell_('Paid and confirmed. Collect on ' + day_(a.pickupDate, false) + '.', 'Order ' + a.ref,
+      h1_('Order confirmed!', 'Thanks, ' + f + '. Your payment came through and your bagels are on the list.') +
+      box_('Collect', day_(a.pickupDate, true), [a.pickupPlace, a.pickupTime ? 'Your preferred time: ' + a.pickupTime : '', a.pickupDays]) +
+      itemsTable_(a) +
+      note_('Your note', a.note) +
+      para_('Questions or need to change something? Just reply to this email.') +
+      para_(CANCELLATION_POLICY_, true));
+  }
+  return shell_('We\'ve got your event enquiry ' + a.ref + '.', 'Enquiry ' + a.ref,
+    h1_('Enquiry received!', 'Thanks for thinking of us, ' + f + '. We\'ll look at the date and come back to you with a quote, usually within a couple of days.') +
+    box_('Your event', day_(a.eventDate, true), [a.venue, a.guests + ' guests']) +
+    note_('Your details', a.details) +
+    para_('Nothing is booked until we confirm. Questions? Just reply to this email.', true));
+}
+
+function ownerHtml_(a) {
+  if (a.type === 'order') {
+    return shell_('Paid ' + rand_(a.total) + '. ' + a.name + ', collecting ' + day_(a.pickupDate, false) + '.', 'Paid ' + rand_(a.total),
+      h1_('New order ' + a.ref, 'Paid online with Yoco. Nothing to chase.') +
+      box_('Collecting', day_(a.pickupDate, true), [a.pickupTime ? 'Preferred time: ' + a.pickupTime : 'Any time', a.pickupPlace]) +
+      itemsTable_(a) +
+      note_('Their note', a.note) +
+      customerCard_(a) +
+      para_('Yoco checkout id: ' + a.checkoutId + '. Keep this email: you need the id to refund.', true));
+  }
+  return shell_('Event enquiry: ' + a.name + ', ' + day_(a.eventDate, true) + '.', 'Enquiry',
+    h1_('Event enquiry ' + a.ref, 'Reply with a quote. Nothing is booked yet.') +
+    box_('Event', day_(a.eventDate, true), [a.venue, a.guests + ' guests']) +
+    note_('Their details', a.details) +
+    customerCard_(a));
 }
 
 /* ------------------------------------------------------------------ */

@@ -105,7 +105,11 @@ assert.doesNotMatch(pOwner.body, /market/i, "no market wording in the owner emai
 // The customer email may mention markets only through the cancellation policy (credit can be used at a market), never as a collection place.
 assert.doesNotMatch(pCustomer.body.replace(/becomes credit for another collection Saturday or one of our markets, valid for 2 months/, ""), /market/i, "no market wording in order emails apart from the credit policy");
 assert.match(pCustomer.body, /Pickup point: Kenilworth Corner/);
-assert.match(pCustomer.htmlBody, /Pickup point/);
+assert.match(pCustomer.htmlBody, />Collect<\/div>[\s\S]*Kenilworth Corner/, "branded customer email shows where to collect");
+assert.ok(pCustomer.htmlBody.includes("/logo-white.png") && /alt="STUFF'D"/.test(pCustomer.htmlBody), "customer email carries the logo, with alt text");
+assert.ok(pOwner.htmlBody && pOwner.htmlBody.includes("/logo-white.png"), "owner email is branded HTML too");
+assert.ok(pOwner.htmlBody.includes("https://wa.me/") && pOwner.htmlBody.includes("tel:+") && pOwner.htmlBody.includes("mailto:"), "owner email has WhatsApp, call and email buttons");
+assert.ok(!/<i>please/.test(pOwner.htmlBody), "no raw customer HTML in the owner email");
 labelled.length = 0;
 sent.length = 2; // back to the first order's two emails for the counts below
 
