@@ -287,8 +287,8 @@ function sendOwner_(a) {
 }
 
 // DRAFT wording from the client's rule (2026-11-18), pending dp-counsel (CPA s17 advance-booking cancellations).
-// Credit lasts 2 months (founder and client, 2026-11-18). Keep in step with CANCELLATION_POLICY in src/collection.ts.
-const CANCELLATION_POLICY_ = "If you cancel before the Wednesday cut-off, or you pay and don't collect, your order becomes credit for another collection Saturday or one of our markets, valid for 2 months (credit, not a refund).";
+// dp-counsel option 1a, founder yes 2026-11-19: credit lasts 6 months. Keep in step with CANCELLATION_POLICY in src/collection.ts.
+const CANCELLATION_POLICY_ = "If you cancel before the Wednesday cut-off, you can choose a refund or credit. If you cancel after the cut-off, or you pay and don't collect, your order becomes credit for another collection Saturday or one of our markets, valid for 6 months from your original collection Saturday. Credit is not paid out as cash.";
 
 function sendCustomer_(a) {
   if (MailApp.getRemainingDailyQuota() < 1) return;
