@@ -12,6 +12,7 @@ import {
   postForm,
   type Status,
 } from "@/components/order-forms";
+import { TURNSTILE_WAIT_MESSAGE, TurnstileBox, useTurnstile } from "@/components/turnstile";
 
 const todayIso = () => {
   const d = new Date();
@@ -28,6 +29,7 @@ export function BookingForm() {
   const [problem, setProblem] = useState("");
   const [focusTick, setFocusTick] = useState(0);
   const [ref, setRef] = useState("");
+  const ts = useTurnstile("booking", status !== "sent");
   const set = (k: keyof typeof f) => (v: string) => {
     setF((p) => ({ ...p, [k]: v }));
     // Editing a field clears its own error straight away.
@@ -70,12 +72,21 @@ export function BookingForm() {
     }
     inFlight.current = true;
     setStatus("sending");
-    const r = await postForm("/api/booking", { ...f, guests: Number(f.guests) });
+    const turnstileToken = await ts.getToken(); // managed check, normally already solved
+    if (!turnstileToken) {
+      inFlight.current = false;
+      setProblem(TURNSTILE_WAIT_MESSAGE);
+      setStatus("idle");
+      ts.reset();
+      return;
+    }
+    const r = await postForm("/api/booking", { ...f, guests: Number(f.guests), turnstileToken });
     inFlight.current = false;
     if (r.ok) {
       setRef(r.data?.ref ?? "");
       setStatus("sent");
     } else {
+      ts.reset(); // a token works once: fresh one for the next try
       setProblem(failureMessage(r));
       setStatus("idle");
     }
@@ -153,6 +164,7 @@ export function BookingForm() {
       </div>
 
       <PrivacyNote onDark what="We use your name, phone and email only to reply to this enquiry." />
+      <TurnstileBox handle={ts} className="mt-4" />
 
       {problem && (
         <p role="alert" className="mt-4 rounded-2xl px-4 py-3 text-sm font-bold bg-white text-error m-0">

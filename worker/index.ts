@@ -3,7 +3,10 @@
 // else is served straight from the static assets, so pages and images stay free requests.
 import { requireAdmin } from "./auth";
 export { Limiter } from "./limiter";
-import { handleForm, handlePayStub } from "./forms";
+export { Orders } from "./orders";
+import { handleForm } from "./forms";
+import { turnstileSiteKey } from "./turnstile";
+import { handleAttention, handleStatus, handleWebhook } from "./payments";
 import { HttpError, errorResponse, json, plainHttpRefused, readJsonObject, withNoindex } from "./http";
 import {
   LIMITS,
@@ -39,6 +42,20 @@ export interface Env {
   APPS_SCRIPT_TOKEN?: string;
   // Durable Object namespace for the strongly consistent counters (worker/limiter.ts).
   LIMITER?: DurableObjectNamespace;
+  // Durable Object namespace for pending and paid orders (worker/orders.ts, ADR-0041).
+  ORDERS?: DurableObjectNamespace;
+  // Yoco (ADR-0041). Secrets set by the founder: YOCO_SECRET_KEY, YOCO_WEBHOOK_SECRET. Plain vars in wrangler.jsonc: YOCO_MODE, SITE_ORIGIN.
+  YOCO_SECRET_KEY?: string;
+  YOCO_WEBHOOK_SECRET?: string;
+  YOCO_MODE?: string;
+  SITE_ORIGIN?: string;
+  // Tests only: honoured only for http://127.0.0.1 (a local fake Yoco).
+  YOCO_API_BASE?: string;
+  // Turnstile (worker/turnstile.ts, D-SB-7). TURNSTILE_SITE_KEY is a public plain var; TURNSTILE_SECRET_KEY is a Worker secret.
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
+  // Tests only: honoured only for http://127.0.0.1 (a local fake siteverify).
+  TURNSTILE_API_BASE?: string;
 }
 
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -121,6 +138,11 @@ async function handleAdmin(request: Request, env: Env, parts: string[]): Promise
     return json({ ok: true });
   }
 
+  if (resource === "orders" && id === "attention" && extra.length === 0) {
+    methodOnly(request, ["GET"]);
+    return handleAttention(env);
+  }
+
   throw new HttpError(404, "Not found");
 }
 
@@ -162,6 +184,11 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
     methodOnly(request, ["GET", "HEAD"]);
     return json({ status: "ok" });
   }
+  if (parts.length === 2 && parts[1] === "config") {
+    // What the page needs to start the Turnstile widget. The site key is public by design; null means Turnstile is not set up.
+    methodOnly(request, ["GET", "HEAD"]);
+    return json({ turnstileSiteKey: turnstileSiteKey(env) || null }, 200, "public");
+  }
   if (parts.length === 2 && parts[1] === "availability") {
     methodOnly(request, ["GET", "HEAD"]);
     return json(await publicAvailability(env.STUFFD_KV), 200, "public");
@@ -173,16 +200,20 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
   if (parts.length === 2 && parts[1] === "pickups") {
     methodOnly(request, ["GET", "HEAD"]);
     // Only what customers need: active points, no internal fields.
-    const list = (await publicPickups(env.STUFFD_KV)).map(({ id, name, area, days }) => ({ id, name, area, days }));
+    const list = (await publicPickups(env.STUFFD_KV)).map(({ id, name, area, days, opens, closes }) => ({ id, name, area, days, ...(opens && closes ? { opens, closes } : {}) }));
     return json(list, 200, "public");
   }
   if (parts.length === 2 && (parts[1] === "order" || parts[1] === "booking")) {
     methodOnly(request, ["POST"]);
     return handleForm(request, env, parts[1]);
   }
-  if (parts.length === 3 && parts[1] === "order" && parts[2] === "pay") {
+  if (parts.length === 3 && parts[1] === "order" && parts[2] === "status") {
+    methodOnly(request, ["GET", "HEAD"]);
+    return handleStatus(request, env);
+  }
+  if (parts.length === 3 && parts[1] === "yoco" && parts[2] === "webhook") {
     methodOnly(request, ["POST"]);
-    return handlePayStub(request);
+    return handleWebhook(request, env);
   }
   throw new HttpError(404, "Not found");
 }

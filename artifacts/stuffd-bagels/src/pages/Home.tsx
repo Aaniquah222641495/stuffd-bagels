@@ -1,15 +1,20 @@
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { BookingForm } from "@/components/booking-form";
-import { CANCELLATION_POLICY, DEFAULT_CUTOFF, availableSaturdays, cutoffDay, niceDay, openingNote } from "@/collection";
+import { TURNSTILE_WAIT_MESSAGE, TurnstileBox, useTurnstile } from "@/components/turnstile";
+import { DEFAULT_CUTOFF, availableSaturdays, cutoffDay, hoursCaveat, hoursLabel, niceDay, openingNote, pickupHours, timeSlots } from "@/collection";
 import {
+  DRAFT_KEY,
   FieldRow,
+  FixedRow,
   Honeypot,
-  PrivacyNote,
+  TimeChips,
   failureMessage,
   inputClass,
   looksLikeEmail,
   looksLikePhone,
+  newAttemptId,
   postForm,
+  readDraft,
   type Status,
 } from "@/components/order-forms";
 import {
@@ -83,6 +88,8 @@ interface Pickup {
   name: string;
   area: string;
   days: string;
+  opens?: string;
+  closes?: string;
 }
 
 const BUSINESS_EMAIL = "stuffd.bagels@gmail.com";
@@ -378,13 +385,14 @@ export default function Home() {
   const [pickups, setPickups] = useState<Pickup[]>([]);
   const [pickupsLoaded, setPickupsLoaded] = useState(false);
   const [notes, setNotes] = useState("");
+  const [noteOpen, setNoteOpen] = useState(false); // the notes box stays folded away until asked for
+  const noteRef = useRef<HTMLTextAreaElement>(null);
   const [honey, setHoney] = useState("");
   const [today, setToday] = useState<string | null>(null);
   const [orderStatus, setOrderStatus] = useState<Status>("idle");
   const [orderErrors, setOrderErrors] = useState<Record<string, string>>({});
   const [orderProblem, setOrderProblem] = useState("");
   const [focusTick, setFocusTick] = useState(0);
-  const [sentOrder, setSentOrder] = useState<{ ref: string; email: string; total: number; place: string; day: string; time: string; lines: string[] } | null>(null);
   const [displayTotal, setDisplayTotal] = useState(0);
   const [detailsInView, setDetailsInView] = useState(false);
   const detailsRef = useRef<HTMLDivElement>(null);
@@ -479,6 +487,45 @@ export default function Home() {
 
   // Set the moment the first click lands (state only updates on the next render), cleared when the answer is back.
   const orderInFlight = useRef(false);
+  const tsReset = useRef<() => void>(() => {});
+  const attemptId = useRef<string | null>(null);
+
+  // Back from Yoco's cancel / failure page ("Back to my order"), or the browser's Back button: put the cart and details back.
+  useEffect(() => {
+    const d = readDraft();
+    if (!d) return;
+    const known = (src: Record<string, number> | undefined, allowed: string[]) =>
+      Object.fromEntries(allowed.map((k) => [k, Number.isInteger(src?.[k]) && (src as Record<string, number>)[k] > 0 && (src as Record<string, number>)[k] <= 50 ? (src as Record<string, number>)[k] : 0]));
+    setQuantities(known(d.quantities, Object.keys(menuPricingObject)));
+    setToppingQty(known(d.toppingQty, Object.keys(TOPPINGS)));
+    setName(d.name);
+    setPhone(d.phone);
+    setEmail(d.email);
+    setPickup(d.pickup);
+    setSaturday(d.saturday);
+    setPickupTime(d.pickupTime);
+    setNotes(d.notes);
+    if (d.notes) setNoteOpen(true);
+    try {
+      sessionStorage.removeItem(DRAFT_KEY);
+    } catch {
+      /* ignore */
+    }
+    if (window.location.hash === "#order") setTimeout(() => document.getElementById("order")?.scrollIntoView({ block: "start" }), 300);
+  }, []);
+
+  // Coming back to this page from Yoco with the browser's Back button (the page is restored from memory): enable the button again.
+  useEffect(() => {
+    const onShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        orderInFlight.current = false;
+        setOrderStatus("idle");
+        tsReset.current(); // the page's old token was used for the order we left behind; a token works once
+      }
+    };
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+  }, []);
 
   const submitOrder = async (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -498,36 +545,69 @@ export default function Home() {
     }
     orderInFlight.current = true;
     setOrderStatus("sending");
+    // One id per press of Pay. A repeat of the SAME press (double click, flaky network, coming back from Yoco and pressing again
+    // with the same cart) gets the same payment page back instead of a second one.
+    if (!attemptId.current) attemptId.current = newAttemptId();
+    // Turnstile (managed): normally already solved by now. Needed by the Worker before it opens a Yoco checkout.
+    const turnstileToken = await ts.getToken();
+    if (!turnstileToken) {
+      orderInFlight.current = false;
+      setOrderProblem(TURNSTILE_WAIT_MESSAGE);
+      setOrderStatus("idle");
+      ts.reset();
+      return;
+    }
     const r = await postForm("/api/order", {
       name,
       phone,
       email,
       pickupId: chosenPoint!.id,
       pickupDate: chosenSat,
-      pickupTime,
+      pickupTime: chosenTime,
       items: Object.fromEntries(Object.entries(quantities).filter(([, q]) => q > 0)),
       toppings: Object.fromEntries(Object.entries(toppingQty).filter(([, q]) => q > 0)),
       note: notes,
       website: honey,
+      attemptId: attemptId.current,
+      turnstileToken,
     });
     orderInFlight.current = false;
-    if (r.ok) {
-      const lines = [
-        ...Object.entries(quantities).filter(([, q]) => q > 0).map(([i, q]) => `${q} x ${i}`),
-        ...Object.entries(toppingQty).filter(([, q]) => q > 0).map(([t, q]) => `${q} x ${t}`),
-      ];
-      setSentOrder({ ref: r.data?.ref ?? "", email: email.trim(), total, place: `${chosenPoint!.name}, ${chosenPoint!.area}`, day: niceDay(chosenSat!), time: pickupTime.trim(), lines });
-      setOrderStatus("sent");
-    } else {
-      setOrderProblem(failureMessage(r));
-      setOrderStatus("idle");
-      if (r.status === 409) {
-        // A point may have been switched off, or the cut-off passed, since the page loaded: refresh both.
-        loadPickups();
-        loadAvailability();
+    const url = r.ok ? r.data?.redirectUrl : undefined;
+    if (r.ok && typeof url === "string" && /^https?:\/\//.test(url)) {
+      // Keep the cart and the details for "Back to my order" (this tab only). Then go to Yoco from this page, so Yoco sees our address
+      // as the referrer (no server redirect, no rel="noreferrer": Yoco checks it for live payments).
+      try {
+        sessionStorage.setItem(
+          DRAFT_KEY,
+          JSON.stringify({ v: 1, savedAt: Date.now(), ref: r.data?.ref ?? "", quantities, toppingQty, name, phone, email, pickup: chosenPoint!.id, saturday: chosenSat, pickupTime: chosenTime, notes }),
+        );
+      } catch {
+        /* private mode: the customer just retypes */
       }
+      window.location.assign(url);
+      return; // the button stays on "Opening Yoco..." until the page leaves
+    }
+    ts.reset(); // the token is spent whatever the answer was: get a fresh one for the next press
+    // Only an unanswered request (status 0) may be retried under the same id; any answer ends that press.
+    if (r.status !== 0) attemptId.current = null;
+    setOrderProblem(r.ok ? "The payment page didn't open. Please try again." : failureMessage(r));
+    setOrderStatus("idle");
+    if (r.status === 409) {
+      // A point may have been switched off, or the cut-off passed, since the page loaded: refresh both.
+      loadPickups();
+      loadAvailability();
     }
   };
+
+  // "Add a note" opens the box and puts the cursor in it.
+  const [noteAsked, setNoteAsked] = useState(false);
+  const openNote = () => {
+    setNoteOpen(true);
+    setNoteAsked(true);
+  };
+  useEffect(() => {
+    if (noteAsked) noteRef.current?.focus();
+  }, [noteAsked]);
 
   // After a failed submit, move focus to the first field with an error (or back up to the menu).
   useEffect(() => {
@@ -544,15 +624,6 @@ export default function Home() {
       const { [k]: _gone, ...rest } = p;
       return rest;
     });
-
-  const startAnotherOrder = () => {
-    setQuantities(Object.fromEntries(Object.keys(menuPricingObject).map((k) => [k, 0])));
-    setToppingQty(Object.fromEntries(Object.keys(TOPPINGS).map((k) => [k, 0])));
-    setNotes("");
-    setSentOrder(null);
-    setOrderStatus("idle");
-    setOrderErrors({});
-  };
 
   const updateQuantity = (item: string, delta: number) => {
     setQuantities((prev) => ({
@@ -586,6 +657,14 @@ export default function Home() {
   const saturdays = today ? availableSaturdays(nowMs, rules) : [];
   const chosenSat = saturdays.includes(saturday) ? saturday : saturdays[0];
   const chosenPoint = pickups.find((p) => p.id === pickup) ?? pickups[0];
+  // Preferred time: one-hour chips from the point's collection hours (none when the hours are not known). A time that
+  // belongs to another point's hours is dropped, so the payload only ever carries a slot of the point being collected from.
+  const slots = chosenPoint ? timeSlots(chosenPoint) : [];
+  const chosenTime = slots.includes(pickupTime) ? pickupTime : "";
+  const hours = chosenPoint ? pickupHours(chosenPoint) : null;
+  const caveat = hoursCaveat(chosenPoint?.days);
+  const onePoint = pickups.length === 1;
+  const oneSat = saturdays.length === 1;
   const satNote = today ? openingNote(nowMs, rules) : "";
   const cutoffLine = chosenSat ? `Orders for ${niceDay(chosenSat)} close on ${niceDay(cutoffDay(chosenSat))} at ${rules.cutoffTime}.` : "";
   // Ordering is hidden (not just disabled) when it is switched off, today is closed, there is no active
@@ -598,6 +677,8 @@ export default function Home() {
         ? availability?.closedMessage || satNote || "There's no Saturday open for orders right now. Please check back soon."
         : null;
   const orderingHidden = hiddenMessage !== null;
+  const ts = useTurnstile("order", !orderingHidden);
+  tsReset.current = ts.reset;
 
   return (
     <div className="bg-paper min-h-screen text-ink overflow-x-hidden">
@@ -935,7 +1016,7 @@ export default function Home() {
               index="03"
               label="Checkout"
               title="Your details"
-              note="Fill this in and send. It goes straight to our kitchen."
+              note="Fill this in and pay. Your order goes to our kitchen once it's paid."
             />
 
             <div className="grid grid-cols-1 gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16 lg:items-start">
@@ -943,8 +1024,8 @@ export default function Home() {
                 <ol className="list-none p-0 m-0 grid gap-6">
                   {[
                     ["Pick your bagels", "Choose from the menu above."],
-                    ["Add your details", "Your name, number, email, which pickup point and which Saturday."],
-                    ["Send it, then pay", "We email your order to the kitchen and send you a confirmation. Your order is confirmed once it's paid."],
+                    ["Add your details", "Your name, number and email. Check where and when you collect."],
+                    ["Pay with Yoco", "Pay securely on Yoco. Your order is confirmed straight away and we email you a confirmation."],
                   ].map(([t, d], i) => (
                     <li key={t} className="grid grid-cols-[3rem_1fr] gap-4 items-start">
                       <span className="font-bubble text-3xl text-blue leading-none">{i + 1}</span>
@@ -973,51 +1054,13 @@ export default function Home() {
               </Reveal>
 
               <section aria-label="Your details" className="min-w-0">
-                {orderStatus === "sent" && sentOrder ? (
-                  <div
-                    ref={(el) => el?.focus()}
-                    tabIndex={-1}
-                    role="status"
-                    data-testid="order-sent"
-                    className="rounded-[22px] bg-photo shadow-soft p-7 sm:p-9 outline-none"
-                  >
-                    <p className="eyebrow m-0 text-blue">Order sent</p>
-                    <h3 className="font-bubble text-4xl leading-none m-0 mt-3">We've got it!</h3>
-                    <p className="inline-block mt-5 mb-0 rounded-full bg-ink text-paper px-4 py-1.5 text-xs font-black uppercase tracking-widest">
-                      Awaiting payment
-                    </p>
-                    <p className="text-base leading-relaxed mt-4 mb-0">
-                      Your order is <strong>confirmed once it's paid</strong>. We'll be in touch with how to pay.
-                    </p>
-                    <ul className="list-none p-0 mt-5 mb-0 border-t border-ink/10">
-                      {sentOrder.lines.map((l) => (
-                        <li key={l} className="py-2.5 border-b border-ink/10 font-semibold">{l}</li>
-                      ))}
-                      <li className="py-2.5 border-b border-ink/10 flex justify-between font-black">
-                        <span>Total</span>
-                        <span>R{sentOrder.total}</span>
-                      </li>
-                    </ul>
-                    <p className="text-sm text-ink/75 leading-relaxed mt-4 mb-0">
-                      Collect at {sentOrder.place} on <strong>{sentOrder.day}</strong>{sentOrder.time ? `, around ${sentOrder.time}` : ""}. We've emailed the details to <strong>{sentOrder.email}</strong>; check your
-                      spam folder if you can't see it.
-                      {sentOrder.ref && <> Your reference is <strong>{sentOrder.ref}</strong>.</>}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={startAnotherOrder}
-                      className="mt-6 rounded-full border-2 border-ink px-6 py-3 font-black uppercase tracking-widest text-sm text-ink transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0.5"
-                    >
-                      Start another order
-                    </button>
-                  </div>
-                ) : hiddenMessage ? (
+                {hiddenMessage ? (
                   <div role="status" data-testid="orders-hidden" className="rounded-[22px] bg-ink text-paper p-7 sm:p-9">
                     <p className="eyebrow m-0 text-sky">Ordering</p>
                     <p className="font-bubble text-2xl sm:text-3xl leading-tight m-0 mt-3 text-balance [overflow-wrap:anywhere]">{hiddenMessage}</p>
                   </div>
                 ) : (
-                  <form onSubmit={submitOrder} noValidate aria-label="Send your order" data-testid="order-form">
+                  <form id="order-form" onSubmit={submitOrder} noValidate aria-label="Pay for your order" data-testid="order-form" className="scroll-mt-10">
                     {satNote && (
                       <p role="status" data-testid="saturday-note" className="mb-4 rounded-2xl bg-ink text-paper px-4 py-3 text-sm font-bold leading-snug m-0">
                         {satNote}
@@ -1046,62 +1089,90 @@ export default function Home() {
                             value={email} onChange={(e) => { setEmail(e.target.value); clearError("email"); }} className={inputClass} />
                         )}
                       </FieldRow>
-                      <FieldRow label="Pickup point" error={orderErrors.pickup} hint={chosenPoint?.days ? `Collection times: ${chosenPoint.days}` : undefined}>
-                        {(p) => (
-                          <div className="relative min-w-0">
-                            <select id={p.id} data-testid="select-venue" aria-invalid={p.invalid} aria-describedby={p.describedBy}
-                              value={chosenPoint?.id ?? ""} onChange={(e) => { setPickup(e.target.value); clearError("pickup"); }} disabled={pickups.length === 0}
-                              className="w-full min-w-0 pl-5 pr-12 pb-4 bg-transparent font-semibold text-base outline-none appearance-none focus-visible:bg-sky/30 text-ink">
-                              {pickups.length === 0 && <option value="">Loading...</option>}
-                              {pickups.map((pt) => (
-                                <option key={pt.id} value={pt.id}>{pt.name} · {pt.area}</option>
-                              ))}
-                            </select>
-                            <svg aria-hidden="true" className="pointer-events-none absolute right-5 top-[0.35rem] w-4 h-4 text-ink/75" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 8l5 5 5-5" /></svg>
-                          </div>
-                        )}
-                      </FieldRow>
-                      <FieldRow label="Collection Saturday" error={orderErrors.saturday} hint={cutoffLine || undefined}>
-                        {(p) => (
-                          <div className="relative min-w-0">
-                            <select id={p.id} data-testid="select-saturday" aria-invalid={p.invalid} aria-describedby={p.describedBy}
-                              value={chosenSat ?? ""} onChange={(e) => { setSaturday(e.target.value); clearError("saturday"); }} disabled={saturdays.length === 0}
-                              className="w-full min-w-0 pl-5 pr-12 pb-4 bg-transparent font-semibold text-base outline-none appearance-none focus-visible:bg-sky/30 text-ink">
-                              {saturdays.length === 0 && <option value="">Loading...</option>}
-                              {saturdays.map((d) => (
-                                <option key={d} value={d}>{niceDay(d)}</option>
-                              ))}
-                            </select>
-                            <svg aria-hidden="true" className="pointer-events-none absolute right-5 top-[0.35rem] w-4 h-4 text-ink/75" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 8l5 5 5-5" /></svg>
-                          </div>
-                        )}
-                      </FieldRow>
-                      <FieldRow label="Preferred time (optional)">
-                        {(p) => (
-                          <input id={p.id} data-testid="input-pickup-time" type="text" maxLength={40} placeholder="e.g. around 11am"
-                            value={pickupTime} onChange={(e) => setPickupTime(e.target.value)} className={inputClass} />
-                        )}
-                      </FieldRow>
-                      <FieldRow label="Notes (optional)">
-                        {(p) => (
-                          <textarea id={p.id} data-testid="textarea-notes" placeholder="Any special requests?" rows={2} maxLength={300}
-                            value={notes} onChange={(e) => setNotes(e.target.value)}
-                            className={`${inputClass} resize-none`} />
-                        )}
-                      </FieldRow>
+                      {onePoint && oneSat && chosenPoint && chosenSat ? (
+                        // One pickup point and one Saturday: nothing to choose, so just say it.
+                        <FixedRow
+                          label="Collect"
+                          testId="collect-summary"
+                          // Kept short (founder 2026-11-19: "too much"): place, then day and hours. The cut-off is
+                          // already said under the form, so it is not repeated here.
+                          value={chosenPoint.area && !chosenPoint.name.toLowerCase().includes(chosenPoint.area.toLowerCase()) ? `${chosenPoint.name}, ${chosenPoint.area}` : chosenPoint.name}
+                          hint={[niceDay(chosenSat).replace(/^(\w{3})\w*/, "$1"), hours ? hoursLabel(hours) : chosenPoint.days].filter(Boolean).join(", ")}
+                        />
+                      ) : (
+                        <>
+                          {onePoint && chosenPoint ? (
+                            <FixedRow
+                              label="Pickup point"
+                              testId="pickup-fixed"
+                              value={`${chosenPoint.name}, ${chosenPoint.area}`}
+                              hint={hours ? caveat || undefined : chosenPoint.days ? `Collection times: ${chosenPoint.days}` : undefined}
+                            />
+                          ) : (
+                            <FieldRow label="Pickup point" error={orderErrors.pickup} hint={chosenPoint?.days ? `Collection times: ${chosenPoint.days}` : undefined}>
+                              {(p) => (
+                                <div className="relative min-w-0">
+                                  <select id={p.id} data-testid="select-venue" aria-invalid={p.invalid} aria-describedby={p.describedBy}
+                                    value={chosenPoint?.id ?? ""} onChange={(e) => { setPickup(e.target.value); setPickupTime(""); clearError("pickup"); }} disabled={pickups.length === 0}
+                                    className="w-full min-w-0 pl-5 pr-12 pb-4 bg-transparent font-semibold text-base outline-none appearance-none focus-visible:bg-sky/30 text-ink">
+                                    {pickups.length === 0 && <option value="">Loading...</option>}
+                                    {pickups.map((pt) => (
+                                      <option key={pt.id} value={pt.id}>{pt.name} · {pt.area}</option>
+                                    ))}
+                                  </select>
+                                  <svg aria-hidden="true" className="pointer-events-none absolute right-5 top-[0.35rem] w-4 h-4 text-ink/75" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 8l5 5 5-5" /></svg>
+                                </div>
+                              )}
+                            </FieldRow>
+                          )}
+                          {oneSat && chosenSat ? (
+                            <FixedRow label="Collection Saturday" testId="saturday-fixed" value={niceDay(chosenSat)} hint={cutoffLine || undefined} />
+                          ) : (
+                            <FieldRow label="Collection Saturday" error={orderErrors.saturday} hint={cutoffLine || undefined}>
+                              {(p) => (
+                                <div className="relative min-w-0">
+                                  <select id={p.id} data-testid="select-saturday" aria-invalid={p.invalid} aria-describedby={p.describedBy}
+                                    value={chosenSat ?? ""} onChange={(e) => { setSaturday(e.target.value); clearError("saturday"); }} disabled={saturdays.length === 0}
+                                    className="w-full min-w-0 pl-5 pr-12 pb-4 bg-transparent font-semibold text-base outline-none appearance-none focus-visible:bg-sky/30 text-ink">
+                                    {saturdays.length === 0 && <option value="">Loading...</option>}
+                                    {saturdays.map((d) => (
+                                      <option key={d} value={d}>{niceDay(d)}</option>
+                                    ))}
+                                  </select>
+                                  <svg aria-hidden="true" className="pointer-events-none absolute right-5 top-[0.35rem] w-4 h-4 text-ink/75" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 8l5 5 5-5" /></svg>
+                                </div>
+                              )}
+                            </FieldRow>
+                          )}
+                        </>
+                      )}
+                      {slots.length > 0 && (
+                        <TimeChips legend="Preferred time (optional)" slots={slots} value={chosenTime} onChange={setPickupTime} />
+                      )}
+                      {noteOpen ? (
+                        <FieldRow label="Note (optional)">
+                          {(p) => (
+                            <textarea id={p.id} ref={noteRef} data-testid="textarea-notes" placeholder="Any special requests?" rows={2} maxLength={300}
+                              value={notes} onChange={(e) => setNotes(e.target.value)}
+                              className={`${inputClass} resize-none`} />
+                          )}
+                        </FieldRow>
+                      ) : (
+                        <div className="px-5 py-2">
+                          <button type="button" data-testid="btn-add-note" aria-expanded={false} onClick={openNote}
+                            className="inline-flex min-h-[44px] items-center gap-2 rounded-full pr-3 text-sm font-bold text-ink underline underline-offset-4 decoration-1 hover:text-blue focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-ink">
+                            <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10 4v12M4 10h12" /></svg>
+                            Add a note
+                          </button>
+                        </div>
+                      )}
                     </div>
 
-                    <p className="text-sm mt-4 text-ink/75 leading-relaxed px-1 m-0">
-                      Your order is confirmed once it's paid. After you send it, we'll email you how to pay.
-                    </p>
-                    <p className="text-sm mt-3 text-ink/75 leading-relaxed px-1 m-0" data-testid="cancellation-policy">
-                      {CANCELLATION_POLICY} By sending your order you agree to this.
-                    </p>
-                    <PrivacyNote what="We use your name, phone and email only to deal with this order." />
 
                     {orderErrors.bagels && itemCount < 1 && (
                       <p role="alert" className="mt-4 mb-0 text-sm font-bold text-error">{orderErrors.bagels}</p>
                     )}
+                    <TurnstileBox handle={ts} className="mt-4" />
                     {orderProblem && (
                       <p role="alert" className="mt-4 mb-0 rounded-2xl border-2 border-error px-4 py-3 text-sm font-bold text-error">
                         {orderProblem}
@@ -1114,9 +1185,13 @@ export default function Home() {
                       className="mt-5 w-full rounded-full text-white border-2 border-ink bg-blue p-4 uppercase tracking-widest transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0.5 font-bebas disabled:cursor-wait"
                       style={{ fontSize: "1.4rem", letterSpacing: "0.12em", boxShadow: "0 5px 0 var(--sb-ink)" }}
                     >
-                      {orderStatus === "sending" ? "Sending your order..." : "Send my order"}
-                      {orderStatus !== "sending" && total > 0 && <span className="ml-3 text-white/90 text-base">· R{total}</span>}
+                      {orderStatus === "sending" ? "Opening Yoco..." : total > 0 ? `Pay R${total} with Yoco` : "Pay with Yoco"}
                     </button>
+                    {/* One short line instead of the long paragraphs (founder 2026-11-19). The credit-not-refund term stays visible
+                        here, not only behind the link: CPA s49 wants terms that limit the customer's rights drawn to their attention. */}
+                    <p className="text-[13px] mt-3 mb-0 text-ink/75 leading-relaxed px-1 text-center" data-testid="pay-note">
+                      Secure payment on Yoco. By paying you agree to our <a className="font-bold underline underline-offset-2" href="/terms">Terms and conditions</a>, including credit (not refunds) if you cancel or don't collect. <a className="font-bold underline underline-offset-2" href="/privacy">Privacy notice</a>.
+                    </p>
                   </form>
                 )}
               </section>
@@ -1401,9 +1476,14 @@ export default function Home() {
 
       {/* MOBILE ORDER BAR: shows once something is picked, hides when the form is on screen */}
       {itemCount > 0 && !detailsInView && !orderingHidden && (
-        <aside aria-label="Your order so far" className="lg:hidden fixed inset-x-3 bottom-3 z-30">
+        <aside
+          aria-label="Your order so far"
+          data-testid="order-bar"
+          className="order-bar lg:hidden fixed inset-x-3 z-30 mx-auto max-w-md"
+          style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+        >
           <a
-            href="#details"
+            href="#order-form"
             className="flex items-center justify-between rounded-full border-2 border-ink bg-blue text-white pl-5 pr-2 py-2"
             style={{ boxShadow: "0 5px 0 var(--sb-ink)" }}
           >

@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-export const B = "http://localhost:8787";
+export const B = process.env.SB_BASE ?? "http://localhost:8787"; // SB_BASE: when 8787 is taken by another session
 export const pw = /ADMIN_PASSWORD=(.*)/.exec(fs.readFileSync(path.join(root, ".dev.vars"), "utf8"))[1].trim();
 const col = await import(pathToFileURL(path.join(root, "artifacts/stuffd-bagels/src/collection.ts")).href);
 export { col };
@@ -22,8 +22,12 @@ const runId = Date.now().toString(36);
 /** A new mailbox every call: the Worker caps customer replies per address per day. */
 export const uniqueEmail = (who = "test") => `${who}${runId}n${++mailN}@example.com`;
 
+// Orders and bookings need a Turnstile token. wrangler dev (APP_ENV development) uses Cloudflare's documented always-pass test secret, which accepts only
+// this documented test token, so every test post carries it unless the test sets turnstileToken itself (even to undefined, to test its absence).
+export const TS_TOKEN = "XXXX.DUMMY.TOKEN.XXXX";
+const withTurnstile = (p, body) => (typeof body === "object" && body !== null && (p === "/api/order" || p === "/api/booking") && !("turnstileToken" in body) ? { ...body, turnstileToken: TS_TOKEN } : body);
 export const post = (p, body, headers = {}) =>
-  fetch(B + p, { method: "POST", headers: { "Content-Type": "application/json", "CF-Connecting-IP": ip, ...headers }, body: typeof body === "string" ? body : JSON.stringify(body) });
+  fetch(B + p, { method: "POST", headers: { "Content-Type": "application/json", "CF-Connecting-IP": ip, ...headers }, body: typeof body === "string" ? body : JSON.stringify(withTurnstile(p, body)) });
 export const admin = (p, method = "GET", body, headers = {}) =>
   fetch(B + "/api/admin" + p, {
     method,
@@ -63,3 +67,23 @@ export async function resetPickups(points) {
 export function clearRateLimits() {
   newIp();
 }
+
+// ---- Yoco (fake) helpers for the payment tests. FAKE_YOCO and WHSEC must match the --var values wrangler dev was started with.
+import crypto from "node:crypto";
+export const FAKE_YOCO = process.env.FAKE_YOCO ?? "http://127.0.0.1:8798";
+export const yocoCalls = async () => (await (await fetch(FAKE_YOCO + "/_calls")).json());
+export const resetYoco = () => fetch(FAKE_YOCO + "/_reset", { method: "POST" });
+export const checkoutIdOf = (redirectUrl) => redirectUrl.split("/pay/")[1];
+/** POST a Yoco-style signed webhook to the Worker. `over` can break the signature, timestamp or secret on purpose. */
+export function webhook(payload, { type = "payment.succeeded", id = "msg_" + crypto.randomUUID(), tsOffset = 0, secret = process.env.WHSEC, body, signWith } = {}) {
+  const ts = Math.floor(Date.now() / 1000) + tsOffset;
+  const raw = body ?? JSON.stringify({ id: "evt_" + id, type, createdDate: new Date().toISOString(), payload });
+  const key = Buffer.from((signWith ?? secret).slice("whsec_".length), "base64");
+  const sig = crypto.createHmac("sha256", key).update(`${id}.${ts}.${raw}`).digest("base64");
+  return fetch(B + "/api/yoco/webhook", { method: "POST", headers: { "content-type": "application/json", "webhook-id": id, "webhook-timestamp": String(ts), "webhook-signature": "v1," + sig }, body: raw });
+}
+export const paidPayload = (checkoutId, over = {}) => ({ id: "p_" + crypto.randomBytes(4).toString("hex"), amount: 6500, currency: "ZAR", mode: "test", status: "succeeded", type: "payment", metadata: { checkoutId }, paymentMethodDetails: { type: "card", card: { maskedCard: "411111******1111", cardHolder: "TEST CARDHOLDER" } }, ...over });
+export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** Waits until `fn()` is true (polling), or fails the test. */
+export async function until(fn, what, ms = 15000) { const t = Date.now(); while (Date.now() - t < ms) { if (await fn()) return; await sleep(250); } throw new Error("timed out waiting for " + what); }
+export const attemptId = () => crypto.randomUUID();

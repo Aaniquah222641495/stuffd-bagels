@@ -21,10 +21,13 @@ interface PickupPoint {
   name: string;
   area: string;
   days: string;
+  /** Collection hours, "HH:MM". The order form makes one-hour time chips from them. Older points have none. */
+  opens?: string;
+  closes?: string;
   active: boolean;
 }
 
-const BLANK_PICKUP = { name: "", area: "", days: "", active: true };
+const BLANK_PICKUP = { name: "", area: "", days: "", opens: "", closes: "", active: true };
 
 interface ScheduleEvent {
   id: string;
@@ -44,6 +47,14 @@ function niceDate(iso: string, opts: Intl.DateTimeFormatOptions) {
 
 function apiUrl(path: string) {
   return `${BASE}/api${path}`;
+}
+
+interface AttentionItem {
+  ref: string;
+  status: "email_failed" | "mismatch";
+  amountCents: number;
+  checkoutId: string | null;
+  order: unknown;
 }
 
 export default function Admin() {
@@ -70,6 +81,7 @@ export default function Admin() {
   const [pickupError, setPickupError] = useState("");
   const [savingPickup, setSavingPickup] = useState(false);
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+  const [attention, setAttention] = useState<AttentionItem[]>([]);
 
   const loadEvents = useCallback(async (pw: string) => {
     const res = await fetch(apiUrl("/admin/events"), {
@@ -83,6 +95,16 @@ export default function Admin() {
       headers: { "x-admin-password": pw },
     });
     if (res.ok) setPickups(await res.json());
+  }, []);
+
+  // Paid orders whose emails could not be sent, and payments that didn't match their order (ADR-0041). Empty is the normal case.
+  const loadAttention = useCallback(async (pw: string) => {
+    try {
+      const res = await fetch(apiUrl("/admin/orders/attention"), { headers: { "x-admin-password": pw } });
+      if (res.ok) setAttention(((await res.json()) as { items?: AttentionItem[] }).items ?? []);
+    } catch {
+      /* the line just doesn't show */
+    }
   }, []);
 
   const load = useCallback(async (pw: string) => {
@@ -110,7 +132,8 @@ export default function Admin() {
     sessionStorage.setItem("admin_pw", pw);
     await loadEvents(pw);
     await loadPickups(pw);
-  }, [loadEvents, loadPickups]);
+    await loadAttention(pw);
+  }, [loadEvents, loadPickups, loadAttention]);
 
   useEffect(() => {
     if (password) load(password);
@@ -280,7 +303,7 @@ export default function Admin() {
 
   function startEditPickup(pt: PickupPoint) {
     setEditingId(pt.id);
-    setPickupForm({ name: pt.name, area: pt.area, days: pt.days, active: pt.active });
+    setPickupForm({ name: pt.name, area: pt.area, days: pt.days, opens: pt.opens ?? "", closes: pt.closes ?? "", active: pt.active });
     setPickupError("");
     document.getElementById("pk-name")?.focus();
   }
@@ -295,6 +318,10 @@ export default function Admin() {
     setPickupError("");
     if (!pickupForm.name.trim() || !pickupForm.area.trim()) {
       setPickupError("Fill in the name and the area or address.");
+      return;
+    }
+    if (!!pickupForm.opens !== !!pickupForm.closes || (pickupForm.opens && pickupForm.closes <= pickupForm.opens)) {
+      setPickupError("Set both the opening and closing time, and closing must be after opening. Or leave both empty.");
       return;
     }
     setSavingPickup(true);
@@ -324,7 +351,7 @@ export default function Admin() {
     const res = await fetch(apiUrl(`/admin/pickups/${pt.id}`), {
       method: "PUT",
       headers: adminHeaders,
-      body: JSON.stringify({ name: pt.name, area: pt.area, days: pt.days, active: !pt.active }),
+      body: JSON.stringify({ name: pt.name, area: pt.area, days: pt.days, opens: pt.opens ?? "", closes: pt.closes ?? "", active: !pt.active }),
     });
     if (res.ok) await loadPickups(password);
     else setPickupError(SOMETHING_WRONG);
@@ -427,6 +454,29 @@ export default function Admin() {
       </header>
 
       <main className="max-w-2xl mx-auto px-6 py-10 space-y-10">
+
+        {attention.length > 0 && (
+          <section aria-labelledby="attention-heading" data-testid="orders-attention" className="rounded-2xl border-2 border-red-700 bg-white p-5">
+            <h2 id="attention-heading" className="m-0 text-base font-black text-red-700">
+              {attention.length} paid {attention.length === 1 ? "order needs" : "orders need"} you
+            </h2>
+            <p className="text-sm mt-2 mb-0 text-ink">The customer has paid (check your Yoco app) but we could not send the order emails, or the amount paid did not match. Contact them and fulfil the order by hand.</p>
+            <ul className="list-none p-0 mt-3 mb-0 space-y-3">
+              {attention.map((a) => {
+                const o = (a.order ?? {}) as { name?: string; phone?: string; email?: string; pickupDate?: string; pickupPlace?: string; items?: { name: string; qty: number }[] };
+                return (
+                  <li key={a.ref} className="text-sm border-t border-ink/10 pt-3 [overflow-wrap:anywhere]">
+                    <strong>{a.ref}</strong> · {a.status === "mismatch" ? "amount paid didn't match" : "emails not sent"} · R{(a.amountCents / 100).toFixed(2)}
+                    {o.name && <><br />{o.name} · {o.phone} · {o.email}</>}
+                    {o.items && <><br />{o.items.map((i) => `${i.qty} x ${i.name}`).join(", ")}</>}
+                    {o.pickupPlace && <><br />{o.pickupPlace} on {o.pickupDate}</>}
+                    {a.checkoutId && <><br />Yoco checkout id: {a.checkoutId}</>}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
 
         {/* ── 01 Order Status ───────────────────────────────── */}
         <section>
@@ -693,6 +743,35 @@ export default function Admin() {
                 onChange={(e) => setPickupForm({ ...pickupForm, days: e.target.value })}
               />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="pk-opens" className="block text-[10px] font-black tracking-widest uppercase text-ink/75 mb-1">
+                  Opens (optional)
+                </label>
+                <input
+                  id="pk-opens"
+                  type="time"
+                  className={inputCls}
+                  value={pickupForm.opens}
+                  onChange={(e) => setPickupForm({ ...pickupForm, opens: e.target.value })}
+                />
+              </div>
+              <div>
+                <label htmlFor="pk-closes" className="block text-[10px] font-black tracking-widest uppercase text-ink/75 mb-1">
+                  Closes (optional)
+                </label>
+                <input
+                  id="pk-closes"
+                  type="time"
+                  className={inputCls}
+                  value={pickupForm.closes}
+                  onChange={(e) => setPickupForm({ ...pickupForm, closes: e.target.value })}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-ink/75 -mt-1 m-0">
+              With an opening and closing time, customers can tap a one-hour slot (for example 1pm to 2pm) as their preferred time.
+            </p>
             <label className="flex items-center gap-2 text-xs font-bold tracking-wide cursor-pointer">
               <input
                 id="pk-active"

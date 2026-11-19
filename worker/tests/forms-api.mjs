@@ -1,12 +1,14 @@
-// Worker order/booking API test against `wrangler dev`. Setup (three terminals):
-//   1. node worker/tests/fake-apps-script.mjs /tmp/fake.log
-//   2. npx wrangler@4.148.0 dev --port 8787 --var APP_ENV:development --var APPS_SCRIPT_URL:http://127.0.0.1:8799/exec --persist-to /tmp/stuffd-state --var APPS_SCRIPT_TOKEN:$TOKEN
-//   3. rm -f /tmp/fake.log && TOKEN=<same value> node worker/tests/forms-api.mjs /tmp/fake.log
+// Worker order/booking API test against `wrangler dev`. Setup (four terminals; the Yoco flags are in payments-api.mjs):
+//   1. FAKE_PORT=8899 node worker/tests/fake-apps-script.mjs /tmp/fake.log
+//   2. FAKE_YOCO_PORT=8798 node worker/tests/fake-yoco.mjs
+//   3. npx wrangler@4.148.0 dev --port 8787 --persist-to /tmp/stuffd-state --var APP_ENV:development --var APPS_SCRIPT_URL:http://127.0.0.1:8899/exec --var APPS_SCRIPT_TOKEN:$TOKEN <the --var YOCO_... flags from payments-api.mjs>
+//   4. rm -f /tmp/fake.log && TOKEN=<same value> WHSEC=<same webhook secret> node worker/tests/forms-api.mjs /tmp/fake.log
+// An ORDER now opens a Yoco checkout and emails nothing until the payment webhook arrives; the test pays through a signed webhook.
 // TOKEN is the same 32+ character value passed to wrangler dev (the Worker refuses to forward without one).
 // It sets up its own pickup points and uses a fresh pretend client IP for rate limits. Dates follow the real clock.
 // The exact cut-off and month-end cases live in saturday-rules.mjs (fake clock); this file checks the live HTTP path.
 import assert from "node:assert/strict";
-import { admin, clearRateLimits, col, logged, post, resetPickups, saturdays, setAvail, testRules, uniqueEmail } from "./_helpers.mjs";
+import { admin, attemptId, checkoutIdOf, clearRateLimits, col, logged, paidPayload, post, resetPickups, resetYoco, saturdays, setAvail, testRules, uniqueEmail, until, webhook, yocoCalls } from "./_helpers.mjs";
 
 clearRateLimits();
 await setAvail({});
@@ -19,21 +21,24 @@ assert.ok(sats.length >= 3, "need three open Saturdays to run");
 const [, SAT, SAT2] = sats; // index 0 may be at its cut-off edge right now
 const addDays = (iso, n) => new Date(Date.parse(iso + "T00:00:00Z") + n * 86400000).toISOString().slice(0, 10);
 
-const order = (o = {}) => ({ name: "Aisha Khan", phone: "082 123 4567", email: uniqueEmail("aisha"), pickupId: P1, pickupDate: SAT, items: { "Pizza Bagel": 2 }, toppings: {}, note: "No onions", website: "", ...o });
+const order = (o = {}) => ({ name: "Aisha Khan", phone: "082 123 4567", email: uniqueEmail("aisha"), pickupId: P1, pickupDate: SAT, items: { "Pizza Bagel": 2 }, toppings: {}, note: "No onions", website: "", attemptId: attemptId(), ...o });
 const booking = (o = {}) => ({ name: "Sam", phone: "+27 82 999 9999", email: uniqueEmail("sam"), eventDate: addDays(SAT, 90), venue: "Kenilworth", guests: 80, details: "Birthday", website: "", ...o });
 let n = 0;
 const ok = (name) => console.log("PASS", ++n, name);
 
 // 1. A good order goes through
 let r = await post("/api/order", order()); let j = await r.json();
-assert.equal(r.status, 200); assert.match(j.ref, /^SB-[A-Z2-9]{6}$/); assert.equal(j.total, 190); assert.equal(j.status, "awaiting_payment");
+assert.equal(r.status, 200); assert.match(j.ref, /^SB-[A-Z2-9]{6}$/); assert.equal(j.total, 190); assert.match(j.redirectUrl, /\/pay\/ch_/); assert.equal(j.status, undefined);
+assert.equal(logged().length, 0, "no email before payment");
+assert.equal((await webhook(paidPayload(checkoutIdOf(j.redirectUrl), { amount: 19000 }))).status, 200);
+await until(() => logged().length === 1, "the paid order's email request");
 let l = logged(); assert.equal(l.length, 1);
 assert.equal(l[0].method, "POST"); assert.match(l[0].ct, /text\/plain/);
 const f = l[0].body;
 assert.equal(f.type, "order"); assert.equal(f.phone, "+27821234567"); assert.equal(f.token, process.env.TOKEN); assert.equal(f.total, 190);
 assert.equal(f.pickupPlace, "Kenilworth Corner, Main Rd, Kenilworth"); assert.equal(f.pickupDays, "Saturdays, 10am to 1pm"); assert.equal(f.pickupDate, SAT);
 assert.equal(col.isSaturday(f.pickupDate), true);
-ok("valid order forwarded with pickup point, Saturday, server total R190, phone normalised, token sent");
+ok("valid order opens a checkout; once PAID (signed webhook) it is forwarded with pickup point, Saturday, server total R190, phone normalised, token sent");
 
 // 2. Bad input: nothing forwarded
 const cases = [
@@ -51,6 +56,7 @@ const cases = [
 ];
 for (const [name, o, status] of cases) { r = await post("/api/order", order(o)); assert.equal(r.status, status, name); }
 assert.equal(logged().length, 1);
+assert.equal((await yocoCalls()).calls.length, 1, "no Yoco checkout for an invalid order");
 ok(`${cases.length} invalid orders refused with the right status, nothing forwarded`);
 
 // 3. Honeypot
@@ -63,8 +69,8 @@ assert.equal((await post("/api/order", "not json")).status, 400);
 assert.equal((await post("/api/order", order(), { "Content-Type": "text/plain" })).status, 400);
 assert.equal((await post("/api/order", order({ note: "x".repeat(20000) }))).status, 400);
 assert.equal((await fetch("http://localhost:8787/api/order")).status, 405);
-assert.equal((await post("/api/order/pay", { ref: "SB-AAAAAA" })).status, 501);
-ok("bad JSON / content-type / oversize / GET refused; /api/order/pay stub answers 501");
+assert.equal((await post("/api/order/pay", { ref: "SB-AAAAAA" })).status, 404);
+ok("bad JSON / content-type / oversize / GET refused; the old /api/order/pay stub is gone (404)");
 
 // 5. Closed Saturday
 assert.equal((await setAvail({ closedDates: [SAT], closedMessage: "Closed that Saturday" })).status, 200);
@@ -106,17 +112,17 @@ assert.equal(logged().length, before);
 l = logged().at(-1); assert.equal(l.body.type, "booking"); assert.equal(l.body.phone, "+27829999999"); assert.match(l.body.ref, /^BK-/);
 ok("booking forwarded with BK ref; 8 invalid bookings refused");
 
-// 9. Apps Script says no
-r = await post("/api/order", order({ name: "FailMe", pickupDate: SAT2 })); j = await r.json();
+// 9. Apps Script says no (bookings only: orders reach the script after payment, with retries)
+r = await post("/api/booking", booking({ name: "FailMe" })); j = await r.json();
 assert.equal(r.status, 502); assert.ok(!/apps script|google|exception/i.test(j.error), j.error);
 ok("Apps Script failure -> 502 with a plain message");
 
-// 10. Rate limits. Counted so far: orders 3 (first, SAT2, FailMe), bookings 1.
+// 10. Rate limits. Counted so far: orders 2 (first, SAT2), bookings 2 (the first, FailMe).
 const codes = []; for (let i = 0; i < 4; i++) codes.push((await post("/api/order", order({ pickupDate: SAT2 }))).status);
-assert.deepEqual(codes, [200, 200, 429, 429], "orders: 5 per hour per IP");
+assert.deepEqual(codes, [200, 200, 200, 429], "orders: 5 per hour per IP");
 r = await post("/api/order", order({ pickupDate: SAT2 })); assert.ok(r.headers.get("retry-after"));
 const bc = []; for (let i = 0; i < 4; i++) bc.push((await post("/api/booking", booking())).status);
-assert.deepEqual(bc, [200, 200, 429, 429], "bookings: 3 per hour per IP");
+assert.deepEqual(bc, [200, 429, 429, 429], "bookings: 3 per hour per IP");
 ok("per-IP limits: 5 orders and 3 bookings per hour, then 429 with Retry-After");
 clearRateLimits();
 await resetPickups([]);

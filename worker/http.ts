@@ -93,3 +93,38 @@ export function withNoindex(res: Response): Response {
   out.headers.set("X-Robots-Tag", "noindex, nofollow");
   return out;
 }
+
+/**
+ * Reads the body as text, exactly as received (a webhook signature covers the raw bytes, so it must not be re-serialised).
+ * Refuses anything over `max` bytes without buffering all of it. No content-type requirement.
+ */
+export async function readRawText(request: Request, max: number): Promise<string> {
+  const tooBig = () => new HttpError(413, "Request too large");
+  const declared = Number(request.headers.get("Content-Length") ?? 0);
+  if (declared > max) throw tooBig();
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel();
+      throw tooBig();
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) {
+    bytes.set(c, at);
+    at += c.byteLength;
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    throw new HttpError(400, "Invalid request");
+  }
+}

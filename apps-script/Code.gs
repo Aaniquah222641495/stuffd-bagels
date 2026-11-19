@@ -6,16 +6,19 @@
  *   - the "Orders" and "Bookings" Gmail labels live in HER mailbox.
  * Set-up steps: README.md next to this file. Change only the CONFIG block.
  *
- * How it works: the website posts an order or a booking to its own Worker (/api/order, /api/booking).
- * The Worker checks it (limits, honeypot, orders switched on, pickup day is a real market day, prices
- * worked out from the menu) and forwards it here. This script checks it again, then:
- *   1. emails the owner  "New order: <name>, <day>"  or  "Booking enquiry: <name>, <date>",
- *   2. emails the customer a short branded reply from the owner's address,
+ * How it works: the website posts a booking to its own Worker (/api/booking) and the Worker forwards it here. ORDERS
+ * are different (ADR-0041): the customer pays on Yoco first, Yoco tells the Worker it was paid (a signed webhook), and ONLY
+ * THEN does the Worker send the order here, marked paid:true with Yoco's checkout id. This script refuses any order that
+ * isn't paid, so an unpaid order can never reach the owner's inbox. For each accepted request it:
+ *   1. emails the owner  "New order: <name>, <day>"  (paid, confirmed)  or  "Booking enquiry: <name>, <date>",
+ *   2. emails the customer a short branded reply from the owner's address ("order confirmed" for orders),
  *   3. puts the owner email under the Gmail label "Orders" or "Bookings".
- * Nothing is stored except the emails themselves (and short-lived duplicate and quota counters).
+ * Nothing is stored except the emails themselves, short-lived duplicate and quota counters, and one small pickup
+ * reminder per paid order (first name, email, pickup details, items) in Script Properties. The reminder is emailed to the
+ * customer at about 08:00 on the collection day and then deleted; a reminder whose day has passed is deleted unsent.
  *
- * Orders are "awaiting payment": an order is only confirmed once it has been paid (founder 2026-11-16).
- * The Yoco "Pay now" step is not built yet; the reference in each email is what it will hang on.
+ * The Worker may send the same paid order more than once (it retries if this script was slow): a paid order is
+ * de-duplicated by its reference for 6 hours, the longest Google's CacheService allows, so it is emailed once.
  */
 
 const CONFIG = {
@@ -34,6 +37,9 @@ const CONFIG = {
   MIN_TOKEN_LENGTH: 32,
   MAX_BODY_CHARS: 12000,
   DUPLICATE_WINDOW_SECONDS: 600,
+  PAID_DUPLICATE_WINDOW_SECONDS: 21600, // 6 hours, the maximum CacheService allows
+  // Pickup-day reminder (founder 2026-11-19): sent to each paid order's customer on the collection morning.
+  REMINDER_HOUR: 8, // Google runs a daily trigger some time inside this hour (08:00 to 09:00), never exactly on the minute
   // A free Gmail account can send about 100 emails a day; each submission sends 2.
   MIN_QUOTA: 4,
   // Caps kept by the script itself, as a second wall behind the Worker's limits.
@@ -95,6 +101,7 @@ function str_(v, max) {
 function line_(v, max) { return str_(v, max).replace(/\s+/g, ' '); }
 function validDate_(v) { return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(new Date(v + 'T12:00:00Z').getTime()); }
 function validEmail_(v) { return /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(\.[A-Za-z0-9\-]+)*\.[A-Za-z]{2,}$/.test(v) && v.length <= 254; }
+function validCheckoutId_(v) { return typeof v === 'string' && /^[A-Za-z0-9_\-]{4,100}$/.test(v); }
 function validRef_(v, prefix) { return typeof v === 'string' && new RegExp('^' + prefix + '-[A-Z0-9]{6}$').test(v); }
 
 /** Returns { ok, data } with only the fields we use, cut to length, or { ok: false }. */
@@ -107,6 +114,8 @@ function clean_(d) {
     // Orders are collected on a Saturday at one of the owner's pickup points (never at a market).
     const place = line_(d.pickupPlace, 200);
     if (!validRef_(d.ref, 'SB') || !place || !validDate_(d.pickupDate) || !Array.isArray(d.items) || d.items.length < 1 || d.items.length > 12) return { ok: false };
+    // A paid order only (ADR-0041). The Worker sends it after Yoco's signed webhook; nothing else may send an order.
+    if (d.paid !== true || !validCheckoutId_(d.checkoutId)) return { ok: false };
     const items = [];
     let total = 0;
     for (let i = 0; i < d.items.length; i++) {
@@ -116,7 +125,7 @@ function clean_(d) {
       items.push({ name: line_(it.name, 40), qty: qty, unit: unit, line: qty * unit });
       total += qty * unit;
     }
-    return { ok: true, data: Object.assign(common, { type: 'order', ref: d.ref, pickupDate: d.pickupDate, pickupTime: line_(d.pickupTime, 40), pickupPlace: place, pickupDays: line_(d.pickupDays, 120), items: items, total: total, note: str_(d.note, 300) }) };
+    return { ok: true, data: Object.assign(common, { type: 'order', paid: true, checkoutId: d.checkoutId, ref: d.ref, pickupDate: d.pickupDate, pickupTime: line_(d.pickupTime, 40), pickupPlace: place, pickupDays: line_(d.pickupDays, 120), items: items, total: total, note: str_(d.note, 300) }) };
   }
   if (d.type === 'booking') {
     const guests = Number(d.guests);
@@ -138,19 +147,24 @@ function process_(raw) {
   try {
     const cache = CacheService.getScriptCache();
     const dupeKey = 'dupe_' + a.ref;
-    const contentKey = 'dupec_' + hash_(JSON.stringify([a.type, a.email, a.name, a.pickupDate || a.eventDate, a.items || a.guests, a.total]));
-    if (cache.get(dupeKey) || cache.get(contentKey)) return { ok: true, duplicate: true };
+    // Bookings also match on content (a double click makes a new reference). Paid orders match on the reference only: two
+    // different payments for the same cart are two orders, and the second one must never be swallowed.
+    const contentKey = a.type === 'booking' ? 'dupec_' + hash_(JSON.stringify([a.type, a.email, a.name, a.eventDate, a.guests])) : '';
+    if (cache.get(dupeKey) || (contentKey && cache.get(contentKey))) return { ok: true, duplicate: true };
     // Daily caps (kept in Script Properties, which survive between runs). Duplicates were answered above and cost nothing.
     const today = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd');
     const props = PropertiesService.getScriptProperties();
     const total = readCount_(props.getProperty('cap_total'), today);
     const rcptKey = 'cap_rc_' + hash_(recipientKey_(a.email));
     const rcpt = readCount_(props.getProperty(rcptKey), today);
-    if (total >= CONFIG.MAX_SUBMISSIONS_PER_DAY) {
+    // Paid orders are never capped (2026-11-19): Yoco's signed payment already proves they are real, and refusing one
+    // would mean a customer paid and the owner never heard. The caps below only stop booking-form spam.
+    const capped = a.type !== 'order';
+    if (capped && total >= CONFIG.MAX_SUBMISSIONS_PER_DAY) {
       console.error('Daily cap reached; refusing ' + a.ref);
       return { ok: false, error: 'cap' };
     }
-    if (rcpt >= CONFIG.MAX_REPLIES_PER_ADDRESS_PER_DAY) {
+    if (capped && rcpt >= CONFIG.MAX_REPLIES_PER_ADDRESS_PER_DAY) {
       console.error('Per-address cap reached; refusing ' + a.ref);
       return { ok: false, error: 'cap' };
     }
@@ -161,8 +175,12 @@ function process_(raw) {
     // The owner email is the one that matters: if it fails, the customer is told it failed and can email.
     sendOwner_(a);
     saveCaps_(props, today, rcptKey, total + 1, rcpt + 1);
-    cache.put(dupeKey, '1', CONFIG.DUPLICATE_WINDOW_SECONDS);
-    cache.put(contentKey, '1', CONFIG.DUPLICATE_WINDOW_SECONDS);
+    // 21600 s (6 hours) is the longest CacheService keeps a value (Apps Script docs). A paid order is held that long; a booking 10 minutes.
+    cache.put(dupeKey, '1', a.type === 'order' ? CONFIG.PAID_DUPLICATE_WINDOW_SECONDS : CONFIG.DUPLICATE_WINDOW_SECONDS);
+    if (contentKey) cache.put(contentKey, '1', CONFIG.DUPLICATE_WINDOW_SECONDS);
+    if (a.type === 'order') {
+      try { saveReminder_(props, a); } catch (err) { console.error('Reminder not saved for ' + a.ref + ': ' + err); }
+    }
   } catch (err) {
     console.error('Owner email failed for ' + a.ref + ': ' + err);
     return { ok: false, error: 'mail' };
@@ -241,7 +259,8 @@ function sendOwner_(a) {
   if (a.type === 'order') {
     lines = [
       'NEW ORDER ' + a.ref,
-      'Status: AWAITING PAYMENT. Not confirmed until it is paid.',
+      'PAID ONLINE (Yoco) ' + rand_(a.total) + '. Confirmed.',
+      'Yoco checkout id: ' + a.checkoutId + '  (keep this: it is what you need to refund)',
       '',
       'Name: ' + a.name,
       'Phone: ' + a.phone + '  (' + wa + ')',
@@ -264,7 +283,7 @@ function sendOwner_(a) {
     ];
   }
   lines.push('', 'Sent from the STUFF\'D Bagels website.');
-  MailApp.sendEmail({ to: owner_(), subject: ownerSubject_(a), body: lines.join('\n'), replyTo: a.email, name: CONFIG.BUSINESS_NAME + ' website' });
+  MailApp.sendEmail({ to: owner_(), subject: ownerSubject_(a), body: lines.join('\n'), htmlBody: ownerHtml_(a), replyTo: a.email, name: CONFIG.BUSINESS_NAME + ' website' });
 }
 
 // DRAFT wording from the client's rule (2026-11-18), pending dp-counsel (CPA s17 advance-booking cancellations).
@@ -276,13 +295,13 @@ function sendCustomer_(a) {
   const f = first_(a.name);
   let subject, intro, rows, outro;
   if (a.type === 'order') {
-    subject = "STUFF'D: we've got your order " + a.ref;
-    intro = "Thanks for your order, " + f + "! We've got it.";
+    subject = "STUFF'D: order confirmed " + a.ref;
+    intro = "Thanks for your order, " + f + "! Paid and confirmed.";
     rows = [['Reference', a.ref]].concat(pickupRows_(a))
       .concat(a.items.map(function (i) { return [i.qty + ' x ' + i.name, rand_(i.line)]; }))
       .concat([['Total', rand_(a.total)]]);
     if (a.note) rows.push(['Your note', a.note]);
-    outro = 'Your order is awaiting payment. It is confirmed once it has been paid, and we will be in touch with how to pay. ' + CANCELLATION_POLICY_ + ' Questions? Just reply to this email.';
+    outro = 'Your payment has been received and your order is confirmed. We will email you a reminder on the morning of your collection day. ' + CANCELLATION_POLICY_ + ' Questions? Just reply to this email.';
   } else {
     subject = "STUFF'D: we've got your event enquiry " + a.ref;
     intro = "Thanks for thinking of us, " + f + "! Your event enquiry has landed.";
@@ -291,25 +310,146 @@ function sendCustomer_(a) {
     outro = "We'll look at the date and get back to you with a quote, usually within a couple of days. Nothing is booked until we confirm. Questions? Just reply to this email.";
   }
   const plain = [intro, ''].concat(rows.map(function (r) { return r[0] + ': ' + r[1]; }), ['', outro, '', "STUFF'D Bagels", 'Cape Town', CONFIG.SITE_URL]).join('\n');
-  MailApp.sendEmail({ to: a.email, subject: subject, body: plain, htmlBody: html_(intro, rows, outro), name: CONFIG.BUSINESS_NAME, replyTo: owner_() });
+  MailApp.sendEmail({ to: a.email, subject: subject, body: plain, htmlBody: customerHtml_(a), name: CONFIG.BUSINESS_NAME, replyTo: owner_() });
 }
 
-/** Branded HTML email: inline styles only, no images (they are blocked by default in many mail apps). */
-function html_(intro, rows, outro) {
+/* ------------------------------------------------------------------ */
+/* Branded HTML emails (founder 2026-11-19: STUFF'D branding and logo, */
+/* and a clearer owner email). Inline styles and tables only, so they  */
+/* hold up in Gmail, Apple Mail and Outlook. The logo is an image from */
+/* the website; if a mail app hides images, its alt text still reads   */
+/* STUFF'D in big white letters on the blue bar.                       */
+/* ------------------------------------------------------------------ */
+
+const FONT_ = "'Arial Black','Helvetica Neue',Arial,Helvetica,sans-serif";
+const BODY_FONT_ = "'Helvetica Neue',Arial,Helvetica,sans-serif";
+
+function logoUrl_() { return CONFIG.SITE_URL.replace(/\/$/, '') + '/logo-white.png'; }
+
+/** The shared frame: blue bar with the logo, white card, footer. */
+function shell_(preheader, tag, inner) {
   const c = COLOURS;
-  const tr = rows.map(function (r, i) {
-    const total = r[0] === 'Total';
-    return '<tr><td style="padding:10px 14px;border-top:1px solid #dbe3f0;font-size:14px;color:' + c.ink + ';' + (total ? 'font-weight:900;' : '') + '">' + esc_(r[0]) +
-      '</td><td style="padding:10px 14px;border-top:1px solid #dbe3f0;font-size:14px;color:' + c.ink + ';text-align:right;white-space:pre-wrap;' + (total ? 'font-weight:900;' : 'font-weight:600;') + '">' + esc_(r[1]) + '</td></tr>';
+  return '<!doctype html><html><body style="margin:0;padding:0;background:' + c.paper + '">' +
+    '<div style="display:none;max-height:0;overflow:hidden;opacity:0">' + esc_(preheader) + '</div>' +
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:' + c.paper + '"><tr><td align="center" style="padding:24px 12px">' +
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:' + c.white + ';border:2px solid ' + c.ink + ';border-radius:20px;overflow:hidden">' +
+    '<tr><td style="background:' + c.blue + ';padding:22px 26px">' +
+      '<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>' +
+      '<td style="vertical-align:middle"><img src="' + logoUrl_() + '" width="150" alt="STUFF\'D" style="display:block;width:150px;max-width:150px;height:auto;border:0;color:#ffffff;font-family:' + FONT_ + ';font-size:30px;font-weight:900"></td>' +
+      (tag ? '<td align="right" style="vertical-align:middle"><span style="display:inline-block;background:' + c.white + ';color:' + c.blue + ';font-family:' + FONT_ + ';font-size:11px;font-weight:900;letter-spacing:2px;text-transform:uppercase;padding:7px 12px;border-radius:999px">' + esc_(tag) + '</span></td>' : '') +
+      '</tr></table></td></tr>' +
+    inner +
+    '<tr><td style="padding:18px 26px 22px;border-top:1px solid #dbe3f0;font-family:' + BODY_FONT_ + ';font-size:12px;line-height:1.5;color:#4a5578">' +
+      '<b style="color:' + c.ink + '">STUFF\'D Bagels</b> &middot; Cape Town &middot; ' + esc_(CONFIG.PHONE_DISPLAY) + '<br>' +
+      '<a href="' + esc_(CONFIG.SITE_URL) + '" style="color:' + c.blue + ';font-weight:700;text-decoration:none">' + esc_(CONFIG.SITE_URL.replace(/^https?:\/\//, '')) + '</a>' +
+    '</td></tr></table></td></tr></table></body></html>';
+}
+
+function h1_(text, sub) {
+  const c = COLOURS;
+  return '<tr><td style="padding:26px 26px 6px;font-family:' + FONT_ + ';font-size:26px;line-height:1.15;font-weight:900;color:' + c.ink + '">' + esc_(text) + '</td></tr>' +
+    (sub ? '<tr><td style="padding:0 26px 14px;font-family:' + BODY_FONT_ + ';font-size:16px;line-height:1.5;color:' + c.ink + '">' + esc_(sub) + '</td></tr>' : '');
+}
+
+/** A soft blue box with a small label and big lines: where and when to collect, or the event. */
+function box_(label, big, lines) {
+  const c = COLOURS;
+  return '<tr><td style="padding:8px 26px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:' + c.sky + ';border-radius:14px"><tr><td style="padding:16px 18px;font-family:' + BODY_FONT_ + ';color:' + c.ink + '">' +
+    '<div style="font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:' + c.blue + '">' + esc_(label) + '</div>' +
+    '<div style="font-family:' + FONT_ + ';font-size:22px;font-weight:900;line-height:1.2;margin-top:4px">' + esc_(big) + '</div>' +
+    lines.filter(Boolean).map(function (l) { return '<div style="font-size:15px;line-height:1.5;margin-top:2px">' + esc_(l) + '</div>'; }).join('') +
+    '</td></tr></table></td></tr>';
+}
+
+/** The bagels, one row each with the quantity in a blue circle, then the total. */
+function itemsTable_(a) {
+  const c = COLOURS;
+  const rows = a.items.map(function (i) {
+    return '<tr>' +
+      '<td width="40" style="padding:10px 0;border-bottom:1px solid #dbe3f0;vertical-align:middle"><span style="display:inline-block;min-width:28px;height:28px;line-height:28px;text-align:center;border-radius:14px;background:' + c.blue + ';color:#ffffff;font-family:' + FONT_ + ';font-size:14px;font-weight:900">' + i.qty + '</span></td>' +
+      '<td style="padding:10px 0;border-bottom:1px solid #dbe3f0;font-family:' + BODY_FONT_ + ';font-size:16px;font-weight:700;color:' + c.ink + '">' + esc_(i.name) + '</td>' +
+      '<td align="right" style="padding:10px 0;border-bottom:1px solid #dbe3f0;font-family:' + BODY_FONT_ + ';font-size:15px;color:' + c.ink + ';white-space:nowrap">' + rand_(i.line) + '</td></tr>';
   }).join('');
-  return '<div style="background:' + c.paper + ';padding:24px 12px;font-family:Arial,Helvetica,sans-serif">' +
-    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;margin:0 auto;border-radius:18px;overflow:hidden;background:' + c.white + ';border:2px solid ' + c.ink + '">' +
-    '<tr><td style="background:' + c.blue + ';padding:22px 24px;color:' + c.white + ';font-size:30px;font-weight:900;letter-spacing:1px">STUFF\'D <span style="font-size:13px;font-weight:700;letter-spacing:3px;color:' + c.sky + '">BAGELS</span></td></tr>' +
-    '<tr><td style="padding:24px 24px 8px;font-size:18px;font-weight:700;color:' + c.ink + '">' + esc_(intro) + '</td></tr>' +
-    '<tr><td style="padding:8px 24px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:' + c.paper + ';border-radius:12px">' + tr + '</table></td></tr>' +
-    '<tr><td style="padding:16px 24px 8px;font-size:15px;line-height:1.5;color:' + c.ink + '">' + esc_(outro) + '</td></tr>' +
-    '<tr><td style="padding:8px 24px 24px;font-size:13px;color:#4a5578">STUFF\'D Bagels, Cape Town &middot; ' + esc_(CONFIG.PHONE_DISPLAY) + '</td></tr>' +
-    '</table></div>';
+  return '<tr><td style="padding:10px 26px 4px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0">' + rows +
+    '<tr><td></td><td style="padding:14px 0 0;font-family:' + FONT_ + ';font-size:16px;font-weight:900;color:' + c.ink + '">Total paid</td>' +
+    '<td align="right" style="padding:14px 0 0;font-family:' + FONT_ + ';font-size:24px;font-weight:900;color:' + c.blue + ';white-space:nowrap">' + rand_(a.total) + '</td></tr>' +
+    '</table></td></tr>';
+}
+
+/** Label / value rows (bookings). */
+function factsTable_(rows) {
+  const c = COLOURS;
+  return '<tr><td style="padding:8px 26px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0">' + rows.map(function (r) {
+    return '<tr><td style="padding:9px 0;border-bottom:1px solid #dbe3f0;font-family:' + BODY_FONT_ + ';font-size:13px;font-weight:700;color:#4a5578;vertical-align:top;width:38%">' + esc_(r[0]) + '</td>' +
+      '<td style="padding:9px 0;border-bottom:1px solid #dbe3f0;font-family:' + BODY_FONT_ + ';font-size:15px;font-weight:700;color:' + c.ink + ';white-space:pre-wrap">' + esc_(r[1]) + '</td></tr>';
+  }).join('') + '</table></td></tr>';
+}
+
+/** A highlighted note (the customer's own words). */
+function note_(label, text) {
+  if (!text) return '';
+  return '<tr><td style="padding:8px 26px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#fff6e0;border-left:4px solid #f2b705;border-radius:10px"><tr><td style="padding:12px 16px;font-family:' + BODY_FONT_ + ';color:' + COLOURS.ink + '">' +
+    '<div style="font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#8a6400">' + esc_(label) + '</div>' +
+    '<div style="font-size:15px;line-height:1.5;margin-top:3px;white-space:pre-wrap">' + esc_(text) + '</div></td></tr></table></td></tr>';
+}
+
+function para_(text, small) {
+  return '<tr><td style="padding:10px 26px;font-family:' + BODY_FONT_ + ';font-size:' + (small ? '13px' : '15px') + ';line-height:1.55;color:' + (small ? '#4a5578' : COLOURS.ink) + '">' + esc_(text) + '</td></tr>';
+}
+
+/** Tap-to-contact buttons for the owner. */
+function buttons_(a) {
+  const btn = function (href, label, bg) {
+    return '<td style="padding:4px"><a href="' + esc_(href) + '" style="display:block;text-align:center;background:' + bg + ';color:#ffffff;font-family:' + FONT_ + ';font-size:13px;font-weight:900;text-decoration:none;padding:12px 8px;border-radius:999px">' + label + '</a></td>';
+  };
+  return '<tr><td style="padding:6px 22px 10px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>' +
+    btn('https://wa.me/' + a.phone.replace('+', ''), 'WhatsApp', '#1f8f4e') +
+    btn('tel:' + a.phone, 'Call', COLOURS.ink) +
+    btn('mailto:' + a.email + '?subject=' + encodeURIComponent((a.type === 'order' ? 'Your STUFF\'D order ' : 'Your STUFF\'D enquiry ') + a.ref), 'Email', COLOURS.blue) +
+    '</tr></table></td></tr>';
+}
+
+function customerCard_(a) {
+  const c = COLOURS;
+  return '<tr><td style="padding:14px 26px 4px;font-family:' + BODY_FONT_ + ';color:' + c.ink + '">' +
+    '<div style="font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:' + c.blue + '">Customer</div>' +
+    '<div style="font-family:' + FONT_ + ';font-size:20px;font-weight:900;margin-top:4px">' + esc_(a.name) + '</div>' +
+    '<div style="font-size:15px;margin-top:2px">' + esc_(a.phone) + ' &middot; ' + esc_(a.email) + '</div></td></tr>' + buttons_(a);
+}
+
+function customerHtml_(a) {
+  const f = first_(a.name);
+  if (a.type === 'order') {
+    return shell_('Paid and confirmed. Collect on ' + day_(a.pickupDate, false) + '.', 'Order ' + a.ref,
+      h1_('Order confirmed!', 'Thanks, ' + f + '. Your payment came through and your bagels are on the list.') +
+      box_('Collect', day_(a.pickupDate, true), [a.pickupPlace, a.pickupTime ? 'Your preferred time: ' + a.pickupTime : '', a.pickupDays]) +
+      itemsTable_(a) +
+      note_('Your note', a.note) +
+      para_('We\'ll email you a reminder on the morning of your collection day. Questions or need to change something? Just reply to this email.') +
+      para_(CANCELLATION_POLICY_, true));
+  }
+  return shell_('We\'ve got your event enquiry ' + a.ref + '.', 'Enquiry ' + a.ref,
+    h1_('Enquiry received!', 'Thanks for thinking of us, ' + f + '. We\'ll look at the date and come back to you with a quote, usually within a couple of days.') +
+    box_('Your event', day_(a.eventDate, true), [a.venue, a.guests + ' guests']) +
+    note_('Your details', a.details) +
+    para_('Nothing is booked until we confirm. Questions? Just reply to this email.', true));
+}
+
+function ownerHtml_(a) {
+  if (a.type === 'order') {
+    return shell_('Paid ' + rand_(a.total) + '. ' + a.name + ', collecting ' + day_(a.pickupDate, false) + '.', 'Paid ' + rand_(a.total),
+      h1_('New order ' + a.ref, 'Paid online with Yoco. Nothing to chase.') +
+      box_('Collecting', day_(a.pickupDate, true), [a.pickupTime ? 'Preferred time: ' + a.pickupTime : 'Any time', a.pickupPlace]) +
+      itemsTable_(a) +
+      note_('Their note', a.note) +
+      customerCard_(a) +
+      para_('Yoco checkout id: ' + a.checkoutId + '. Keep this email: you need the id to refund.', true));
+  }
+  return shell_('Event enquiry: ' + a.name + ', ' + day_(a.eventDate, true) + '.', 'Enquiry',
+    h1_('Event enquiry ' + a.ref, 'Reply with a quote. Nothing is booked yet.') +
+    box_('Event', day_(a.eventDate, true), [a.venue, a.guests + ' guests']) +
+    note_('Their details', a.details) +
+    customerCard_(a));
 }
 
 /* ------------------------------------------------------------------ */
@@ -329,8 +469,125 @@ function labelRecent_() {
   });
 }
 
+/* ------------------------------------------------------------------ */
+/* Inbox folders (founder and client, 2026-11-19)                      */
+/* Files everyday mail into labels so the inbox only holds what needs  */
+/* her. Shopping and Promotions also leave the inbox (archived, never  */
+/* deleted: they stay under their label). Our own emails are skipped.  */
+/* To add a sender, add it to the matching query below.                */
+/* ------------------------------------------------------------------ */
+const FOLDERS_ = [
+  { label: 'Payments', query: 'from:(yoco.com OR capitecbank.co.za OR stub.africa)' },
+  { label: 'Markets', query: 'from:(bookipi.com OR reveregroup.co.za OR youngatheart.co.za OR jotform.com) OR "Revere Markets"' },
+  { label: 'Accounts', query: 'from:(google.com OR canva.com OR openai.com)' },
+  { label: 'Enquiries', query: 'subject:(sponsorship OR sponsor OR collab OR collaboration OR vacancy OR inquiry OR enquiry OR quote)' },
+  { label: 'Shopping', query: 'from:(shein.com OR sheinnotify.com OR sheinnotice.com OR buffaloex.com OR takealot.com OR temu.com)', archive: true },
+  { label: 'Promotions', query: 'from:(uber.com OR sterkinekor.com) OR category:promotions', archive: true }
+];
+
+/** Labels matching threads; `window` like '2d' limits it to recent mail ('' = everything, for the first run). */
+function organise_(window) {
+  const business = ['Orders', 'Bookings', 'Payments', 'Markets', 'Enquiries'];
+  FOLDERS_.forEach(function (f) {
+    const label = GmailApp.getUserLabelByName(f.label) || GmailApp.createLabel(f.label);
+    let q = '(' + f.query + ') -from:me -label:' + f.label.toLowerCase();
+    // Never hide business mail: promotions skip anything already filed as business.
+    if (f.archive) q += business.map(function (b) { return ' -label:' + b.toLowerCase(); }).join('');
+    if (window) q += ' newer_than:' + window;
+    for (let round = 0; round < 10; round++) { // 10 x 100 threads per label per run keeps us inside Apps Script's time limit
+      const threads = GmailApp.search(q, 0, 100);
+      if (!threads.length) break;
+      label.addToThreads(threads);
+      if (f.archive) GmailApp.moveThreadsToArchive(threads.filter(function (t) { return t.isInInbox(); }));
+      if (threads.length < 100) break;
+    }
+  });
+}
+
+/** Run once from the editor to file all existing mail. Safe to run again. */
+function organiseAll() { organise_(''); }
+
 /** Run by the 5-minute trigger that setup() installs. */
-function labelNew() { labelRecent_(); }
+function labelNew() {
+  labelRecent_();
+  try { organise_('2d'); } catch (err) { console.error('Folders failed (next run retries): ' + err); }
+}
+
+/* ------------------------------------------------------------------ */
+/* Pickup-day reminder (founder 2026-11-19)                            */
+/* ------------------------------------------------------------------ */
+
+const REMINDER_PREFIX_ = 'rem_';
+
+/** Keeps only what the reminder needs. Overwrites on a resend of the same ref, so one reminder per order. */
+function saveReminder_(props, a) {
+  props.setProperty(REMINDER_PREFIX_ + a.ref, JSON.stringify({
+    ref: a.ref, first: first_(a.name), email: a.email, pickupDate: a.pickupDate, pickupTime: a.pickupTime,
+    pickupPlace: a.pickupPlace, pickupDays: a.pickupDays,
+    items: a.items.map(function (i) { return { name: i.name, qty: i.qty }; })
+  }));
+}
+
+/** Run every morning by the trigger setup() installs. Sends today's reminders, deletes them, deletes any from past days. */
+function sendReminders() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) { console.error('Reminders: busy, the next daily run will not resend these, so check the log'); return; }
+  try {
+    const today = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd');
+    const props = PropertiesService.getScriptProperties();
+    const all = props.getProperties();
+    let sentCount = 0, skipped = 0;
+    Object.keys(all).sort().forEach(function (k) {
+      if (k.indexOf(REMINDER_PREFIX_) !== 0) return;
+      let r;
+      try { r = JSON.parse(all[k]); } catch (err) { props.deleteProperty(k); return; }
+      if (!r || !validDate_(r.pickupDate) || r.pickupDate < today) { props.deleteProperty(k); return; } // missed or broken: never kept
+      if (r.pickupDate > today) return; // a later Saturday
+      // Keep a little quota so a new paid order today can still reach the owner.
+      if (MailApp.getRemainingDailyQuota() < CONFIG.MIN_QUOTA) { skipped++; return; }
+      try {
+        sendReminder_(r);
+        sentCount++;
+        props.deleteProperty(k);
+      } catch (err) {
+        console.error('Reminder failed for ' + r.ref + ': ' + err);
+      }
+    });
+    console.log('Reminders for ' + today + ': sent ' + sentCount + (skipped ? ', NOT sent (email quota low) ' + skipped : ''));
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function reminderItems_(r) {
+  return r.items.map(function (i) { return i.qty + ' x ' + i.name; });
+}
+
+function sendReminder_(r) {
+  const subject = "STUFF'D: collection day! Your order " + r.ref;
+  const when = r.pickupTime ? 'Your preferred time: ' + r.pickupTime : '';
+  const plain = [
+    'Hi ' + r.first + ', today is collection day!', '',
+    'Collect: today, ' + day_(r.pickupDate, true),
+    'Where: ' + r.pickupPlace
+  ].concat(when ? [when] : [], r.pickupDays ? ['Collection times: ' + r.pickupDays] : [],
+    ['', 'Your order ' + r.ref + ':'], reminderItems_(r),
+    ['', "Can't make it or running late? Just reply to this email or call " + CONFIG.PHONE_DISPLAY + '.', '', "STUFF'D Bagels", 'Cape Town', CONFIG.SITE_URL]).join('\n');
+  MailApp.sendEmail({ to: r.email, subject: subject, body: plain, htmlBody: reminderHtml_(r), name: CONFIG.BUSINESS_NAME, replyTo: owner_() });
+}
+
+function reminderHtml_(r) {
+  const c = COLOURS;
+  const items = '<tr><td style="padding:10px 26px 4px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0">' + r.items.map(function (i) {
+    return '<tr><td width="40" style="padding:10px 0;border-bottom:1px solid #dbe3f0;vertical-align:middle"><span style="display:inline-block;min-width:28px;height:28px;line-height:28px;text-align:center;border-radius:14px;background:' + c.blue + ';color:#ffffff;font-family:' + FONT_ + ';font-size:14px;font-weight:900">' + i.qty + '</span></td>' +
+      '<td style="padding:10px 0;border-bottom:1px solid #dbe3f0;font-family:' + BODY_FONT_ + ';font-size:16px;font-weight:700;color:' + c.ink + '">' + esc_(i.name) + '</td></tr>';
+  }).join('') + '</table></td></tr>';
+  return shell_('Today is collection day. ' + r.pickupPlace + '.', 'Order ' + r.ref,
+    h1_('Collection day!', 'Hi ' + r.first + ', your bagels are being stuffed for today.') +
+    box_('Collect today', day_(r.pickupDate, true), [r.pickupPlace, r.pickupTime ? 'Your preferred time: ' + r.pickupTime : '', r.pickupDays]) +
+    items +
+    para_("Can't make it or running late? Just reply to this email or call " + CONFIG.PHONE_DISPLAY + '.'));
+}
 
 /* ------------------------------------------------------------------ */
 /* One-time set-up and self-test (run from the editor, as the owner)   */
@@ -344,7 +601,11 @@ function setup() {
     if (t.getHandlerFunction() === 'labelNew') ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('labelNew').timeBased().everyMinutes(5).create();
-  console.log('Labels "' + CONFIG.ORDERS_LABEL + '" and "' + CONFIG.BOOKINGS_LABEL + '" are ready, and the 5-minute labeller is on.');
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'sendReminders') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('sendReminders').timeBased().everyDays(1).atHour(CONFIG.REMINDER_HOUR).inTimezone(CONFIG.TIMEZONE).create();
+  console.log('Labels "' + CONFIG.ORDERS_LABEL + '" and "' + CONFIG.BOOKINGS_LABEL + '" are ready, the 5-minute labeller is on, and pickup reminders go out daily between ' + CONFIG.REMINDER_HOUR + ':00 and ' + (CONFIG.REMINDER_HOUR + 1) + ':00.');
   console.log('Owner emails go to: ' + owner_());
   console.log('Next: Deploy > New deployment > Web app (Execute as: Me, Who has access: Anyone). Then run testOrder and testBooking.');
 }
@@ -352,13 +613,24 @@ function setup() {
 /** Sends a pretend order and booking to the owner's own address (the customer reply goes to the same address). */
 function testOrder() {
   console.log(JSON.stringify(process_({
-    type: 'order', ref: 'SB-TEST22', name: 'Test Customer', phone: '+27820000000', email: owner_(),
+    type: 'order', paid: true, checkoutId: 'ch_TEST0001', // a real order only arrives after Yoco says it was paid
+    ref: 'SB-' + Math.random().toString(36).slice(2, 8).toUpperCase().padEnd(6, '7'), name: 'Test Customer', phone: '+27820000000', email: owner_(),
     pickupDate: '2026-12-19', // any date works for the test; real orders are always a Saturday
     pickupTime: '10:30', pickupDays: 'Saturdays, 10am to 1pm',
     pickupPlace: 'Test pickup point, Cape Town',
-    items: [{ name: 'Pizza Bagel', qty: 2, unit: 85, line: 170 }, { name: 'Extra Cheese', qty: 1, unit: 5, line: 5 }],
+    items: [{ name: 'Pizza Bagel', qty: 2, unit: 85, line: 170 }, { name: 'Extra Jalapeno', qty: 1, unit: 5, line: 5 }],
     total: 175, note: 'This is a test, please ignore.'
   })));
+}
+/** Sends a pretend pickup reminder to the owner's own address (nothing is saved). */
+function testReminder() {
+  sendReminder_({
+    ref: 'SB-TEST77', first: 'Test', email: owner_(),
+    pickupDate: Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd'), pickupTime: '2pm to 3pm',
+    pickupPlace: 'Test pickup point, Cape Town', pickupDays: '',
+    items: [{ name: 'Pizza Bagel', qty: 2 }, { name: 'Extra Jalapeno', qty: 1 }]
+  });
+  console.log('Test reminder sent to ' + owner_());
 }
 function testBooking() {
   console.log(JSON.stringify(process_({

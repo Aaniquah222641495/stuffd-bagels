@@ -1,20 +1,23 @@
 // Form rate limits and the Apps Script token rule, against the real Worker code with a fake clock and fake Durable Objects.
 // Run: node worker/tests/forms-limits.mjs
 import assert from "node:assert/strict";
-import { bundle, fakeLimiter } from "./_bundle.mjs";
+import { TS_DUMMY_TOKEN, YOCO_TEST_ENV, bundle, fakeLimiter, fakeOrders, fakeYocoFetch } from "./_bundle.mjs";
 const { handleForm } = await bundle("worker/forms.ts");
 const sast = (iso, time = "12:00:00") => Date.parse(`${iso}T${time}+02:00`);
 const NOW = sast("2026-11-16"); // a Monday; Saturday 28 Nov (the last of the month, open since the 15th) is the one on the list
 const TOKEN = "k7Vq2mXw9LpR4sTz8NbC3dHf6JyA1eGu0QiO5vWx";
 const fetched = [];
-globalThis.fetch = async (url, init) => { fetched.push({ url, body: JSON.parse(init.body) }); return new Response('{"ok":true}'); };
+// Orders now open a Yoco checkout (the fake answers it) and send NO email; bookings still go to the (fake) Apps Script.
+globalThis.fetch = fakeYocoFetch(async (url, init) => { fetched.push({ url, body: JSON.parse(init.body) }); return new Response('{"ok":true}'); });
+const ordersFor = new WeakMap();
 const kv = (() => { const m = new Map([["pickups", JSON.stringify({ pickups: [{ id: "p1", name: "Kenilworth Corner", area: "Main Rd", days: "", active: true }] })]]); return { get: async (k) => m.get(k) ?? null, put: async () => {} }; })();
 
 async function run(lim, { ip = "203.0.113.5", email = "a@example.com", kind = "order", env = {} } = {}) {
-  const e = { LIMITER: lim.ns, STUFFD_KV: kv, ADMIN_PASSWORD: "x", APPS_SCRIPT_URL: "http://fake/exec", APPS_SCRIPT_TOKEN: TOKEN, ...env };
+  if (!ordersFor.has(lim)) ordersFor.set(lim, await fakeOrders({ now: () => NOW }));
+  const e = { LIMITER: lim.ns, ORDERS: ordersFor.get(lim).ns, ...YOCO_TEST_ENV, STUFFD_KV: kv, ADMIN_PASSWORD: "x", APPS_SCRIPT_URL: "http://fake/exec", APPS_SCRIPT_TOKEN: TOKEN, ...env };
   const body = kind === "order"
-    ? { name: "Aisha", phone: "0821234567", email, pickupId: "p1", pickupDate: "2026-11-28", items: { "Classic Bagel": 1 }, website: "" }
-    : { name: "Sam", phone: "0821234567", email, eventDate: "2026-12-20", venue: "Hall", guests: 20, details: "", website: "" };
+    ? { name: "Aisha", phone: "0821234567", email, pickupId: "p1", pickupDate: "2026-11-28", items: { "Classic Bagel": 1 }, website: "", attemptId: crypto.randomUUID(), turnstileToken: TS_DUMMY_TOKEN }
+    : { name: "Sam", phone: "0821234567", email, eventDate: "2026-12-20", venue: "Hall", guests: 20, details: "", website: "", turnstileToken: TS_DUMMY_TOKEN };
   try {
     const res = await handleForm(new Request("http://x/api/" + kind, { method: "POST", headers: { "Content-Type": "application/json", "CF-Connecting-IP": ip }, body: JSON.stringify(body) }), e, kind, NOW);
     return { status: res.status, body: await res.json() };
@@ -27,14 +30,20 @@ const mk = () => fakeLimiter({ now: () => NOW });
 // token rule (M3)
 let lim = await mk();
 for (const env of [{ APPS_SCRIPT_TOKEN: undefined }, { APPS_SCRIPT_TOKEN: "" }, { APPS_SCRIPT_TOKEN: "short" }, { APPS_SCRIPT_URL: undefined }]) {
-  fetched.length = 0;
-  const r = await run(lim, { email: `t${n}@example.com`, env });
-  assert.equal(r.status, 503); assert.match(r.body.error, /isn't switched on/); assert.equal(fetched.length, 0, "nothing is sent to Apps Script without URL and a 32+ character token");
+  fetched.length = 0; globalThis.fetch.calls.length = 0;
+  for (const kind of ["order", "booking"]) {
+    const r = await run(lim, { email: `t${n}@example.com`, env, kind });
+    assert.equal(r.status, 503); assert.match(r.body.error, /isn't switched on/); assert.equal(fetched.length, 0, "nothing is sent to Apps Script without URL and a 32+ character token");
+  }
+  assert.equal(globalThis.fetch.calls.length, 0, "and no Yoco checkout is made (we won't take money we can't email about)");
 }
 fetched.length = 0;
-assert.equal((await run(lim, { email: "tok@example.com" })).status, 200);
+assert.equal((await run(lim, { email: "tok@example.com", kind: "booking" })).status, 200);
 assert.equal(fetched.length, 1); assert.equal(fetched[0].body.token, TOKEN);
-ok("no forwarding without APPS_SCRIPT_URL and a 32+ character APPS_SCRIPT_TOKEN; with both, the token is sent");
+fetched.length = 0;
+const ordered = await run(lim, { email: "tok2@example.com" });
+assert.equal(ordered.status, 200); assert.match(ordered.body.redirectUrl, /^https:\/\/c\.yoco\.com\//); assert.equal(fetched.length, 0, "an order sends no email until it is paid");
+ok("no forwarding without APPS_SCRIPT_URL and a 32+ character APPS_SCRIPT_TOKEN (orders and bookings); a booking sends the token; an order opens a checkout and sends nothing");
 
 // IPv6 /64 (#5): 8 different addresses in one /64 share one limit of 5 orders per hour
 lim = await mk();
@@ -68,9 +77,9 @@ assert.equal(accepted, 40); assert.match(first429.body.error, /busy day/);
 ok("shared cap: 40 submissions a day (80 emails, under Gmail's 100)");
 
 // store down: fail closed
-lim = await mk(); lim.state.fail = true; fetched.length = 0;
+lim = await mk(); lim.state.fail = true; fetched.length = 0; globalThis.fetch.calls.length = 0;
 const down = await run(lim, { email: "down@example.com" });
-assert.equal(down.status, 503); assert.equal(fetched.length, 0);
+assert.equal(down.status, 503); assert.equal(fetched.length, 0); assert.equal(globalThis.fetch.calls.length, 0, "no Yoco checkout while the limiter is down");
 assert.equal((await run({ ns: undefined, state: {} }, { email: "nobinding@example.com", env: { LIMITER: undefined } })).status, 503);
 ok("counter store unreachable or not bound: 503, nothing forwarded");
 console.log(`forms-limits: all ${n} groups passed`);

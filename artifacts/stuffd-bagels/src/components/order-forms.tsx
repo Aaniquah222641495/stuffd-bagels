@@ -7,7 +7,7 @@ export type Status = "idle" | "sending" | "sent";
 export interface PostResult {
   ok: boolean;
   status: number;
-  data: { ok?: boolean; ref?: string; error?: string } | null;
+  data: { ok?: boolean; ref?: string; error?: string; redirectUrl?: string; total?: number } | null;
 }
 
 export async function postForm(url: string, body: unknown): Promise<PostResult> {
@@ -76,6 +76,50 @@ export function FieldRow({
   );
 }
 
+/** A row that only states a fact (there is just one pickup point or Saturday, so there is nothing to choose). */
+export function FixedRow({ label, value, hint, testId }: { label: string; value: string; hint?: string; testId?: string }) {
+  return (
+    <div className="flex flex-col" data-testid={testId}>
+      <p className="eyebrow px-5 pt-4 pb-1 m-0 text-ink/75">{label}</p>
+      <p className={`px-5 m-0 font-semibold text-base leading-snug [overflow-wrap:anywhere] ${hint ? "pb-1" : "pb-4"}`}>{value}</p>
+      {hint && <p className="px-5 pb-3 m-0 text-[13px] leading-snug text-ink/75">{hint}</p>}
+    </div>
+  );
+}
+
+/**
+ * One-tap time chips: a native radio group (arrow keys move and pick, Tab goes in and out as one stop, screen readers
+ * read "1 of 6"). "Any time" is the empty choice, so a pick can always be undone.
+ */
+export function TimeChips({ legend, slots, value, onChange, hint }: { legend: string; slots: string[]; value: string; onChange: (v: string) => void; hint?: string }) {
+  const id = useId();
+  const options: [string, string][] = [["", "Any time"], ...slots.map((t): [string, string] => [t, t])];
+  return (
+    <fieldset className="m-0 min-w-0 border-0 p-0" data-testid="time-chips">
+      <legend className="eyebrow px-5 pt-4 pb-2 text-ink/75">{legend}</legend>
+      <div className="flex flex-wrap gap-2 px-5 pb-4">
+        {options.map(([v, label]) => (
+          <label key={label} className="relative">
+            <input
+              type="radio"
+              name={`${id}-time`}
+              value={v}
+              checked={value === v}
+              onChange={() => onChange(v)}
+              data-testid={v ? "time-chip" : "time-chip-any"}
+              className="peer sr-only"
+            />
+            <span className="inline-flex min-h-[44px] cursor-pointer select-none items-center whitespace-nowrap rounded-full border-2 border-ink bg-paper px-4 text-sm font-bold text-ink peer-checked:bg-blue peer-checked:text-white peer-focus-visible:outline peer-focus-visible:outline-[3px] peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink">
+              {label}
+            </span>
+          </label>
+        ))}
+      </div>
+      {hint && <p className="-mt-2 px-5 pb-3 m-0 text-[13px] leading-snug text-ink/75">{hint}</p>}
+    </fieldset>
+  );
+}
+
 export const inputClass =
   "px-5 pb-4 bg-transparent font-semibold text-base outline-none placeholder:text-ink/45 focus-visible:bg-sky/30";
 
@@ -97,4 +141,51 @@ export function PrivacyNote({ what, onDark = false }: { what: string; onDark?: b
       {what} Only STUFF&apos;D Bagels sees it. <a className="font-bold underline underline-offset-2" href="/privacy">Privacy notice</a>.
     </p>
   );
+}
+
+
+/** sessionStorage key for the cart and details saved just before the customer goes to Yoco ("Back to my order" restores it). */
+export const DRAFT_KEY = "sb-order-draft";
+
+export interface OrderDraft {
+  ref: string;
+  quantities: Record<string, number>;
+  toppingQty: Record<string, number>;
+  name: string;
+  phone: string;
+  email: string;
+  pickup: string;
+  saturday: string;
+  pickupTime: string;
+  notes: string;
+}
+
+/** The saved cart, if it is under 2 hours old and well formed. Anything else is ignored (and the key is cleared). */
+export function readDraft(): OrderDraft | null {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as Partial<OrderDraft> & { v?: number; savedAt?: number };
+    const str = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : "");
+    if (d.v !== 1 || typeof d.savedAt !== "number" || Date.now() - d.savedAt > 2 * 60 * 60 * 1000 || typeof d.quantities !== "object" || d.quantities === null) {
+      sessionStorage.removeItem(DRAFT_KEY);
+      return null;
+    }
+    return {
+      ref: str(d.ref, 20), quantities: d.quantities as Record<string, number>, toppingQty: (typeof d.toppingQty === "object" && d.toppingQty ? d.toppingQty : {}) as Record<string, number>,
+      name: str(d.name, 60), phone: str(d.phone, 20), email: str(d.email, 254), pickup: str(d.pickup, 64), saturday: str(d.saturday, 10), pickupTime: str(d.pickupTime, 40), notes: str(d.notes, 300),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** A UUID v4 for one press of the Pay button (the Worker sends it to Yoco as the Idempotency-Key). */
+export function newAttemptId(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
