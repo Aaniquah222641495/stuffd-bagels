@@ -16,9 +16,10 @@ import { contentHash } from "./orders-core";
 import { orders, type OrdersEnv } from "./orders-client";
 import { YocoError, createCheckout, modeOk, type YocoEnv } from "./yoco";
 import { niceDay, opensOnFor, saturdayStatus, sastDay } from "../artifacts/stuffd-bagels/src/collection";
+import { precheckTurnstile, verifyTurnstile, type TurnstileEnv } from "./turnstile";
 import { isRealDate, marketsForRules, publicAvailability, publicPickups, sastToday, secondsToSastMidnight } from "./store";
 
-export interface FormsEnv extends LimiterEnv, OrdersEnv, YocoEnv, MailerEnv {
+export interface FormsEnv extends LimiterEnv, OrdersEnv, YocoEnv, MailerEnv, TurnstileEnv {
   STUFFD_KV?: KVNamespace;
   ADMIN_PASSWORD?: string;
   LIMITER_SALT?: string;
@@ -271,6 +272,7 @@ function knownAttempt(r: { kind: string; ref?: string; redirectUrl?: string; amo
 async function handleOrder(request: Request, env: FormsEnv, body: Record<string, unknown>, now: number): Promise<Response> {
   const attemptId = typeof body.attemptId === "string" && UUID_V4.test(body.attemptId) ? body.attemptId.toLowerCase() : null;
   if (!attemptId) throw bad();
+  precheckTurnstile(env, body.turnstileToken); // not configured (503, logged) or no token (400): before any storage is read
   const payload = await parseOrder(body, env, now);
   assertOrdersReady(env); // before counting anything: a switched-off site must not use up anyone's allowance
 
@@ -292,6 +294,9 @@ async function handleOrder(request: Request, env: FormsEnv, body: Record<string,
     throw unavailable();
   }
 
+  // Turnstile (D-SB-7): a real, unspent token, checked before a rate-limit slot, a Yoco checkout or an email is used. A repeat of a press we
+  // already know was answered above without a new check, so a flaky network never needs a second token.
+  await verifyTurnstile(request, env, body.turnstileToken, "order");
   const release = await rateLimit(request, env, "order", payload.email);
   let begun;
   try {
@@ -344,8 +349,10 @@ export async function handleForm(request: Request, env: FormsEnv, kind: "order" 
     }
     return handleOrder(request, env, body, now);
   }
+  precheckTurnstile(env, body.turnstileToken);
   const payload = parseBooking(body);
   assertSwitchedOn(env); // before counting anything: a switched-off site must not use up anyone's allowance
+  await verifyTurnstile(request, env, body.turnstileToken, "booking"); // before a rate-limit slot or any email
   await rateLimit(request, env, "booking", payload.email);
   await forward(env, payload);
   return json({ ok: true, ref: payload.ref });

@@ -5,6 +5,7 @@ import { requireAdmin } from "./auth";
 export { Limiter } from "./limiter";
 export { Orders } from "./orders";
 import { handleForm } from "./forms";
+import { turnstileSiteKey } from "./turnstile";
 import { handleAttention, handleStatus, handleWebhook } from "./payments";
 import { HttpError, errorResponse, json, plainHttpRefused, readJsonObject, withNoindex } from "./http";
 import {
@@ -50,6 +51,11 @@ export interface Env {
   SITE_ORIGIN?: string;
   // Tests only: honoured only for http://127.0.0.1 (a local fake Yoco).
   YOCO_API_BASE?: string;
+  // Turnstile (worker/turnstile.ts, D-SB-7). TURNSTILE_SITE_KEY is a public plain var; TURNSTILE_SECRET_KEY is a Worker secret.
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
+  // Tests only: honoured only for http://127.0.0.1 (a local fake siteverify).
+  TURNSTILE_API_BASE?: string;
 }
 
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -177,6 +183,11 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
   if (parts.length === 2 && parts[1] === "healthz") {
     methodOnly(request, ["GET", "HEAD"]);
     return json({ status: "ok" });
+  }
+  if (parts.length === 2 && parts[1] === "config") {
+    // What the page needs to start the Turnstile widget. The site key is public by design; null means Turnstile is not set up.
+    methodOnly(request, ["GET", "HEAD"]);
+    return json({ turnstileSiteKey: turnstileSiteKey(env) || null }, 200, "public");
   }
   if (parts.length === 2 && parts[1] === "availability") {
     methodOnly(request, ["GET", "HEAD"]);

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { BookingForm } from "@/components/booking-form";
+import { TURNSTILE_WAIT_MESSAGE, TurnstileBox, useTurnstile } from "@/components/turnstile";
 import { DEFAULT_CUTOFF, availableSaturdays, cutoffDay, hoursCaveat, hoursLabel, niceDay, openingNote, pickupHours, timeSlots } from "@/collection";
 import {
   DRAFT_KEY,
@@ -486,6 +487,7 @@ export default function Home() {
 
   // Set the moment the first click lands (state only updates on the next render), cleared when the answer is back.
   const orderInFlight = useRef(false);
+  const tsReset = useRef<() => void>(() => {});
   const attemptId = useRef<string | null>(null);
 
   // Back from Yoco's cancel / failure page ("Back to my order"), or the browser's Back button: put the cart and details back.
@@ -518,6 +520,7 @@ export default function Home() {
       if (e.persisted) {
         orderInFlight.current = false;
         setOrderStatus("idle");
+        tsReset.current(); // the page's old token was used for the order we left behind; a token works once
       }
     };
     window.addEventListener("pageshow", onShow);
@@ -545,6 +548,15 @@ export default function Home() {
     // One id per press of Pay. A repeat of the SAME press (double click, flaky network, coming back from Yoco and pressing again
     // with the same cart) gets the same payment page back instead of a second one.
     if (!attemptId.current) attemptId.current = newAttemptId();
+    // Turnstile (managed): normally already solved by now. Needed by the Worker before it opens a Yoco checkout.
+    const turnstileToken = await ts.getToken();
+    if (!turnstileToken) {
+      orderInFlight.current = false;
+      setOrderProblem(TURNSTILE_WAIT_MESSAGE);
+      setOrderStatus("idle");
+      ts.reset();
+      return;
+    }
     const r = await postForm("/api/order", {
       name,
       phone,
@@ -557,6 +569,7 @@ export default function Home() {
       note: notes,
       website: honey,
       attemptId: attemptId.current,
+      turnstileToken,
     });
     orderInFlight.current = false;
     const url = r.ok ? r.data?.redirectUrl : undefined;
@@ -574,6 +587,7 @@ export default function Home() {
       window.location.assign(url);
       return; // the button stays on "Opening Yoco..." until the page leaves
     }
+    ts.reset(); // the token is spent whatever the answer was: get a fresh one for the next press
     // Only an unanswered request (status 0) may be retried under the same id; any answer ends that press.
     if (r.status !== 0) attemptId.current = null;
     setOrderProblem(r.ok ? "The payment page didn't open. Please try again." : failureMessage(r));
@@ -663,6 +677,8 @@ export default function Home() {
         ? availability?.closedMessage || satNote || "There's no Saturday open for orders right now. Please check back soon."
         : null;
   const orderingHidden = hiddenMessage !== null;
+  const ts = useTurnstile("order", !orderingHidden);
+  tsReset.current = ts.reset;
 
   return (
     <div className="bg-paper min-h-screen text-ink overflow-x-hidden">
@@ -1156,6 +1172,7 @@ export default function Home() {
                     {orderErrors.bagels && itemCount < 1 && (
                       <p role="alert" className="mt-4 mb-0 text-sm font-bold text-error">{orderErrors.bagels}</p>
                     )}
+                    <TurnstileBox handle={ts} className="mt-4" />
                     {orderProblem && (
                       <p role="alert" className="mt-4 mb-0 rounded-2xl border-2 border-error px-4 py-3 text-sm font-bold text-error">
                         {orderProblem}
