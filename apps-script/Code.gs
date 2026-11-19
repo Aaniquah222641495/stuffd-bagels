@@ -153,11 +153,14 @@ function process_(raw) {
     const total = readCount_(props.getProperty('cap_total'), today);
     const rcptKey = 'cap_rc_' + hash_(recipientKey_(a.email));
     const rcpt = readCount_(props.getProperty(rcptKey), today);
-    if (total >= CONFIG.MAX_SUBMISSIONS_PER_DAY) {
+    // Paid orders are never capped (2026-11-19): Yoco's signed payment already proves they are real, and refusing one
+    // would mean a customer paid and the owner never heard. The caps below only stop booking-form spam.
+    const capped = a.type !== 'order';
+    if (capped && total >= CONFIG.MAX_SUBMISSIONS_PER_DAY) {
       console.error('Daily cap reached; refusing ' + a.ref);
       return { ok: false, error: 'cap' };
     }
-    if (rcpt >= CONFIG.MAX_REPLIES_PER_ADDRESS_PER_DAY) {
+    if (capped && rcpt >= CONFIG.MAX_REPLIES_PER_ADDRESS_PER_DAY) {
       console.error('Per-address cap reached; refusing ' + a.ref);
       return { ok: false, error: 'cap' };
     }

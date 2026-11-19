@@ -170,6 +170,9 @@ for (let i = 0; i < 12; i++) post({ ...booking, ref: `BK-DAY${String(100 + i)}`,
 assert.equal(accepted + refused, 12);
 assert.ok(refused >= 1, "the daily cap stops further submissions");
 assert.equal(post({ ...booking, ref: "BK-DAY999", email: "late@example.com", guests: 99 }).error, "cap");
+// A paid order still goes through after the caps are hit: the customer has paid, so the owner must hear about it.
+{ const paidLate = post({ ...order, ref: "SB-LATE99", email: "s.a.m.smith@gmail.com", checkoutId: "ch_LATE0099" });
+  assert.equal(paidLate.ok, true, "paid orders are never refused by the daily or per-address caps"); }
 // A new day starts from zero and old per-address counters are tidied away.
 for (const [k, v] of propStore) propStore.set(k, "2000-01-01:" + v.split(":")[1]);
 assert.equal(post({ ...booking, ref: "BK-DAY998", email: "late@example.com", guests: 98 }).ok, true);
