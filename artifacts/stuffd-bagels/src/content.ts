@@ -20,7 +20,7 @@ export const menuPricingObject: Record<
   },
   "Jalapeno Bagel": {
     price: 75,
-    image: "/card-jalapeno.jpg", // client box photo 2026-11-16, right box (founder 2026-11-21: use it), cut 675x900 (3:4 like the others), bagel about 88% of the width, blue backdrop recoloured to the light card surface
+    image: "/card-jalapeno.jpg", // client box photo 2026-11-16, right box (founder 2026-11-21: use it), cut 675x900 (3:4 like the others), zoomed about 10% tighter (founder 2026-11-21), blue backdrop recoloured to the light card surface
     avif: "/card-jalapeno.avif",
     desc: "Jalapeno Cream Cheese · Jalapenos",
   },
