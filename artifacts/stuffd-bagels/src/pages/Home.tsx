@@ -753,9 +753,9 @@ export default function Home() {
             <div className="absolute inset-0 overflow-hidden">
               <img
                 src="/hero-bagel.jpeg"
-                alt="A hand holding a STUFF'D jalapeno bagel, stuffed with cream cheese and topped with jalapeno slices and paprika"
-                width={802}
-                height={1067}
+                alt="A table of STUFF'D bagels, stuffed and topped with herbs and melted cheese"
+                width={736}
+                height={978}
                 fetchPriority="high"
                 className="hero-settle absolute inset-0 w-full h-full object-cover"
               />
