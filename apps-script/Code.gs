@@ -17,6 +17,13 @@
  * reminder per paid order (first name, email, pickup details, items) in Script Properties. The reminder is emailed to the
  * customer at about 08:00 on the collection day and then deleted; a reminder whose day has passed is deleted unsent.
  *
+ * AUTOMATIC REFUNDS (founder 2026-11-19): the order-confirmed email carries a "Cancel my order" link that the WORKER signs
+ * (this script only prints it). Before the order's Wednesday cut-off the customer confirms on the site and the Worker refunds
+ * through Yoco itself. The Worker then posts a third kind of request, type 'cancel' (outcome refunded, pending or failed), and this
+ * script emails the owner "SB-xxxx cancelled and refunded" (or the pending / failed version), emails the customer a refund
+ * confirmation, and deletes that order's pickup reminder so no reminder goes out. Cancel emails count against the Gmail quota
+ * like any other, but are never refused by the booking caps: the money has already moved.
+ *
  * The Worker may send the same paid order more than once (it retries if this script was slow): a paid order is
  * de-duplicated by its reference for 6 hours, the longest Google's CacheService allows, so it is emailed once.
  */
@@ -26,6 +33,8 @@ const CONFIG = {
   // Where order and booking emails go. Empty = the account this script runs as (stuffd.bagels@gmail.com).
   OWNER_EMAIL: '',
   SITE_URL: 'https://stuffdbagels.co.za',
+  // Hosts a "Cancel my order" link may point to: the live site and the preview Worker (it shares this script). Anything else is dropped.
+  CANCEL_LINK_HOSTS: ['stuffdbagels.co.za', 'stuffdbagels-preview.thedigitalpantryza.workers.dev'],
   PHONE_DISPLAY: '083 300 8472',
   TIMEZONE: 'Africa/Johannesburg',
   ORDERS_LABEL: 'Orders',
@@ -104,6 +113,36 @@ function validEmail_(v) { return /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(\.[A-Za-z0-
 function validCheckoutId_(v) { return typeof v === 'string' && /^[A-Za-z0-9_\-]{4,100}$/.test(v); }
 function validRef_(v, prefix) { return typeof v === 'string' && new RegExp('^' + prefix + '-[A-Z0-9]{6}$').test(v); }
 
+/** The items of an order or a cancellation, checked and totalled by us (never the sender's total), or null. */
+function cleanItems_(raw) {
+  if (!Array.isArray(raw) || raw.length < 1 || raw.length > 12) return null;
+  const items = [];
+  let total = 0;
+  for (let i = 0; i < raw.length; i++) {
+    const it = raw[i] || {};
+    const qty = Number(it.qty), unit = Number(it.unit);
+    if (!line_(it.name, 40) || !(qty >= 1 && qty <= 50 && qty % 1 === 0) || !(unit >= 0 && unit <= 1000 && unit % 1 === 0)) return null;
+    items.push({ name: line_(it.name, 40), qty: qty, unit: unit, line: qty * unit });
+    total += qty * unit;
+  }
+  return { items: items, total: total };
+}
+
+/**
+ * The cancel link the Worker signed, or '' (then the email says "reply to this email" instead). Only https, only our hosts, only the
+ * exact path and token shape: a bad link never blocks a paid order, it is just left out.
+ */
+function cancelUrl_(v) {
+  if (typeof v !== 'string' || v.length > 200) return '';
+  const m = /^https:\/\/([a-z0-9.\-]+)\/order\/cancel#SB-[A-Z2-9]{6}\.\d{9,12}\.[A-Za-z0-9_\-]{43}$/.exec(v);
+  return m && CONFIG.CANCEL_LINK_HOSTS.indexOf(m[1]) >= 0 ? v : '';
+}
+/** "Wednesday 25 Nov at 23:59" as the Worker wrote it, or ''. */
+function cancelByLabel_(v) {
+  const t = line_(v, 40);
+  return /^[A-Za-z]{6,9} \d{1,2} [A-Za-z]{3} at \d{2}:\d{2}$/.test(t) ? t : '';
+}
+
 /** Returns { ok, data } with only the fields we use, cut to length, or { ok: false }. */
 function clean_(d) {
   const common = {
@@ -116,16 +155,18 @@ function clean_(d) {
     if (!validRef_(d.ref, 'SB') || !place || !validDate_(d.pickupDate) || !Array.isArray(d.items) || d.items.length < 1 || d.items.length > 12) return { ok: false };
     // A paid order only (ADR-0041). The Worker sends it after Yoco's signed webhook; nothing else may send an order.
     if (d.paid !== true || !validCheckoutId_(d.checkoutId)) return { ok: false };
-    const items = [];
-    let total = 0;
-    for (let i = 0; i < d.items.length; i++) {
-      const it = d.items[i] || {};
-      const qty = Number(it.qty), unit = Number(it.unit);
-      if (!line_(it.name, 40) || !(qty >= 1 && qty <= 50 && qty % 1 === 0) || !(unit >= 0 && unit <= 1000 && unit % 1 === 0)) return { ok: false };
-      items.push({ name: line_(it.name, 40), qty: qty, unit: unit, line: qty * unit });
-      total += qty * unit;
-    }
-    return { ok: true, data: Object.assign(common, { type: 'order', paid: true, checkoutId: d.checkoutId, ref: d.ref, pickupDate: d.pickupDate, pickupTime: line_(d.pickupTime, 40), pickupPlace: place, pickupDays: line_(d.pickupDays, 120), items: items, total: total, note: str_(d.note, 300) }) };
+    const cleaned = cleanItems_(d.items);
+    if (!cleaned) return { ok: false };
+    const link = cancelUrl_(d.cancelUrl);
+    const by = link ? cancelByLabel_(d.cancelByLabel) : '';
+    return { ok: true, data: Object.assign(common, { type: 'order', paid: true, checkoutId: d.checkoutId, ref: d.ref, pickupDate: d.pickupDate, pickupTime: line_(d.pickupTime, 40), pickupPlace: place, pickupDays: line_(d.pickupDays, 120), items: cleaned.items, total: cleaned.total, note: str_(d.note, 300), cancelUrl: by ? link : '', cancelByLabel: by }) };
+  }
+  if (d.type === 'cancel') {
+    // The Worker posts this after it has asked Yoco for the refund. outcome: refunded and pending are refunds Yoco accepted; failed means it did not confirm one.
+    const place = line_(d.pickupPlace, 200);
+    const cleaned = cleanItems_(d.items);
+    if (!validRef_(d.ref, 'SB') || !validCheckoutId_(d.checkoutId) || ['refunded', 'pending', 'failed'].indexOf(d.outcome) < 0 || !place || !validDate_(d.pickupDate) || !cleaned) return { ok: false };
+    return { ok: true, data: Object.assign(common, { type: 'cancel', ref: d.ref, outcome: d.outcome, checkoutId: d.checkoutId, pickupDate: d.pickupDate, pickupPlace: place, items: cleaned.items, total: cleaned.total }) };
   }
   if (d.type === 'booking') {
     const guests = Number(d.guests);
@@ -141,6 +182,7 @@ function process_(raw) {
   const c = clean_(raw);
   if (!c.ok) return { ok: false, error: 'invalid' };
   const a = c.data;
+  if (a.type === 'cancel') return processCancel_(a);
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
@@ -193,6 +235,37 @@ function process_(raw) {
   return { ok: true };
 }
 
+/**
+ * A customer cancelled before the cut-off and the Worker has asked Yoco for the refund. Sends the owner and the customer their emails and
+ * deletes the pickup reminder. Safe to repeat: the Worker retries until we answer ok, and the same outcome is only emailed once (6 hours).
+ */
+function processCancel_(a) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
+  try {
+    const cache = CacheService.getScriptCache();
+    const key = 'cancel_' + a.ref + '_' + a.outcome;
+    if (cache.get(key)) return { ok: true, duplicate: true };
+    // First, and whatever happens next: a cancelled order must never get "today is collection day". Deleting twice is harmless.
+    PropertiesService.getScriptProperties().deleteProperty(REMINDER_PREFIX_ + a.ref);
+    // Same quota wall as every other email. No booking cap: the refund has already moved, so the owner must hear about it.
+    if (MailApp.getRemainingDailyQuota() < CONFIG.MIN_QUOTA) {
+      console.error('Email quota nearly used up; refusing the cancellation emails for ' + a.ref);
+      return { ok: false, error: 'quota' };
+    }
+    sendCancelOwner_(a);
+    cache.put(key, '1', CONFIG.PAID_DUPLICATE_WINDOW_SECONDS);
+  } catch (err) {
+    console.error('Cancellation owner email failed for ' + a.ref + ': ' + err);
+    return { ok: false, error: 'mail' };
+  } finally {
+    lock.releaseLock();
+  }
+  try { sendCancelCustomer_(a); } catch (err) { console.error('Cancellation customer reply failed for ' + a.ref + ': ' + err); }
+  try { labelRecent_(); } catch (err) { console.error('Labelling failed (the 5-minute catch-up will retry): ' + err); }
+  return { ok: true };
+}
+
 /** Counters look like "2026-11-16:3". A counter from an earlier day reads as 0. */
 function readCount_(v, today) {
   if (typeof v !== 'string') return 0;
@@ -240,6 +313,12 @@ function orderLines_(a) {
   return a.items.map(function (i) { return i.qty + ' x ' + i.name + '   ' + rand_(i.line); });
 }
 
+function cancelOwnerSubject_(a) {
+  if (a.outcome === 'refunded') return a.ref + ' cancelled and refunded';
+  if (a.outcome === 'pending') return a.ref + ' cancelled, refund pending';
+  return a.ref + ' cancelled: REFUND FAILED, check Yoco';
+}
+
 function ownerSubject_(a) {
   if (a.type === 'booking') return 'Booking enquiry: ' + a.name + ', ' + day_(a.eventDate, true);
   return 'New order: ' + a.name + ', ' + day_(a.pickupDate, false); // the collection Saturday
@@ -260,7 +339,8 @@ function sendOwner_(a) {
     lines = [
       'NEW ORDER ' + a.ref,
       'PAID ONLINE (Yoco) ' + rand_(a.total) + '. Confirmed.',
-      'Yoco checkout id: ' + a.checkoutId + '  (keep this: it is what you need to refund)',
+      'Yoco checkout id: ' + a.checkoutId + '  (keep this; you only need it if an automatic refund fails)',
+      'If the customer cancels before the cut-off, the website refunds them automatically and emails you. Nothing to do.',
       '',
       'Name: ' + a.name,
       'Phone: ' + a.phone + '  (' + wa + ')',
@@ -302,6 +382,8 @@ function sendCustomer_(a) {
       .concat([['Total', rand_(a.total)]]);
     if (a.note) rows.push(['Your note', a.note]);
     outro = 'Your payment has been received and your order is confirmed. We will email you a reminder on the morning of your collection day. ' + CANCELLATION_POLICY_ + ' Questions? Just reply to this email.';
+    // The link is signed by the Worker. Without one (or after the cut-off) the customer is asked to reply instead.
+    if (a.cancelUrl) outro += '\n\nNeed to cancel? You can cancel and get a full refund until ' + a.cancelByLabel + ': ' + a.cancelUrl;
   } else {
     subject = "STUFF'D: we've got your event enquiry " + a.ref;
     intro = "Thanks for thinking of us, " + f + "! Your event enquiry has landed.";
@@ -362,7 +444,7 @@ function box_(label, big, lines) {
 }
 
 /** The bagels, one row each with the quantity in a blue circle, then the total. */
-function itemsTable_(a) {
+function itemsTable_(a, totalLabel) {
   const c = COLOURS;
   const rows = a.items.map(function (i) {
     return '<tr>' +
@@ -371,7 +453,7 @@ function itemsTable_(a) {
       '<td align="right" style="padding:10px 0;border-bottom:1px solid #dbe3f0;font-family:' + BODY_FONT_ + ';font-size:15px;color:' + c.ink + ';white-space:nowrap">' + rand_(i.line) + '</td></tr>';
   }).join('');
   return '<tr><td style="padding:10px 26px 4px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0">' + rows +
-    '<tr><td></td><td style="padding:14px 0 0;font-family:' + FONT_ + ';font-size:16px;font-weight:900;color:' + c.ink + '">Total paid</td>' +
+    '<tr><td></td><td style="padding:14px 0 0;font-family:' + FONT_ + ';font-size:16px;font-weight:900;color:' + c.ink + '">' + esc_(totalLabel || 'Total paid') + '</td>' +
     '<td align="right" style="padding:14px 0 0;font-family:' + FONT_ + ';font-size:24px;font-weight:900;color:' + c.blue + ';white-space:nowrap">' + rand_(a.total) + '</td></tr>' +
     '</table></td></tr>';
 }
@@ -426,6 +508,7 @@ function customerHtml_(a) {
       itemsTable_(a) +
       note_('Your note', a.note) +
       para_('We\'ll email you a reminder on the morning of your collection day. Questions or need to change something? Just reply to this email.') +
+      cancelBlock_(a) +
       para_(CANCELLATION_POLICY_, true));
   }
   return shell_('We\'ve got your event enquiry ' + a.ref + '.', 'Enquiry ' + a.ref,
@@ -433,6 +516,71 @@ function customerHtml_(a) {
     box_('Your event', day_(a.eventDate, true), [a.venue, a.guests + ' guests']) +
     note_('Your details', a.details) +
     para_('Nothing is booked until we confirm. Questions? Just reply to this email.', true));
+}
+
+/** "Need to cancel?" with the signed link as a button. No link (no secret, or the cut-off already passed): nothing extra, the line above says to reply. */
+function cancelBlock_(a) {
+  if (!a.cancelUrl) return '';
+  const c = COLOURS;
+  return '<tr><td style="padding:10px 26px 4px;font-family:' + BODY_FONT_ + ';font-size:15px;line-height:1.55;color:' + c.ink + '">' +
+    '<b>Need to cancel?</b> You can cancel and get a full refund until ' + esc_(a.cancelByLabel) + '.</td></tr>' +
+    '<tr><td style="padding:6px 26px 12px"><a href="' + esc_(a.cancelUrl) + '" style="display:inline-block;background:' + c.white + ';color:' + c.ink + ';border:2px solid ' + c.ink + ';font-family:' + FONT_ + ';font-size:13px;font-weight:900;letter-spacing:1px;text-transform:uppercase;text-decoration:none;padding:12px 20px;border-radius:999px">Cancel my order</a></td></tr>';
+}
+
+/** The owner's email about a cancellation: all three outcomes, with the order details and the Yoco checkout id. */
+function sendCancelOwner_(a) {
+  const wa = 'https://wa.me/' + a.phone.replace('+', '');
+  const head = {
+    refunded: 'CANCELLED AND REFUNDED ' + a.ref + '. Yoco confirmed the full refund of ' + rand_(a.total) + '. Nothing for you to do.',
+    pending: 'CANCELLED ' + a.ref + '. Yoco accepted the full refund of ' + rand_(a.total) + ' but it is still pending. Check in the Yoco app in a day or two that it shows as refunded.',
+    failed: 'CANCELLED ' + a.ref + ' BUT THE REFUND DID NOT GO THROUGH. The customer cancelled in time and is waiting for ' + rand_(a.total) + '. Open the Yoco app and refund this payment in full (checkout id below), or ask your developer. They can also press the cancel link again before the cut-off.'
+  }[a.outcome];
+  const lines = [head, 'The pickup reminder for this order was deleted, so no reminder goes out.', 'Yoco checkout id: ' + a.checkoutId, '',
+    'Name: ' + a.name, 'Phone: ' + a.phone + '  (' + wa + ')', 'Email: ' + a.email + '  (just hit Reply)', ''
+  ].concat(pickupRows_(a).map(function (r) { return r[0] + ': ' + r[1]; }), ['', 'Order:'], orderLines_(a), ['Total: ' + rand_(a.total), '', 'Sent from the STUFF\'D Bagels website.']);
+  MailApp.sendEmail({ to: owner_(), subject: cancelOwnerSubject_(a), body: lines.join('\n'), htmlBody: cancelOwnerHtml_(a, head), replyTo: a.email, name: CONFIG.BUSINESS_NAME + ' website' });
+}
+
+function cancelOwnerHtml_(a, head) {
+  const tag = a.outcome === 'failed' ? 'Refund failed' : a.outcome === 'pending' ? 'Refund pending' : 'Refunded';
+  return shell_(head, tag,
+    h1_(a.ref + (a.outcome === 'failed' ? ' cancelled: refund failed' : ' cancelled'), head) +
+    box_('Was collecting', day_(a.pickupDate, true), [a.pickupPlace]) +
+    itemsTable_(a, a.outcome === 'refunded' ? 'Refunded' : a.outcome === 'pending' ? 'Refund pending' : 'To refund') +
+    customerCard_(a) +
+    para_('The pickup reminder for this order was deleted. Yoco checkout id: ' + a.checkoutId + '.', true));
+}
+
+/** The customer's refund confirmation (or, if Yoco did not confirm, a clear "we are on it"). */
+function sendCancelCustomer_(a) {
+  if (MailApp.getRemainingDailyQuota() < 1) return;
+  const f = first_(a.name);
+  let subject, intro, outro;
+  if (a.outcome === 'refunded') {
+    subject = "STUFF'D: refund processed " + a.ref;
+    intro = 'Your order is cancelled, ' + f + '.';
+    outro = 'Your refund of ' + rand_(a.total) + ' has been processed through Yoco and goes back to the card you paid with. It can take a few days to show on your statement, depending on your bank.';
+  } else if (a.outcome === 'pending') {
+    subject = "STUFF'D: your refund is on its way " + a.ref;
+    intro = 'Your order is cancelled, ' + f + '.';
+    outro = 'Yoco is processing your refund of ' + rand_(a.total) + ' to the card you paid with. It can take a few days to show on your statement, depending on your bank.';
+  } else {
+    subject = "STUFF'D: we've got your cancellation " + a.ref;
+    intro = 'Your order is cancelled, ' + f + '.';
+    outro = "We couldn't finish your refund of " + rand_(a.total) + " automatically. We've been told and we will sort it out, so you don't need to do anything.";
+  }
+  const rows = [['Reference', a.ref]].concat(a.items.map(function (i) { return [i.qty + ' x ' + i.name, rand_(i.line)]; }), [[a.outcome === 'failed' ? 'To be refunded' : 'Refund', rand_(a.total)]]);
+  const plain = [intro, ''].concat(rows.map(function (r) { return r[0] + ': ' + r[1]; }), ['', outro + ' Questions? Just reply to this email.', '', "STUFF'D Bagels", 'Cape Town', CONFIG.SITE_URL]).join('\n');
+  MailApp.sendEmail({ to: a.email, subject: subject, body: plain, htmlBody: cancelCustomerHtml_(a, f, outro), name: CONFIG.BUSINESS_NAME, replyTo: owner_() });
+}
+
+function cancelCustomerHtml_(a, f, outro) {
+  const title = a.outcome === 'refunded' ? 'Refund processed' : a.outcome === 'pending' ? 'Refund on its way' : 'Cancellation received';
+  return shell_(title + ' for ' + a.ref + '.', 'Order ' + a.ref,
+    h1_(title, 'Your order is cancelled, ' + f + '.') +
+    itemsTable_(a, a.outcome === 'failed' ? 'To be refunded' : 'Refund') +
+    para_(outro) +
+    para_('Questions? Just reply to this email.', true));
 }
 
 function ownerHtml_(a) {
@@ -443,7 +591,7 @@ function ownerHtml_(a) {
       itemsTable_(a) +
       note_('Their note', a.note) +
       customerCard_(a) +
-      para_('Yoco checkout id: ' + a.checkoutId + '. Keep this email: you need the id to refund.', true));
+      para_('Yoco checkout id: ' + a.checkoutId + '. If this customer cancels before the cut-off the website refunds them automatically and emails you, so there is nothing to do. Keep this email in case an automatic refund ever fails: you need the id to refund by hand.', true));
   }
   return shell_('Event enquiry: ' + a.name + ', ' + day_(a.eventDate, true) + '.', 'Enquiry',
     h1_('Event enquiry ' + a.ref, 'Reply with a quote. Nothing is booked yet.') +
@@ -461,10 +609,14 @@ function labelRecent_() {
   const orders = GmailApp.getUserLabelByName(CONFIG.ORDERS_LABEL) || GmailApp.createLabel(CONFIG.ORDERS_LABEL);
   const bookings = GmailApp.getUserLabelByName(CONFIG.BOOKINGS_LABEL) || GmailApp.createLabel(CONFIG.BOOKINGS_LABEL);
   // The email we just sent can take a moment to show up in search; the 5-minute trigger catches any left over.
-  [['New order', 'New order: ', orders], ['Booking enquiry', 'Booking enquiry: ', bookings]].forEach(function (g) {
+  // Cancellation emails ("SB-xxxx cancelled and refunded") go under Orders too, next to the order they cancel.
+  const cancelled = function (subject) { return /^SB-[A-Z0-9]{6} cancelled/.test(subject); };
+  [['New order', function (sub) { return sub.indexOf('New order: ') === 0; }, orders],
+   ['Booking enquiry', function (sub) { return sub.indexOf('Booking enquiry: ') === 0; }, bookings],
+   ['cancelled', cancelled, orders]].forEach(function (g) {
     const threads = GmailApp.search('subject:"' + g[0] + '" newer_than:2d -label:' + g[2].getName().toLowerCase(), 0, 30);
     threads.forEach(function (t) {
-      if (t.getFirstMessageSubject().indexOf(g[1]) === 0) t.addLabel(g[2]);
+      if (g[1](t.getFirstMessageSubject())) t.addLabel(g[2]);
     });
   });
 }
@@ -631,6 +783,15 @@ function testReminder() {
     items: [{ name: 'Pizza Bagel', qty: 2 }, { name: 'Extra Jalapeno', qty: 1 }]
   });
   console.log('Test reminder sent to ' + owner_());
+}
+/** Sends a pretend cancellation (refunded) to the owner's own address. Also deletes any reminder with that reference (there is none). */
+function testCancel() {
+  console.log(JSON.stringify(process_({
+    type: 'cancel', outcome: 'refunded', checkoutId: 'ch_TEST0001',
+    ref: 'SB-TESTC7', name: 'Test Customer', phone: '+27820000000', email: owner_(),
+    pickupDate: '2026-12-19', pickupPlace: 'Test pickup point, Cape Town',
+    items: [{ name: 'Pizza Bagel', qty: 2, unit: 85, line: 170 }], total: 170
+  })));
 }
 function testBooking() {
   console.log(JSON.stringify(process_({

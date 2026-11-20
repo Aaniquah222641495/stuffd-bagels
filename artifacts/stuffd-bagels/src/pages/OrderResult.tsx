@@ -2,8 +2,8 @@
 // Never says "confirmed" because of the redirect alone: only the server's status (set by Yoco's signed webhook) does.
 import { useEffect, useState } from "react";
 import { DRAFT_KEY } from "@/components/order-forms";
+import { ResultShell, resultBtn, shopMail } from "@/components/result-shell";
 
-const EMAIL = "stuffd.bagels@gmail.com";
 const REF = /^SB-[A-Z2-9]{6}$/;
 const POLL_MS = 2000;
 const POLL_FOR_MS = 30000;
@@ -11,29 +11,9 @@ const POLL_FOR_MS = 30000;
 type Kind = "success" | "cancel" | "failure" | "unknown";
 type Phase = "loading" | "confirming" | "confirmed" | "slow" | "expired" | "notfound";
 
-function Shell({ children, testId }: { children: React.ReactNode; testId: string }) {
-  return (
-    <main className="min-h-screen bg-paper text-ink">
-      <div className="bg-blue text-white">
-        <div className="max-w-3xl mx-auto px-5 sm:px-8 py-10">
-          <a href="/" className="eyebrow text-white underline underline-offset-4">Back to the menu</a>
-          <h1 className="font-bubble text-5xl sm:text-6xl leading-[0.95] m-0 mt-5">Your order</h1>
-        </div>
-      </div>
-      <div className="max-w-3xl mx-auto px-5 sm:px-8 py-12">
-        <div role="status" aria-live="polite" data-testid="result-card" data-state={testId} className="rounded-[22px] bg-photo shadow-soft p-7 sm:p-9">
-          {children}
-        </div>
-      </div>
-    </main>
-  );
-}
-
-const btn =
-  "inline-block mt-6 rounded-full border-2 border-ink px-6 py-3 font-black uppercase tracking-widest text-sm text-ink no-underline transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0.5";
-const mail = (ref: string) => (
-  <a className="font-bold text-blue underline underline-offset-4" href={`mailto:${EMAIL}${ref ? `?subject=${encodeURIComponent("Order " + ref)}` : ""}`}>{EMAIL}</a>
-);
+const Shell = ResultShell;
+const btn = resultBtn;
+const mail = shopMail;
 
 export default function OrderResult() {
   const [kind, setKind] = useState<Kind | null>(null); // null until the page is running in the browser (the prerendered HTML has no query string)

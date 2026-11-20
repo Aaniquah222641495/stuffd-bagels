@@ -7,6 +7,15 @@
 > Version: New version > Deploy**. If this is the first install, just follow the parts below. **Plan to do this at the
 > Gmail session, before the first test payment.** An old script plus the new Worker refuses every order (safe, but no email).
 
+> **RE-PASTE REQUIRED AGAIN (automatic refunds, 2026-11-20).** `Code.gs` changed again: the "order confirmed" email now has a
+> **Cancel my order** button (a link the website signs), and a new kind of request, `cancel`, makes the script email you
+> **"SB-xxxx cancelled and refunded"**, email the customer a refund confirmation, and delete that order's pickup reminder.
+> Same steps as above: replace ALL of `Code.gs`, keep your `SHARED_TOKEN`, save, **Deploy > Manage deployments > pencil >
+> Version: New version > Deploy** (same `/exec` address). Then run **`testCancel`** once from the editor (it emails you a pretend
+> "cancelled and refunded" pair), and check the tokenless request still answers `{"ok":false,"error":"invalid"}`.
+> Do this **before** the website change that signs the links goes live: an old script plus the new Worker still works (it ignores
+> the link and sends the old email), but a customer who cancels would then get no cancellation emails and keep their reminder.
+
 A customer **pays on Yoco first**. Only when Yoco's signed notice (a webhook) reaches the website server does the server pass
 the order to a small Google script that lives in **stuffd.bagels@gmail.com**. Event bookings are enquiries and are passed on
 straight away. For each one the script:
@@ -16,6 +25,14 @@ straight away. For each one the script:
 2. emails the customer a short branded reply **from stuffd.bagels@gmail.com** (orders: **"STUFF'D: order confirmed <ref>"**;
    booking enquiries say nothing is booked until you confirm),
 3. files the owner email under the Gmail label **Orders** or **Bookings** (Gmail labels are its folders).
+
+**Cancellations.** The confirmation email has a **Cancel my order** button until the order's Wednesday 23:59 cut-off. The
+website (not this script) signs that link and does the refund through Yoco. Afterwards the website asks this script to email
+you **"<ref> cancelled and refunded"** (or **"cancelled, refund pending"**, or **"cancelled: REFUND FAILED, check Yoco"**: then
+open the Yoco app and refund that checkout id in full), email the customer, and delete the order's pickup reminder. These go
+under the **Orders** label too. They count against Gmail's daily email limit like any email, but the booking caps never block
+them. The link may only point at `stuffdbagels.co.za` or the preview address listed in `CANCEL_LINK_HOSTS` in CONFIG; anything
+else is left out of the email.
 
 An unpaid order never reaches your inbox: the script refuses any order that isn't marked paid. It uses only free Google
 services. Nothing is stored except the emails themselves.
@@ -76,6 +93,7 @@ address could make your Gmail send email to anybody, so the script refuses to wo
 4. Choose **testBooking** and Run. You get **Booking enquiry: Test Customer, ...**, a customer reply, and the **Bookings** label.
 5. Choose **testReminder** and Run. You get **STUFF'D: collection day! Your order SB-TEST77**, the pickup-day reminder
    every paid customer gets between 8:00 and 9:00 on their collection Saturday (nothing is saved by this test).
+6a. Choose **testCancel** and Run. You get **SB-TESTC7 cancelled and refunded** (under **Orders**) and **STUFF'D: refund processed SB-TESTC7** (the customer copy, to yourself). No money moves: it is only the two emails. Running it again within 6 hours does nothing (duplicate guard).
 6. Running **testBooking** twice within 10 minutes does nothing the second time (duplicate guard). Wait, or ignore. (**testOrder** makes a new reference every run, so it always sends.)
 7. Delete the test emails when you are happy.
 

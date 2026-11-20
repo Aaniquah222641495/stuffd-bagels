@@ -12,7 +12,7 @@ const cacheStore = new Map();
 const cacheTtl = new Map();
 let quota = 100;
 const threads = () =>
-  sent.filter((m) => /^(New order|Booking enquiry): /.test(m.subject)).map((m) => ({
+  sent.filter((m) => /^(New order|Booking enquiry): |^SB-[A-Z0-9]{6} cancelled/.test(m.subject)).map((m) => ({
     getFirstMessageSubject: () => m.subject,
     addLabel: (l) => labelled.push([m.subject, l.getName()]),
   }));
@@ -274,6 +274,131 @@ assert.ok(!/awaiting payment|AWAITING/i.test(code), "Code.gs has no 'awaiting pa
   propStore.clear();
 }
 
+
+// Automatic refunds (founder 2026-11-19): the confirmation email carries a Worker-signed cancel link; a 'cancel' request emails the owner and the
+// customer, deletes the pickup reminder, and respects the quota. The script never signs anything: it only prints a link the Worker made.
+{
+  propStore.clear(); cacheStore.clear(); labelled.length = 0;
+  const SIG = "A".repeat(43);
+  const link = (host = "stuffdbagels.co.za", ref = "SB-LNK234") => `https://${host}/order/cancel#${ref}.1764115200.${SIG}`;
+  const label = "Wednesday 25 Nov at 23:59";
+  const mk = (ref, extra = {}) => ({ ...order, ref, checkoutId: "ch_" + ref.replace("-", ""), email: ref.toLowerCase() + "@example.com", name: "Aisha Khan", note: "", ...extra });
+
+  // The link and its label are printed in plain text and HTML, escaped, and only when they look exactly like what the Worker makes.
+  let before = sent.length;
+  assert.equal(post(mk("SB-LNK234", { cancelUrl: link(), cancelByLabel: label })).ok, true);
+  let [oOwner, oCust] = sent.slice(before);
+  assert.ok(oCust.body.includes(`Need to cancel? You can cancel and get a full refund until ${label}: ${link()}`), "plain text has the link and the cut-off");
+  assert.ok(oCust.htmlBody.includes(`href="${link()}"`) && oCust.htmlBody.includes(">Cancel my order</a>") && oCust.htmlBody.includes(`until ${label}.`), "HTML has a Cancel my order button");
+  assert.ok(!oOwner.body.includes("order/cancel#") && !oOwner.htmlBody.includes("order/cancel#"), "the owner email never carries the customer's link");
+  assert.match(oOwner.body, /website refunds them automatically and emails you/, "owner is told refunds are automatic");
+  assert.doesNotMatch(oOwner.body + oOwner.htmlBody, /you need the id to refund\.|what you need to refund/, "old 'you refund by hand' wording is gone");
+  for (const [name, bad] of [
+    ["another host", { cancelUrl: link("evil.example"), cancelByLabel: label }],
+    ["look-alike host", { cancelUrl: link("stuffdbagels.co.za.evil.example"), cancelByLabel: label }],
+    ["http", { cancelUrl: link().replace("https", "http"), cancelByLabel: label }],
+    ["a query string", { cancelUrl: link() + "?x=1", cancelByLabel: label }],
+    ["a different path", { cancelUrl: link().replace("/order/cancel", "/admin"), cancelByLabel: label }],
+    ["a javascript: link", { cancelUrl: "javascript:alert(1)", cancelByLabel: label }],
+    ["a short signature", { cancelUrl: link().slice(0, -3), cancelByLabel: label }],
+    ["markup in the link", { cancelUrl: link() + '"><script>', cancelByLabel: label }],
+    ["no label", { cancelUrl: link() }],
+    ["a label with markup", { cancelUrl: link(), cancelByLabel: "<b>Wednesday</b> 25 Nov at 23:59" }],
+    ["not a string", { cancelUrl: { a: 1 }, cancelByLabel: label }],
+  ]) {
+    const b4 = sent.length;
+    const ref = "SB-" + "BAD" + String(100 + Math.floor(Math.random() * 899));
+    assert.equal(post(mk(ref, bad)).ok, true, name + ": the PAID order is still accepted");
+    const cust = sent[b4 + 1];
+    assert.ok(!cust.body.includes("Need to cancel?") && !cust.htmlBody.includes("order/cancel"), name + ": link left out");
+  }
+  assert.equal(post(mk("SB-LNK234", { cancelUrl: link(), cancelByLabel: label })).duplicate, true);
+  // The preview Worker shares this script, so its host is allowed too.
+  before = sent.length;
+  assert.equal(post(mk("SB-PRV234", { cancelUrl: link("stuffdbagels-preview.thedigitalpantryza.workers.dev", "SB-PRV234"), cancelByLabel: label })).ok, true);
+  assert.ok(sent[before + 1].body.includes("stuffdbagels-preview.thedigitalpantryza.workers.dev/order/cancel#SB-PRV234"));
+  // No link at all (no secret, or the cut-off had passed when the email went out): the email is the old one, no cancel wording.
+  before = sent.length; assert.equal(post(mk("SB-NOL234")).ok, true);
+  assert.ok(!sent[before + 1].body.includes("Need to cancel?") && !sent[before + 1].htmlBody.includes("Cancel my order"));
+  assert.match(sent[before + 1].body, /Questions\? Just reply to this email/);
+  propStore.clear(); cacheStore.clear();
+
+  // A cancellation: owner "SB-xxxx cancelled and refunded", customer refund confirmation, reminder deleted, labelled under Orders.
+  const paid = mk("SB-CNL234", { pickupDate: "2026-11-28" });
+  assert.equal(post(paid).ok, true);
+  assert.ok(propStore.has("rem_SB-CNL234"), "the reminder exists before the cancellation");
+  const cancel = (o = "refunded", extra = {}) => ({ type: "cancel", outcome: o, checkoutId: paid.checkoutId, ref: "SB-CNL234", name: "Aisha <b>Khan</b>", phone: "+27821234567", email: paid.email, pickupDate: "2026-11-28", pickupPlace: "Strandfontein collection, Strandfontein", items: [{ name: "Classic Bagel", qty: 2, unit: 65, line: 1 }], total: 1, ...extra });
+  const capBefore = propStore.get("cap_total");
+  labelled.length = 0; before = sent.length;
+  assert.deepEqual(post(cancel()), { ok: true });
+  assert.equal(sent.length, before + 2, "one email to the owner, one to the customer");
+  const [cOwner, cCust] = sent.slice(before);
+  assert.equal(cOwner.subject, "SB-CNL234 cancelled and refunded"); assert.equal(cOwner.to, "stuffd.bagels@gmail.com");
+  assert.match(cOwner.body, /CANCELLED AND REFUNDED SB-CNL234\. Yoco confirmed the full refund of R130\. Nothing for you to do\./, "total is recomputed from the items, not trusted");
+  assert.match(cOwner.body, /Yoco checkout id: ch_SBCNL234/); assert.match(cOwner.body, /reminder for this order was deleted/);
+  assert.equal(cCust.to, paid.email); assert.equal(cCust.subject, "STUFF'D: refund processed SB-CNL234"); assert.equal(cCust.replyTo, "stuffd.bagels@gmail.com");
+  assert.match(cCust.body, /Your order is cancelled, Aisha\./); assert.match(cCust.body, /refund of R130 has been processed through Yoco/); assert.match(cCust.body, /Refund: R130/);
+  assert.ok(cCust.htmlBody.includes("Refund processed") && cCust.htmlBody.includes("/logo-white.png"), "branded");
+  assert.ok(cOwner.htmlBody.includes("&lt;b&gt;Khan") && !cOwner.htmlBody.includes("<b>Khan"), "customer text escaped in the owner HTML");
+  assert.ok(!propStore.has("rem_SB-CNL234"), "the pickup reminder is deleted, so no reminder goes out");
+  assert.ok(labelled.some((l) => l[0] === "SB-CNL234 cancelled and refunded" && l[1] === "Orders"), "the owner email is filed under Orders");
+  assert.ok(!labelled.some((l) => /refund processed/i.test(l[0])), "the customer copy is not filed");
+  assert.equal(propStore.get("cap_total"), capBefore, "a cancellation doesn't use up the booking cap");
+  assert.equal(cacheTtl.get("cancel_SB-CNL234_refunded"), 21600);
+  // The Worker retries until it hears ok: the same outcome is emailed once, a new outcome is a new email.
+  assert.deepEqual(post(cancel()), { ok: true, duplicate: true }); assert.equal(sent.length, before + 2);
+  const pend = sent.length; assert.equal(post(cancel("pending")).ok, true); assert.equal(sent.length, pend + 2);
+  assert.equal(sent[pend].subject, "SB-CNL234 cancelled, refund pending"); assert.equal(sent[pend + 1].subject, "STUFF'D: your refund is on its way SB-CNL234");
+  assert.match(sent[pend].body, /still pending\. Check in the Yoco app/); assert.match(sent[pend + 1].body, /Yoco is processing your refund of R130/);
+  const fail = sent.length; assert.equal(post(cancel("failed")).ok, true);
+  assert.equal(sent[fail].subject, "SB-CNL234 cancelled: REFUND FAILED, check Yoco");
+  assert.match(sent[fail].body, /THE REFUND DID NOT GO THROUGH[\s\S]*refund this payment in full/); assert.match(sent[fail].htmlBody, /Refund failed/);
+  assert.equal(sent[fail + 1].subject, "STUFF'D: we've got your cancellation SB-CNL234");
+  assert.match(sent[fail + 1].body, /couldn't finish your refund of R130 automatically\. We've been told and we will sort it out/); assert.match(sent[fail + 1].body, /To be refunded: R130/);
+  assert.ok(!/credit|market/i.test(sent.slice(before).map((m) => m.body).join("\n")), "refund emails say nothing about credit");
+
+  // Refusals: nothing is emailed for a malformed cancel, and a made-up outcome is not accepted.
+  const b0 = sent.length;
+  for (const bad of [cancel("done"), cancel(null), cancel("refunded", { ref: "BK-CNL234" }), cancel("refunded", { checkoutId: "" }), cancel("refunded", { items: [] }), cancel("refunded", { pickupPlace: "" }), cancel("refunded", { pickupDate: "tomorrow" }), cancel("refunded", { phone: "0821234567" }), cancel("refunded", { email: "nope" })])
+    assert.equal(post(bad).ok, false, JSON.stringify(bad));
+  assert.equal(post(cancel("refunded"), NONE).ok, false, "no token: refused"); assert.equal(post(cancel("pending"), "wrong").ok, false, "wrong token: refused");
+  assert.equal(sent.length, b0);
+
+  // Quota: the same wall as every other email. The reminder is still deleted (a cancelled order must never get 'collection day').
+  propStore.clear(); cacheStore.clear();
+  assert.equal(post(mk("SB-QTA234")).ok, true); assert.ok(propStore.has("rem_SB-QTA234"));
+  quota = 3; const q0 = sent.length;
+  assert.deepEqual(post(cancel("refunded", { ref: "SB-QTA234", checkoutId: "ch_SBQTA234" })), { ok: false, error: "quota" });
+  assert.equal(sent.length, q0, "nothing sent below MIN_QUOTA"); assert.ok(!propStore.has("rem_SB-QTA234"), "reminder deleted even when the emails wait");
+  quota = 100; assert.equal(post(cancel("refunded", { ref: "SB-QTA234", checkoutId: "ch_SBQTA234" })).ok, true, "the Worker's retry goes through once the quota allows");
+  assert.equal(sent.length, q0 + 2);
+  quota = 1; const q1 = sent.length;  // the owner email needs MIN_QUOTA; the customer one only 1
+  assert.equal(post(cancel("pending", { ref: "SB-QTA234", checkoutId: "ch_SBQTA234" })).error, "quota"); assert.equal(sent.length, q1);
+  quota = 100;
+
+  // Never refused by the booking caps (the money has already moved).
+  vm.runInContext("CONFIG.MAX_SUBMISSIONS_PER_DAY = 0", ctx);
+  assert.equal(post(cancel("refunded", { ref: "SB-CAP234", checkoutId: "ch_SBCAP234" })).ok, true, "daily cap 0 does not stop a cancellation");
+  vm.runInContext("CONFIG.MAX_SUBMISSIONS_PER_DAY = 40", ctx);
+
+  // The reminder of ANOTHER order is untouched.
+  propStore.clear(); cacheStore.clear();
+  assert.equal(post(mk("SB-KEEP22")).ok, true); assert.equal(post(mk("SB-GONE22")).ok, true);
+  assert.equal(post(cancel("refunded", { ref: "SB-GONE22", checkoutId: "ch_SBGONE22" })).ok, true);
+  assert.ok(propStore.has("rem_SB-KEEP22") && !propStore.has("rem_SB-GONE22"), "only the cancelled order's reminder is deleted");
+  // A cancelled order's reminder day arrives: nothing is sent for it.
+  { const realDate = ctx.Date; const iso = "2026-12-19T08:15:00+02:00";
+    ctx.Date = class extends realDate { constructor(...a) { super(...(a.length ? a : [iso])); } static now() { return new realDate(iso).getTime(); } };
+    const s0 = sent.length; ctx.sendReminders(); ctx.Date = realDate;
+    assert.equal(sent.length, s0 + 1, "one reminder (the order that wasn't cancelled)"); assert.equal(sent.at(-1).to, "sb-keep22@example.com"); }
+  propStore.clear(); cacheStore.clear(); labelled.length = 0;
+
+  // The new copy has no emoji and no em dash, and the cancel emails don't use the words the order-email test bans.
+  const added = code.split("\n").filter((l) => /cancel|refund/i.test(l)).join("\n");
+  assert.ok(!/[—–\u{1F300}-\u{1FAFF}☀-➿]/u.test(added), "no em dash, en dash or emoji in the cancel and refund wording");
+  console.log("automatic refunds in Code.gs: link printing, cancel emails, reminder deletion, quota, caps");
+}
+
 // Quota.
 quota = 2;
 assert.equal(post({ ...booking, ref: "BK-CCC333", guests: 13, email: "quota@example.com" }).error, "quota");
@@ -309,4 +434,26 @@ console.log("apps-script selftest: all checks passed");
   assert.ok(/"vars": \{ "APP_ENV": "production",[^}]*"TURNSTILE_SITE_KEY": "0x4AAAAAAGIpBftgw-wYSqUM",/.test(wr), "production has the real (public) Turnstile site key, not a documented test key");
   assert.ok(/"preview": \{[\s\S]*"TURNSTILE_SITE_KEY": "1x00000000000000000000AA"/.test(wr), "preview uses the documented test site key");
   console.log("turnstile wiring: CSP, both routes, both forms, no secret in config");
+}
+
+// Automatic refunds wiring: the Worker signs and checks, the page is static and private, the CSP is pinned to the Turnstile script path, and the secret is only ever a secret.
+{
+  const fs = await import("node:fs");
+  const src = (f) => fs.readFileSync(new URL(f, import.meta.url), "utf8");
+  const headers = src("../artifacts/stuffd-bagels/public/_headers");
+  const csp = headers.match(/Content-Security-Policy: (.*)/)[1];
+  const dir = (name) => (csp.split(";").map((d) => d.trim()).find((d) => d.startsWith(name + " ")) ?? "");
+  assert.equal(dir("script-src"), "script-src 'self' https://challenges.cloudflare.com/turnstile/v0/", "script-src is pinned to the Turnstile script path (web-security PR #16 nit 5)");
+  assert.ok(/\/order\/cancel\n  X-Robots-Tag: noindex\n  Cache-Control: no-store\n  ! Referrer-Policy\n  Referrer-Policy: no-referrer/.test(headers), "/order/cancel: noindex, never cached, no referrer");
+  const cancel = src("../worker/cancel.ts"), forms = src("../worker/forms.ts"), index = src("../worker/index.ts"), core = src("../worker/orders-core.ts");
+  assert.ok(index.includes('parts[2] === "cancel"') && index.includes('methodOnly(request, ["POST"]);\n    return handleCancel('), "cancel is POST only");
+  assert.ok(cancel.indexOf("verifyTurnstile(request, env, body.turnstileToken") < cancel.indexOf("refundCheckout(env"), "Turnstile is checked before any refund");
+  assert.ok(cancel.indexOf("tokenOf(env, body)") < cancel.indexOf("verifyTurnstile("), "a bad link is refused before Turnstile is spent");
+  assert.ok(cancel.indexOf("beginCancel(") < cancel.indexOf("refundCheckout(env"), "the claim is written before Yoco is called");
+  assert.ok(!/body\.(amount|total)|\.amount\b/.test(cancel), "the cancel handler never reads an amount from the browser");
+  assert.ok(forms.includes("cancelReady(env)"), "orders are refused without the cancel secret");
+  assert.ok(core.includes("now >= until"), "the cut-off is re-checked on the server when the refund is claimed");
+  const wr = src("../wrangler.jsonc");
+  assert.ok(!/CANCEL_LINK_SECRET"\s*:/.test(wr), "the cancel secret is never a var in wrangler.jsonc");
+  console.log("automatic refunds wiring: POST only, Turnstile before refund, claim before Yoco, secret not in config, CSP pinned, cancel page private");
 }

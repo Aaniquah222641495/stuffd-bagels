@@ -8,6 +8,7 @@ import Admin from "@/pages/Admin";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
 import OrderResult from "@/pages/OrderResult";
+import CancelOrder from "@/pages/CancelOrder";
 
 const queryClient = new QueryClient();
 
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
       <Route path="/order/result" component={OrderResult} />
+      <Route path="/order/cancel" component={CancelOrder} />
       <Route path="/admin" component={Admin} />
       <Route component={NotFound} />
     </Switch>

@@ -1,7 +1,7 @@
 # Cloudflare Workers static assets headers: security on every page and file, long caching for hashed assets.
 # These apply to static files only. /api responses set their own headers in worker/http.ts.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com/turnstile/v0/; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
@@ -20,6 +20,14 @@
 /order/result
   X-Robots-Tag: noindex
   Cache-Control: no-store
+
+# The "Cancel my order" link from the confirmation email (the signed token is in the # part, which no server ever receives). Never cached, never indexed,
+# and nothing is passed on to the next page.
+/order/cancel
+  X-Robots-Tag: noindex
+  Cache-Control: no-store
+  ! Referrer-Policy
+  Referrer-Policy: no-referrer
 
 /llms.txt
   Content-Type: text/plain; charset=utf-8

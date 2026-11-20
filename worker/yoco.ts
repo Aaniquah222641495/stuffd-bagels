@@ -33,7 +33,7 @@ export function modeOk(env: YocoEnv): NotReady | null {
   return null;
 }
 
-function siteOrigin(env: YocoEnv): string | null {
+export function siteOrigin(env: YocoEnv): string | null {
   try {
     const u = new URL(env.SITE_ORIGIN ?? "");
     if (u.protocol !== "https:" && u.protocol !== "http:") return null;
@@ -56,7 +56,7 @@ function apiBase(env: YocoEnv): string {
 }
 
 export class YocoError extends Error {
-  constructor(public reason: "network" | "status" | "response" | "redirect" | "mode", public status = 0) {
+  constructor(public reason: "network" | "status" | "response" | "redirect" | "mode" | "refund", public status = 0) {
     super(`yoco ${reason}${status ? " " + status : ""}`);
   }
 }
@@ -130,10 +130,48 @@ export async function createCheckout(env: YocoEnv, input: CheckoutInput): Promis
   return { id: j.id, redirectUrl: j.redirectUrl as string };
 }
 
+export interface RefundResult {
+  refundId: string;
+  /** Yoco's word for it. `pending` is still a refund Yoco has accepted: it finishes on its own. */
+  status: "succeeded" | "pending";
+}
+
+/**
+ * Refunds a checkout IN FULL (empty body: Yoco's default is the whole amount, so no amount ever comes from us or the browser).
+ * Checked on developer.yoco.com 2026-11-20 and by hand on live order SB-N9SE2N: POST /api/checkouts/{id}/refund, Bearer secret key,
+ * Idempotency-Key, answer { refundId, status: "succeeded" | "pending" }. Live checkouts only (a test checkout can't be refunded).
+ * The key is `refund-<ref>`, so a repeat of the same call (a double click, a retry after a timeout) is answered with the first result
+ * instead of refunding twice. Anything but a 2xx with a recognised status is a YocoError: the caller must never call that a refund.
+ */
+export async function refundCheckout(env: YocoEnv, a: { checkoutId: string; ref: string }): Promise<RefundResult> {
+  if (modeOk(env) !== null || !env.YOCO_SECRET_KEY) throw new YocoError("mode");
+  if (!/^[A-Za-z0-9_\-]{4,100}$/.test(a.checkoutId) || !/^SB-[A-Z2-9]{6}$/.test(a.ref)) throw new YocoError("refund");
+  let res: Response;
+  try {
+    res = await fetch(`${apiBase(env)}/api/checkouts/${a.checkoutId}/refund`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.YOCO_SECRET_KEY}`, "Idempotency-Key": `refund-${a.ref}` },
+      body: "{}",
+      redirect: "manual",
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    throw new YocoError("network"); // the outcome is UNKNOWN (the refund may have gone through): the caller treats it as "check Yoco"
+  }
+  if (res.status < 200 || res.status > 299) throw new YocoError("status", res.status);
+  const j = await res.json().then(
+    (v) => v as { refundId?: unknown; status?: unknown } | null,
+    () => null,
+  );
+  if (!j || typeof j.refundId !== "string" || !/^[A-Za-z0-9_\-]{4,100}$/.test(j.refundId)) throw new YocoError("response");
+  if (j.status !== "succeeded" && j.status !== "pending") throw new YocoError("response");
+  return { refundId: j.refundId, status: j.status };
+}
+
 export type VerifyResult = { ok: true } | { ok: false; reason: "headers" | "timestamp" | "secret" | "signature" };
 
 /** Constant-time equality of two byte arrays of the same length (workerd's timingSafeEqual when present, else an XOR loop for Node). */
-function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+export function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   const tse = (crypto.subtle as unknown as { timingSafeEqual?: (x: BufferSource, y: BufferSource) => boolean }).timingSafeEqual;
   if (typeof tse === "function") return tse.call(crypto.subtle, a, b);

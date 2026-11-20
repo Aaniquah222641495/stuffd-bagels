@@ -64,8 +64,8 @@ export interface TurnstileHandle {
   reset: () => void;
 }
 
-/** One widget for one form. `action` must match what the Worker expects ("order" or "booking"). `active`: the form is on the page. */
-export function useTurnstile(action: "order" | "booking", active = true): TurnstileHandle {
+/** One widget for one form. `action` must match what the Worker expects ("order", "booking" or "cancel"). `active`: the form is on the page. */
+export function useTurnstile(action: "order" | "booking" | "cancel", active = true): TurnstileHandle {
   const boxRef = useRef<HTMLDivElement>(null);
   const widget = useRef<string | null>(null);
   const token = useRef("");

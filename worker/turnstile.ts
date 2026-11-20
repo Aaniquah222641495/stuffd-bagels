@@ -25,7 +25,7 @@ export const TEST_SITE_KEY = "1x00000000000000000000AA";
 export const TEST_SECRET_KEY = "1x0000000000000000000000000000000AA";
 const SITEVERIFY = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 export const MAX_TOKEN = 2048;
-export type TurnstileAction = "order" | "booking";
+export type TurnstileAction = "order" | "booking" | "cancel";
 
 const MSG_MISSING = "Please wait for the security check to finish, then try again.";
 const MSG_FAILED = "We couldn't confirm the security check. Please try again.";
