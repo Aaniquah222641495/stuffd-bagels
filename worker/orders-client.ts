@@ -4,7 +4,7 @@ import type { OrdersService } from "./orders-core";
 type Async<T> = { [K in keyof T]: T[K] extends (...a: infer A) => infer R ? (...a: A) => Promise<Awaited<R>> : never };
 
 /** The methods of OrdersService as the Durable Object exposes them (every call is async over RPC). */
-export type OrdersRpc = Async<Pick<OrdersService, "lookup" | "begin" | "attach" | "drop" | "markPaid" | "status" | "attention">>;
+export type OrdersRpc = Async<Pick<OrdersService, "lookup" | "begin" | "attach" | "drop" | "markPaid" | "status" | "attention" | "cancelInfo" | "beginCancel" | "finishCancel">>;
 
 export interface OrdersEnv {
   ORDERS?: DurableObjectNamespace;

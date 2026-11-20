@@ -101,6 +101,14 @@ export const PAGES: PageMeta[] = [
     noindex: true,
     jsonLd: [],
   },
+  // Where the "Cancel my order" link in the confirmation email lands (the signed token is after the #): never indexed, not in the sitemap.
+  {
+    path: "/order/cancel",
+    title: "Cancel my order | STUFF'D Bagels",
+    description: "Cancel a STUFF'D Bagels order before the cut-off.",
+    noindex: true,
+    jsonLd: [],
+  },
   // The owner's admin page: prerendered as a shell (no content), never indexed, not in the sitemap.
   {
     path: "/admin",

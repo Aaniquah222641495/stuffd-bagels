@@ -3,7 +3,7 @@
 // behind a stubbed fetch. Run: node worker/tests/payments-handler.mjs
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
-import { TS_DUMMY_TOKEN, bundle, fakeLimiter, fakeOrders, fakeSiteverify } from "./_bundle.mjs";
+import { TEST_CANCEL_SECRET, TS_DUMMY_TOKEN, bundle, fakeLimiter, fakeOrders, fakeSiteverify } from "./_bundle.mjs";
 const { handleForm } = await bundle("worker/forms.ts");
 const { handleWebhook, handleStatus, handleAttention } = await bundle("worker/payments.ts");
 const { trySend } = await bundle("worker/mailer.ts");
@@ -14,7 +14,7 @@ const clock = { t: NOW, now: () => clock.t };
 const TOKEN = "k7Vq2mXw9LpR4sTz8NbC3dHf6JyA1eGu0QiO5vWx";
 const WH_KEY = crypto.randomBytes(24);
 const WH_SECRET = "whsec_" + WH_KEY.toString("base64");
-const baseEnv = { APP_ENV: "development", ADMIN_PASSWORD: "x", APPS_SCRIPT_URL: "http://fake/exec", APPS_SCRIPT_TOKEN: TOKEN, YOCO_SECRET_KEY: "sk_test_localfake1234567890", YOCO_WEBHOOK_SECRET: WH_SECRET, YOCO_MODE: "test", SITE_ORIGIN: "https://stuffdbagels-preview.example.workers.dev" };
+const baseEnv = { APP_ENV: "development", CANCEL_LINK_SECRET: TEST_CANCEL_SECRET, ADMIN_PASSWORD: "x", APPS_SCRIPT_URL: "http://fake/exec", APPS_SCRIPT_TOKEN: TOKEN, YOCO_SECRET_KEY: "sk_test_localfake1234567890", YOCO_WEBHOOK_SECRET: WH_SECRET, YOCO_MODE: "test", SITE_ORIGIN: "https://stuffdbagels-preview.example.workers.dev" };
 const kv = (() => { const m = new Map([["pickups", JSON.stringify({ pickups: [{ id: "p1", name: "Kenilworth Corner", area: "Main Rd", days: "", active: true }] })]]); return { get: async (k) => m.get(k) ?? null, put: async () => {} }; })();
 
 // --- fake Yoco + fake Apps Script behind fetch

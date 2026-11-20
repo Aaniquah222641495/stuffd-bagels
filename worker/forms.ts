@@ -16,10 +16,11 @@ import { contentHash } from "./orders-core";
 import { orders, type OrdersEnv } from "./orders-client";
 import { YocoError, createCheckout, modeOk, type YocoEnv } from "./yoco";
 import { niceDay, opensOnFor, saturdayStatus, sastDay } from "../artifacts/stuffd-bagels/src/collection";
+import { cancelDeadline, cancelReady, type CancelEnv } from "./cancel-token";
 import { precheckTurnstile, verifyTurnstile, type TurnstileEnv } from "./turnstile";
 import { isRealDate, marketsForRules, publicAvailability, publicPickups, sastToday, secondsToSastMidnight } from "./store";
 
-export interface FormsEnv extends LimiterEnv, OrdersEnv, YocoEnv, MailerEnv, TurnstileEnv {
+export interface FormsEnv extends LimiterEnv, OrdersEnv, YocoEnv, MailerEnv, TurnstileEnv, CancelEnv {
   STUFFD_KV?: KVNamespace;
   ADMIN_PASSWORD?: string;
   LIMITER_SALT?: string;
@@ -38,6 +39,7 @@ export const FORM_LIMITS = {
   maxGuests: 5000,
   perIpPerHour: { order: 5, booking: 3 }, // per IPv4 address or IPv6 /64
   perRecipientPerDay: 3, // customer replies to one mailbox per day (same cap in apps-script/Code.gs)
+  repeatPerIpPerHour: 20, // repeats of a press we already know (a flaky network retrying, or someone replaying an attemptId): per IPv4 address or IPv6 /64
   perDay: 40, // Gmail lets a free account send about 100 emails a day; each submission sends 2. Code.gs has the same cap.
   minToken: MIN_TOKEN, // APPS_SCRIPT_TOKEN must be at least this long (Code.gs refuses anything shorter)
 };
@@ -137,7 +139,8 @@ function readQuantities(v: unknown, prices: Record<string, number>): { name: str
   return out;
 }
 
-async function parseOrder(body: Record<string, unknown>, env: FormsEnv, now: number): Promise<OrderPayload> {
+/** The parsed order and the first instant the customer can no longer cancel it by themselves (its Wednesday cut-off, the same rule that closes ordering). */
+async function parseOrder(body: Record<string, unknown>, env: FormsEnv, now: number): Promise<{ payload: OrderPayload; cancelBy: number }> {
   const name = line(body.name, FORM_LIMITS.name, true);
   const tel = phone(body.phone);
   const mail = email(body.email);
@@ -177,8 +180,11 @@ async function parseOrder(body: Record<string, unknown>, env: FormsEnv, now: num
   const time = line(body.pickupTime, FORM_LIMITS.pickupTime, false);
 
   return {
-    type: "order", ref: reference("SB"), name, phone: tel, email: mail,
-    pickupDate: date, pickupTime: time, pickupPlace: `${point.name}, ${point.area}`, pickupDays: point.days, items, total, note,
+    payload: {
+      type: "order", ref: reference("SB"), name, phone: tel, email: mail,
+      pickupDate: date, pickupTime: time, pickupPlace: `${point.name}, ${point.area}`, pickupDays: point.days, items, total, note,
+    },
+    cancelBy: cancelDeadline(date, avail.cutoffTime),
   };
 }
 
@@ -248,6 +254,23 @@ function assertOrdersReady(env: FormsEnv): void {
   if (modeOk(env) !== null || !env.ORDERS) {
     throw new HttpError(503, "Online ordering isn't switched on yet. Please email stuffd.bagels@gmail.com.");
   }
+  // The confirmation email carries a signed "Cancel my order" link (automatic refunds). Without the secret there is no link, so no money is taken.
+  if (!cancelReady(env)) {
+    console.error("cancel link: CANCEL_LINK_SECRET is missing or shorter than 32 characters, so orders are refused. Run: npx wrangler@4.148.0 secret put CANCEL_LINK_SECRET");
+    throw new HttpError(503, "Online ordering isn't switched on yet. Please email stuffd.bagels@gmail.com.");
+  }
+}
+
+/** Repeats of a known press have their own allowance: enough for a flaky network, too few to replay an attemptId in bulk (web-security PR #16 nit 3). */
+async function repeatLimit(request: Request, env: FormsEnv): Promise<void> {
+  let verdict;
+  try {
+    const key = `form:repeat:${await hashKey(ipBucket(request.headers.get("CF-Connecting-IP") ?? "unknown"), limiterSalt(env))}`;
+    verdict = await take(env, key, [{ id: "hour", limit: FORM_LIMITS.repeatPerIpPerHour, windowSec: 3600 }]);
+  } catch {
+    throw new HttpError(503, "We can't take this right now. Please try again in a minute.");
+  }
+  if (!verdict.ok) throw new HttpError(429, "That's a few too many tries. Please wait a little.", { "Retry-After": String(Math.min(verdict.retryAfter, 3600)) });
 }
 
 /** A repeat of a press we already know (or a changed cart): answer from the stored row, without a new Yoco call. */
@@ -273,7 +296,7 @@ async function handleOrder(request: Request, env: FormsEnv, body: Record<string,
   const attemptId = typeof body.attemptId === "string" && UUID_V4.test(body.attemptId) ? body.attemptId.toLowerCase() : null;
   if (!attemptId) throw bad();
   precheckTurnstile(env, body.turnstileToken); // not configured (503, logged) or no token (400): refused before parseOrder (which reads KV), the limiter, the orders object, Yoco and email
-  const payload = await parseOrder(body, env, now);
+  const { payload, cancelBy } = await parseOrder(body, env, now);
   assertOrdersReady(env); // before counting anything: a switched-off site must not use up anyone's allowance
 
   const amountCents = payload.items.reduce((n, i) => n + i.qty * i.unit * 100, 0); // whole rand today; integer cents
@@ -287,7 +310,9 @@ async function handleOrder(request: Request, env: FormsEnv, body: Record<string,
   let store;
   try {
     store = orders(env);
-    const known = knownAttempt(await store.lookup(attemptId, hash));
+    const found = await store.lookup(attemptId, hash);
+    if (found.kind !== "none") await repeatLimit(request, env); // counted apart from new orders, so it never uses an order's allowance
+    const known = knownAttempt(found);
     if (known) return known; // a retry of the same press: no new rate-limit slot, no new Yoco call
   } catch (err) {
     if (err instanceof HttpError) throw err;
@@ -300,7 +325,11 @@ async function handleOrder(request: Request, env: FormsEnv, body: Record<string,
   const release = await rateLimit(request, env, "order", payload.email);
   let begun;
   try {
-    begun = await store.begin({ attemptId, contentHash: hash, ref: payload.ref, amountCents, orderJson: JSON.stringify(payload) });
+    begun = await store.begin({
+      attemptId, contentHash: hash, ref: payload.ref, amountCents, orderJson: JSON.stringify(payload), cancelBy,
+      // Only what the cancellation emails need: no phone (the owner already has it in the order email), no free-text note, no pickup time or collection hours.
+      cancelJson: JSON.stringify({ name: payload.name, email: payload.email, pickupDate: payload.pickupDate, pickupPlace: payload.pickupPlace, items: payload.items, total: payload.total }),
+    });
   } catch {
     await release();
     throw unavailable();
