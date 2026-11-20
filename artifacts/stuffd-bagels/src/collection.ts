@@ -265,10 +265,10 @@ export function openingNote(now: number, rules: CollectionRules): string {
 }
 
 /**
- * Cancellation and no-show wording, DRAFT from the client's rule (2026-11-18: credit, not refunds).
- * Pending dp-counsel review (CPA s17, advance-booking cancellations). Credit lasts 2 months (founder and client, 2026-11-18).
+ * Cancellation and no-show wording: dp-counsel option 1a (counsel-review-2026-11-19.md s1), approved by the founder 2026-11-19.
+ * Refund or credit before the cut-off; credit only after it or for a no-show; credit valid 6 months (CPA s17).
  * Shown in the FAQ, above the order button, and in the order
  * auto-reply (apps-script/Code.gs keeps its own copy: keep them identical).
  */
 export const CANCELLATION_POLICY =
-  "If you cancel before the Wednesday cut-off, or you pay and don't collect, your order becomes credit for another collection Saturday or one of our markets, valid for 2 months (credit, not a refund).";
+  "If you cancel before the Wednesday cut-off, you can choose a refund or credit. If you cancel after the cut-off, or you pay and don't collect, your order becomes credit for another collection Saturday or one of our markets, valid for 6 months from your original collection Saturday. Credit is not paid out as cash.";

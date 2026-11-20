@@ -1187,10 +1187,10 @@ export default function Home() {
                     >
                       {orderStatus === "sending" ? "Opening Yoco..." : total > 0 ? `Pay R${total} with Yoco` : "Pay with Yoco"}
                     </button>
-                    {/* One short line instead of the long paragraphs (founder 2026-11-19). The credit-not-refund term stays visible
+                    {/* One short line instead of the long paragraphs (founder 2026-11-19). The cancellation term (dp-counsel 1b) stays visible
                         here, not only behind the link: CPA s49 wants terms that limit the customer's rights drawn to their attention. */}
                     <p className="text-[13px] mt-3 mb-0 text-ink/75 leading-relaxed px-1 text-center" data-testid="pay-note">
-                      Secure payment on Yoco. By paying you agree to our <a className="font-bold underline underline-offset-2" href="/terms">Terms and conditions</a>, including credit (not refunds) if you cancel or don't collect. <a className="font-bold underline underline-offset-2" href="/privacy">Privacy notice</a>.
+                      Secure payment on Yoco. By paying you agree to our <a className="font-bold underline underline-offset-2" href="/terms">Terms and conditions</a>. Cancel before the Wednesday cut-off for a refund or credit; after it, or if you don't collect, you get credit (valid 6 months), not a refund. <a className="font-bold underline underline-offset-2" href="/privacy">Privacy notice</a>.
                     </p>
                   </form>
                 )}
