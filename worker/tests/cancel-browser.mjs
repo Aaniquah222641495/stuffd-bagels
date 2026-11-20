@@ -35,7 +35,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   await ctx.route("**/api/**", (route) => route.fallback({ headers: { ...route.request().headers(), "CF-Connecting-IP": H.ip } }));
   const page = await ctx.newPage();
   const cdp = await ctx.newCDPSession(page); await cdp.send("Network.enable"); await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
-  const bad = []; page.on("console", (m) => { if (["error", "warning"].includes(m.type()) && !/status of (4\d\d|5\d\d)/.test(m.text()) && !/Turnstile\] Error: 200100/.test(m.text()) && !/Permissions-Policy header: Unrecognized feature: .interest-cohort./.test(m.text())) bad.push(m.text()); });
+  const bad = []; page.on("console", (m) => { if (["error", "warning"].includes(m.type()) && !/status of (4\d\d|5\d\d)/.test(m.text()) && !/Turnstile\] Error: 200100/.test(m.text())) bad.push(m.text()); });
   const urls = []; page.on("request", (r) => urls.push(r.url()));
   const card = () => page.getByTestId("result-card");
   const stateOf = async () => card().getAttribute("data-state");
