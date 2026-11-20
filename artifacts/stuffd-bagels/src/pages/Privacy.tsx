@@ -13,7 +13,7 @@ export default function Privacy() {
         </div>
       </div>
       <div className="max-w-3xl mx-auto px-5 sm:px-8 py-12 leading-relaxed text-base [&_h2]:font-bubble [&_h2]:text-3xl [&_h2]:mt-10 [&_h2]:mb-3 [&_h2]:leading-none [&_ul]:pl-5 [&_li]:mt-1.5 [&_a]:font-bold [&_a]:text-blue [&_a]:underline [&_a]:underline-offset-4">
-        <p className="m-0">Last updated 19 November 2026.</p>
+        <p className="m-0">Last updated 20 November 2026.</p>
 
         <h2>Who we are</h2>
         <p className="m-0">Stuff'd Bagels is a trading name of Sherezaan Khan (sole proprietor), 33 Ulm Way, Strandfontein. We are the "responsible party" under the Protection of Personal Information Act (POPIA). Our Information Officer is Sherezaan Khan. Contact us at <a href={`mailto:${EMAIL}`}>{EMAIL}</a>.</p>
@@ -21,7 +21,7 @@ export default function Privacy() {
         <h2>What we collect, and why</h2>
         <p className="m-0">We only ask for what we need.</p>
         <ul className="m-0 mt-3">
-          <li><strong>When you send an order:</strong> your name, phone number, email address, the pickup point and Saturday you'll collect on, an optional preferred time, what you ordered, and an optional note. We use it to take your payment, prepare your order, email you your confirmation and a reminder on the morning of your collection day, and contact you if there's a problem.</li>
+          <li><strong>When you send an order:</strong> your name, phone number, email address, the pickup point and Saturday you'll collect on, an optional preferred time, what you ordered, and an optional note. We use it to take your payment, prepare your order, cancel your order and refund you, email you your confirmation and a reminder on the morning of your collection day, and contact you if there's a problem.</li>
           <li><strong>When you send an event enquiry:</strong> your name, phone number, email address, the event date, venue or area, number of guests, and any details you add. We use it to reply with a quote.</li>
         </ul>
         <p className="m-0 mt-3">The details come from you, through our order and enquiry forms. You do not have to give them, but without them we cannot take or prepare your order, or reply to your enquiry. We use them only for the purposes above. We don't use your details for marketing, and we don't sell them.</p>
@@ -29,18 +29,19 @@ export default function Privacy() {
         <h2>Who sees it</h2>
         <p className="m-0">Only the people who run Stuff'd Bagels see your details. We also use service providers:</p>
         <ul className="m-0 mt-3">
-          <li><strong>Yoco</strong> runs the payment page. It collects your card or bank details itself and looks after them under its own privacy policy; we never see them. We send Yoco your order reference and what you ordered. Yoco tells us the amount, whether the payment went through, and a payment reference.</li>
+          <li><strong>Yoco</strong> runs the payment page. It collects your card or bank details itself and looks after them under its own privacy policy; we never see them. We send Yoco your order reference and what you ordered. Yoco tells us the amount, whether the payment went through, and a payment reference. If you cancel, we also send Yoco the refund request for your order.</li>
           <li><strong>Google</strong> provides the Stuff'd Bagels email account. Your order or enquiry arrives there as an email, and we send your confirmation and reminder from it.</li>
-          <li><strong>Cloudflare</strong> runs this website. While you pay, it holds your order details for a short time so we can confirm the order when Yoco tells us it was paid. Your details are deleted from the website as soon as the order emails are sent. An order that is never paid is deleted within 48 hours. If the emails cannot be sent, we keep the order for up to 7 days so we can follow it up, then delete it. We keep your payment reference and the order reference for up to 7 days to match the payment to the order. Event enquiries pass straight to our email and are not kept on the website. To stop spam, the website keeps a short-lived counter linked to a scrambled version of your internet address, never your name or order; it deletes itself within a day.</li>
+          <li><strong>Cloudflare</strong> runs this website. After you pay, it holds your name, phone number, email address and what you ordered until the day after your order's cut-off, so we can confirm your order and you can cancel it from the link in your confirmation email. After that it is deleted, or sooner if you cancel and are refunded. Your optional note is deleted as soon as the order emails are sent. An order that is never paid is deleted within 48 hours. If the emails cannot be sent, or a refund cannot be finished, we keep the order for up to 7 days (or until the day after the cut-off, if that is later) so we can follow it up, then delete it. After a refund we keep only your order reference, payment reference and refund amount for 60 days, with no name, phone number or email, so your cancel link can show that the order is already refunded. Otherwise we keep the payment reference and order reference for up to 7 days after your order is confirmed, or until the day after the cut-off if that is later, to match the payment to the order. Event enquiries pass straight to our email and are not kept on the website. To stop spam, the website keeps a short-lived counter linked to a scrambled version of your internet address, never your name or order; it deletes itself within a day.</li>
           <li><strong>Cloudflare Turnstile</strong> checks that the person using our order and enquiry forms is not a bot. It is Cloudflare's service and uses some of your browser's details for that check.</li>
         </ul>
         <p className="m-0 mt-3"><strong>Collection-day reminder.</strong> After you pay we email you a reminder on the morning of your collection day. It is about your order, not marketing. For this, a small copy of your order (first name, email address, pickup details and what you ordered) is kept in the Stuff'd Bagels Google account until that morning, then deleted.</p>
+        <p className="m-0 mt-3"><strong>Cancelling.</strong> Your confirmation email has a private link to cancel your order and get a refund before the cut-off. Anyone who has the link can cancel the order, so please don't forward the email. When you cancel we email you to confirm, tell the owner, and ask Yoco to refund the card you paid with. The cancel page uses Cloudflare Turnstile (above) to check that you are not a bot.</p>
 
         <h2>Other countries</h2>
         <p className="m-0">Google and Cloudflare may store or process your information on servers outside South Africa. We need them to take your order and email you about it, and we rely on their own privacy and security commitments.</p>
 
         <h2>How long we keep it</h2>
-        <p className="m-0">We keep order and enquiry emails for 12 months, then delete them. Payment records are kept by Yoco, and we keep a record of your payment for 5 years because tax and accounting rules require it. If you ask us to delete your details sooner, we will, except where the law makes us keep them.</p>
+        <p className="m-0">We keep order, cancellation and enquiry emails for 12 months, then delete them. Payment records are kept by Yoco, and we keep a record of your payment for 5 years because tax and accounting rules require it. If you ask us to delete your details sooner, we will, except where the law makes us keep them.</p>
 
         <h2>Your rights</h2>
         <p className="m-0">You can ask us what we hold about you, ask us to correct it, or ask us to delete it. Email <a href={`mailto:${EMAIL}`}>{EMAIL}</a>. If you are unhappy with how we have handled your information you can complain to the Information Regulator, through the complaints page at <a href="https://inforegulator.org.za/complaints/" rel="noopener noreferrer" target="_blank">inforegulator.org.za/complaints</a>.</p>

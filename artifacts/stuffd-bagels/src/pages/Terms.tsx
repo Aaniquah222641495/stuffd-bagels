@@ -43,7 +43,7 @@ export default function Terms() {
 
         <h2>Cancelling and missed collections</h2>
         <p className="m-0">{CANCELLATION_POLICY}</p>
-        <p className="m-0 mt-3">To cancel, email <a href={`mailto:${EMAIL}`}>{EMAIL}</a> with your order reference. Refunds go back to the way you paid, through Yoco. To use credit, email us with your order reference and tell us which Saturday or market you want. If you cannot collect because of a death or a stay in hospital, tell us and we will refund you. If we cancel a collection Saturday or cannot supply your order, we will refund you in full.</p>
+        <p className="m-0 mt-3">To cancel and get a refund before the cut-off, use the "Cancel my order" button in your confirmation email. Your refund goes back to the card you paid with, through Yoco, and can take a few days to show on your statement. If you would rather have credit, email <a href={`mailto:${EMAIL}`}>{EMAIL}</a> with your order reference before the cut-off, and do not use the button. After the cut-off the button no longer refunds. To use credit, email us with your order reference and tell us which collection day or market you want. If you cannot find your confirmation email, email us with your order reference and we will help you cancel. If you cannot collect because of a death or a stay in hospital, tell us and we will refund you. If we cancel a collection or cannot supply your order, we will refund you in full.</p>
 
         <h2>Your order record</h2>
         <p className="m-0">Your confirmation email and Yoco's receipt are your record of the order. Keep them. Email us with your order reference if you need a copy.</p>

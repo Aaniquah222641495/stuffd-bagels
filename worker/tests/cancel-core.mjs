@@ -176,6 +176,8 @@ assert.equal(p.type, "cancel"); assert.equal(p.outcome, "refunded"); assert.equa
 assert.equal(p.name, "Aisha Khan"); assert.equal(p.email, "a@example.com"); assert.equal(p.total, 65); assert.equal(p.pickupDate, SAT);
 assert.ok(!("note" in p) && !("pickupTime" in p) && !("orderJson" in p), "no free-text note in the cancellation details");
 assert.equal(row(f, ref).deleteAt, clock.t + 60 * DAY, "a refunded stub (no personal data) is kept 60 days so the link keeps saying 'already refunded'");
+assert.equal(row(f, ref).contentHash, "", "the hash of name, phone and email goes with them");
+assert.equal(f.svc.lookup(row(f, ref).attemptId, "any-hash").kind, "paid", "a repeat press of that attempt just reads 'already paid'");
 await f.svc.tick(send, async () => { throw new Error("must not send again"); });
 assert.equal(f.svc.cancelMailPayload(row(f, ref)), null, "nothing left to send");
 ok("cancellation emails: retried like order emails, the payload carries what the script needs, PII dropped once accepted, stub kept 60 days");

@@ -163,7 +163,8 @@ export class OrdersService {
   }
 
   private existing(row: OrderRow, hash: string): BeginResult {
-    if (row.contentHash !== hash) return { kind: "changed" };
+    // A hash of the order fields is dropped with the personal data (""): such a row can only say "already paid" to a repeat press.
+    if (row.contentHash !== "" && row.contentHash !== hash) return { kind: "changed" };
     switch (row.status) {
       case "creating":
         return { kind: "busy" };
@@ -390,6 +391,7 @@ export class OrdersService {
       ...row, cmailState: "sent", cmailNext: null, cmailTries: 0,
       cancelJson: accepted ? null : row.cancelJson,
       orderJson: accepted ? null : row.orderJson,
+      contentHash: accepted ? "" : row.contentHash, // a hash of name, phone and email is personal data too: gone with them (dp-counsel 2026-11-20)
       deleteAt: accepted ? this.clock() + RULES.refundedKeepMs : row.deleteAt,
     });
   }

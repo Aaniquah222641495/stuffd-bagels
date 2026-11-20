@@ -383,7 +383,7 @@ function sendCustomer_(a) {
     if (a.note) rows.push(['Your note', a.note]);
     outro = 'Your payment has been received and your order is confirmed. We will email you a reminder on the morning of your collection day. ' + CANCELLATION_POLICY_ + ' Questions? Just reply to this email.';
     // The link is signed by the Worker. Without one (or after the cut-off) the customer is asked to reply instead.
-    if (a.cancelUrl) outro += '\n\nNeed to cancel? You can cancel and get a full refund until ' + a.cancelByLabel + ': ' + a.cancelUrl;
+    if (a.cancelUrl) outro += '\n\nNeed to cancel? You can cancel and get a full refund until ' + a.cancelByLabel + ': ' + a.cancelUrl + '\nPrefer credit? Reply to this email before the cut-off instead.';
   } else {
     subject = "STUFF'D: we've got your event enquiry " + a.ref;
     intro = "Thanks for thinking of us, " + f + "! Your event enquiry has landed.";
@@ -523,7 +523,7 @@ function cancelBlock_(a) {
   if (!a.cancelUrl) return '';
   const c = COLOURS;
   return '<tr><td style="padding:10px 26px 4px;font-family:' + BODY_FONT_ + ';font-size:15px;line-height:1.55;color:' + c.ink + '">' +
-    '<b>Need to cancel?</b> You can cancel and get a full refund until ' + esc_(a.cancelByLabel) + '.</td></tr>' +
+    '<b>Need to cancel?</b> You can cancel and get a full refund until ' + esc_(a.cancelByLabel) + '. Prefer credit? Reply to this email before the cut-off instead.</td></tr>' +
     '<tr><td style="padding:6px 26px 12px"><a href="' + esc_(a.cancelUrl) + '" style="display:inline-block;background:' + c.white + ';color:' + c.ink + ';border:2px solid ' + c.ink + ';font-family:' + FONT_ + ';font-size:13px;font-weight:900;letter-spacing:1px;text-transform:uppercase;text-decoration:none;padding:12px 20px;border-radius:999px">Cancel my order</a></td></tr>';
 }
 
