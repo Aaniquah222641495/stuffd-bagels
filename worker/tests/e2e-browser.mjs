@@ -73,7 +73,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   const form = await page.getByTestId("order-form").textContent();
   assert.ok(form.includes(`Orders for ${nice(sats[0])} close on ${nice(col.cutoffDay(sats[0]))} at 23:59.`), "cut-off line");
   assert.ok(form.includes("Collection times: Saturdays, 10am to 1pm"), "with a pickup select, the point's times hint stays");
-  assert.ok(form.includes("including credit (not refunds) if you cancel or don't collect"), "credit-not-refund term shown before the order is sent (full policy is on /terms)");
+  assert.ok(form.includes("for a refund or credit; after it, or if you don't collect, you get credit (valid 6 months), not a refund"), "cancellation term shown before the order is sent (full policy is on /terms)");
   assert.ok(!/market/i.test(form), "no market wording in the order form");
   console.log("  Saturdays offered:", opts.join(", "));
 
@@ -121,7 +121,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   assert.ok(!(await page.getByTestId("order-form").textContent()).includes("Please add your name"), "errors clear as fields are fixed");
   assert.equal((await page.getByTestId("btn-place-order").textContent()).trim(), "Pay R310 with Yoco");
   const payNote = page.getByTestId("pay-note");
-  assert.match(await payNote.textContent(), /By paying you agree to our Terms and conditions, including credit \(not refunds\) if you cancel or don't collect\./, "one short line; the credit term stays visible (CPA s49)");
+  assert.match(await payNote.textContent(), /By paying you agree to our Terms and conditions\. Cancel before the Wednesday cut-off for a refund or credit; after it, or if you don't collect, you get credit \(valid 6 months\), not a refund\./, "one short line; the cancellation term stays visible (CPA s49)");
   assert.equal(await payNote.locator('a[href="/terms"]').count(), 1, "links to the Terms page");
   const steps = await page.locator("#details ol").textContent();
   assert.ok(steps.includes("Pay with Yoco") && steps.includes("Pay securely on Yoco. Your order is confirmed straight away and we email you a confirmation."), "step 3 matches paying online");
