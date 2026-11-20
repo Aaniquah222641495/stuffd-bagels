@@ -327,8 +327,8 @@ async function handleOrder(request: Request, env: FormsEnv, body: Record<string,
   try {
     begun = await store.begin({
       attemptId, contentHash: hash, ref: payload.ref, amountCents, orderJson: JSON.stringify(payload), cancelBy,
-      // Only what the cancellation emails need: no free-text note, no pickup time or collection hours.
-      cancelJson: JSON.stringify({ name: payload.name, phone: payload.phone, email: payload.email, pickupDate: payload.pickupDate, pickupPlace: payload.pickupPlace, items: payload.items, total: payload.total }),
+      // Only what the cancellation emails need: no phone (the owner already has it in the order email), no free-text note, no pickup time or collection hours.
+      cancelJson: JSON.stringify({ name: payload.name, email: payload.email, pickupDate: payload.pickupDate, pickupPlace: payload.pickupPlace, items: payload.items, total: payload.total }),
     });
   } catch {
     await release();

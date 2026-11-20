@@ -12,7 +12,7 @@ const SAT = "2026-11-28";
 const BY = col.cutoffInstant(SAT, "23:59"); // Thu 26 Nov 00:00:00.000 SAST: Wednesday's 23:59 is the last minute
 const clock = { t: sast("2026-11-20", "10:00:00.000"), now: () => clock.t };
 let seq = 0;
-const CANCEL_JSON = JSON.stringify({ name: "Aisha Khan", phone: "+27821234567", email: "a@example.com", pickupDate: SAT, pickupPlace: "Strandfontein", items: [{ name: "Classic Bagel", qty: 1, unit: 65, line: 65 }], total: 65 });
+const CANCEL_JSON = JSON.stringify({ name: "Aisha Khan", email: "a@example.com", pickupDate: SAT, pickupPlace: "Strandfontein", items: [{ name: "Classic Bagel", qty: 1, unit: 65, line: 65 }], total: 65 });
 
 async function paidOrder(over = {}, { confirm = true } = {}) {
   clock.t = sast("2026-11-20", "10:00:00.000");
@@ -218,7 +218,19 @@ ok("retention: the row (and the cancel details) outlive the cut-off by a day, so
 // 15. Nothing in the public status leaks: refunds don't change what the result page sees
 ({ f, ref } = await paidOrder());
 f.svc.beginCancel(ref); f.svc.finishCancel(ref, { kind: "refunded", refundId: "rfd_q" });
-assert.equal(f.svc.status(ref), "paid", "the Yoco result page still reads 'paid'");
-ok("public order status is unchanged by a refund");
+assert.equal(f.svc.status(ref), "cancelled", "the Yoco result page reads 'cancelled', not 'confirmed' (web-security PR #19 fix 4)");
+ok("public order status reads cancelled once refunded or pending");
+
+// 16. A claim whose answer is never recorded: visible to the owner after 2 minutes, and its personal data still has an end date (web-security PR #19 fixes 1 and 2)
+({ f, ref } = await paidOrder());
+assert.equal(f.svc.beginCancel(ref).kind, "claimed");
+assert.ok(row(f, ref).deleteAt >= BY + DAY, "the claim keeps a deleteAt, so the details can't live forever");
+assert.equal(f.svc.attention().length, 0, "not yet: it may still be in flight");
+clock.t += 121_000;
+const stuck = f.svc.attention();
+assert.equal(stuck.length, 1); assert.equal(stuck[0].status, "refund_stuck"); assert.equal(stuck[0].order.email, "a@example.com", "with the details the owner needs");
+clock.t = row(f, ref).deleteAt; await f.svc.tick(async () => true);
+assert.equal(row(f, ref), undefined, "and it is deleted at its end date even if nobody presses again");
+ok("a stuck 'refunding' claim shows under needs-you after 2 minutes, and its details are deleted on schedule");
 
 console.log("cancel-core: all", n, "groups passed");

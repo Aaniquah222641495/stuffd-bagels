@@ -9,7 +9,7 @@ const POLL_MS = 2000;
 const POLL_FOR_MS = 30000;
 
 type Kind = "success" | "cancel" | "failure" | "unknown";
-type Phase = "loading" | "confirming" | "confirmed" | "slow" | "expired" | "notfound";
+type Phase = "loading" | "confirming" | "confirmed" | "cancelled" | "slow" | "expired" | "notfound";
 
 const Shell = ResultShell;
 const btn = resultBtn;
@@ -56,7 +56,8 @@ export default function OrderResult() {
           /* ignore */
         }
         setPhase("confirmed");
-      } else if (status === "expired") setPhase("expired");
+      } else if (status === "cancelled") setPhase("cancelled");
+      else if (status === "expired") setPhase("expired");
       else if (status === "unknown") setPhase("notfound");
       else if (status === "slow" || Date.now() - started >= POLL_FOR_MS) setPhase("slow");
       else setTimeout(tick, POLL_MS);
@@ -114,6 +115,17 @@ export default function OrderResult() {
         <h2 className="font-bubble text-4xl leading-none m-0 mt-3">We've got it!</h2>
         <p className="text-base leading-relaxed mt-4 mb-0">Order confirmed. Your confirmation email is on its way.</p>
         <p className="text-sm text-ink/75 leading-relaxed mt-3 mb-0">Your reference is <strong>{ref}</strong>. Check your spam folder if you can't see the email.</p>
+        <a href="/" className={btn}>Back to the menu</a>
+      </Shell>
+    );
+  }
+  if (phase === "cancelled") {
+    return (
+      <Shell testId="cancelled">
+        <p className="eyebrow m-0 text-blue">Order cancelled</p>
+        <h2 className="font-bubble text-4xl leading-none m-0 mt-3">This order was cancelled</h2>
+        <p className="text-base leading-relaxed mt-4 mb-0">Your order is cancelled and your refund is on its way back to your card. We've emailed you a confirmation.</p>
+        <p className="text-sm text-ink/75 leading-relaxed mt-3 mb-0">Your reference is <strong>{ref}</strong>.</p>
         <a href="/" className={btn}>Back to the menu</a>
       </Shell>
     );

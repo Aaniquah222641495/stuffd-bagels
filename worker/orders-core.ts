@@ -42,7 +42,7 @@ export interface OrderRow {
   deleteAt: number | null;
   /** First instant self-cancel is refused (epoch ms): the order's Wednesday cut-off. NULL = no self-cancel (an order made before refunds existed). */
   cancelBy: number | null;
-  /** What the cancellation emails need (name, phone, email, pickup, items, total). Never the free-text note. NULL once not needed. */
+  /** What the cancellation emails need (name, email, pickup, items, total). No phone, never the free-text note. NULL once not needed. */
   cancelJson: string | null;
   refundState: RefundState | null;
   refundId: string | null;
@@ -119,7 +119,7 @@ export type MarkPaidResult =
   | { kind: "mismatch"; ref: string }
   | { kind: "unknown" };
 
-export type PublicStatus = "pending" | "paid" | "expired" | "unknown";
+export type PublicStatus = "pending" | "paid" | "cancelled" | "expired" | "unknown";
 
 /** What the cancel page may be told about an order (never personal data beyond what the link-holder already has: amount and collection day). */
 export type CancelInfo =
@@ -142,8 +142,8 @@ export type RefundOutcome = { kind: "refunded" | "pending"; refundId: string } |
 
 export interface AttentionItem {
   ref: string;
-  /** refund_failed: the customer cancelled in time but Yoco did not confirm the refund (owner: check Yoco, refund by hand). cancel_email_failed: the cancellation emails never went out. */
-  status: "email_failed" | "mismatch" | "refund_failed" | "cancel_email_failed";
+  /** refund_failed: the customer cancelled in time but Yoco did not confirm the refund (owner: check Yoco FIRST, it may already show a refund). refund_stuck: a refund was started but its outcome was never saved (check Yoco). cancel_email_failed: the cancellation emails never went out. */
+  status: "email_failed" | "mismatch" | "refund_failed" | "refund_stuck" | "cancel_email_failed";
   amountCents: number;
   checkoutId: string | null;
   paymentId: string | null;
@@ -246,6 +246,8 @@ export class OrdersService {
   status(ref: string): PublicStatus {
     const row = this.store.get(ref);
     if (!row) return "unknown";
+    // A cancelled order (refund done or accepted by Yoco) must not read "confirmed" on the result page (web-security PR #19 fix 4).
+    if (row.refundState === "refunded" || row.refundState === "pending") return "cancelled";
     switch (row.status) {
       case "paid":
       case "confirmed":
@@ -264,7 +266,7 @@ export class OrdersService {
   attention(): AttentionItem[] {
     return this.store
       .all()
-      .filter((r) => r.status === "email_failed" || r.status === "mismatch" || r.refundState === "failed" || r.cmailState === "failed")
+      .filter((r) => r.status === "email_failed" || r.status === "mismatch" || r.refundState === "failed" || r.cmailState === "failed" || this.stuck(r))
       .sort((a, b) => (a.paidAt ?? 0) - (b.paidAt ?? 0))
       .map((r) => {
         let order: unknown = null;
@@ -275,7 +277,7 @@ export class OrdersService {
           // leave null
         }
         const status: AttentionItem["status"] =
-          r.refundState === "failed" ? "refund_failed" : r.cmailState === "failed" ? "cancel_email_failed" : (r.status as "email_failed" | "mismatch");
+          r.refundState === "failed" ? "refund_failed" : this.stuck(r) ? "refund_stuck" : r.cmailState === "failed" ? "cancel_email_failed" : (r.status as "email_failed" | "mismatch");
         return { ref: r.ref, status, amountCents: r.amountCents, checkoutId: r.checkoutId, paymentId: r.paymentId, paidAt: r.paidAt, order };
       });
   }
@@ -320,6 +322,11 @@ export class OrdersService {
     }
   }
 
+  /** A refund claimed more than 2 minutes ago with no recorded answer: Yoco may have refunded, we never heard. The owner must check Yoco. */
+  private stuck(r: OrderRow): boolean {
+    return r.refundState === "refunding" && this.clock() - (r.refundAt ?? 0) >= RULES.refundClaimStaleMs;
+  }
+
   /** Read only: what the cancel page should show for this order right now. */
   cancelInfo(ref: string, notAfter?: number): CancelInfo {
     const row = this.store.get(ref);
@@ -349,6 +356,8 @@ export class OrdersService {
     this.store.put({
       ...row, status: row.status === "paid" ? "confirmed" : row.status, nextTryAt: null, orderJson: row.status === "paid" ? null : row.orderJson,
       refundState: "refunding", refundAt: now,
+      // Personal data must never outlive its time even if the answer is never recorded (web-security PR #19 fix 2).
+      deleteAt: Math.max(row.deleteAt ?? 0, now + RULES.confirmedKeepMs, row.cancelBy + RULES.afterCutoffMs),
     });
     return { kind: "claimed", ref, checkoutId: row.checkoutId, amountCents: row.amountCents };
   }

@@ -148,7 +148,8 @@ function clean_(d) {
   const common = {
     name: line_(d.name, 60), phone: line_(d.phone, 20), email: line_(d.email, 254)
   };
-  if (!common.name || !/^\+\d{8,15}$/.test(common.phone) || !validEmail_(common.email)) return { ok: false };
+  // A cancellation carries no phone (the owner already has it in the order email): only orders and bookings need one.
+  if (!common.name || !validEmail_(common.email) || (d.type !== 'cancel' && !/^\+\d{8,15}$/.test(common.phone))) return { ok: false };
   if (d.type === 'order') {
     // Orders are collected on a Saturday at one of the owner's pickup points (never at a market).
     const place = line_(d.pickupPlace, 200);
@@ -166,6 +167,7 @@ function clean_(d) {
     const place = line_(d.pickupPlace, 200);
     const cleaned = cleanItems_(d.items);
     if (!validRef_(d.ref, 'SB') || !validCheckoutId_(d.checkoutId) || ['refunded', 'pending', 'failed'].indexOf(d.outcome) < 0 || !place || !validDate_(d.pickupDate) || !cleaned) return { ok: false };
+    delete common.phone;
     return { ok: true, data: Object.assign(common, { type: 'cancel', ref: d.ref, outcome: d.outcome, checkoutId: d.checkoutId, pickupDate: d.pickupDate, pickupPlace: place, items: cleaned.items, total: cleaned.total }) };
   }
   if (d.type === 'booking') {
@@ -493,6 +495,12 @@ function buttons_(a) {
 
 function customerCard_(a) {
   const c = COLOURS;
+  if (a.type === 'cancel') { // no phone on a cancellation: name, email and a Reply button only
+    return '<tr><td style="padding:14px 26px 4px;font-family:' + BODY_FONT_ + ';color:' + c.ink + '">' +
+      '<div style="font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:' + c.blue + '">Customer</div>' +
+      '<div style="font-family:' + FONT_ + ';font-size:20px;font-weight:900;margin-top:4px">' + esc_(a.name) + '</div>' +
+      '<div style="font-size:15px;margin-top:2px">' + esc_(a.email) + ' &middot; phone: see the original order email</div></td></tr>';
+  }
   return '<tr><td style="padding:14px 26px 4px;font-family:' + BODY_FONT_ + ';color:' + c.ink + '">' +
     '<div style="font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:' + c.blue + '">Customer</div>' +
     '<div style="font-family:' + FONT_ + ';font-size:20px;font-weight:900;margin-top:4px">' + esc_(a.name) + '</div>' +
@@ -529,14 +537,13 @@ function cancelBlock_(a) {
 
 /** The owner's email about a cancellation: all three outcomes, with the order details and the Yoco checkout id. */
 function sendCancelOwner_(a) {
-  const wa = 'https://wa.me/' + a.phone.replace('+', '');
   const head = {
     refunded: 'CANCELLED AND REFUNDED ' + a.ref + '. Yoco confirmed the full refund of ' + rand_(a.total) + '. Nothing for you to do.',
     pending: 'CANCELLED ' + a.ref + '. Yoco accepted the full refund of ' + rand_(a.total) + ' but it is still pending. Check in the Yoco app in a day or two that it shows as refunded.',
-    failed: 'CANCELLED ' + a.ref + ' BUT THE REFUND DID NOT GO THROUGH. The customer cancelled in time and is waiting for ' + rand_(a.total) + '. Open the Yoco app and refund this payment in full (checkout id below), or ask your developer. They can also press the cancel link again before the cut-off.'
+    failed: 'CANCELLED ' + a.ref + ' BUT THE REFUND WAS NOT CONFIRMED. The customer cancelled in time and is waiting for ' + rand_(a.total) + '. FIRST check the Yoco app: it may already show a refund for this payment (checkout id below). Only if it does not, refund this payment in full there, or ask your developer. The customer can also press the cancel link again before the cut-off.'
   }[a.outcome];
   const lines = [head, 'The pickup reminder for this order was deleted, so no reminder goes out.', 'Yoco checkout id: ' + a.checkoutId, '',
-    'Name: ' + a.name, 'Phone: ' + a.phone + '  (' + wa + ')', 'Email: ' + a.email + '  (just hit Reply)', ''
+    'Name: ' + a.name, 'Email: ' + a.email + '  (just hit Reply)', 'Phone: see the original order email', ''
   ].concat(pickupRows_(a).map(function (r) { return r[0] + ': ' + r[1]; }), ['', 'Order:'], orderLines_(a), ['Total: ' + rand_(a.total), '', 'Sent from the STUFF\'D Bagels website.']);
   MailApp.sendEmail({ to: owner_(), subject: cancelOwnerSubject_(a), body: lines.join('\n'), htmlBody: cancelOwnerHtml_(a, head), replyTo: a.email, name: CONFIG.BUSINESS_NAME + ' website' });
 }

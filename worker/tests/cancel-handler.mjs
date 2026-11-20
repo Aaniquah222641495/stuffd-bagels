@@ -107,7 +107,7 @@ let c = await ctx(); reset();
 let o = await placed(c);
 assert.equal(o.row().cancelBy, BY, "cut-off = Thursday 00:00 SAST after Wednesday 25 Nov");
 const cj = JSON.parse(o.row().cancelJson);
-assert.deepEqual(Object.keys(cj).sort(), ["email", "items", "name", "phone", "pickupDate", "pickupPlace", "total"], "no note, no pickup time in the cancel details");
+assert.deepEqual(Object.keys(cj).sort(), ["email", "items", "name", "pickupDate", "pickupPlace", "total"], "no phone, no note, no pickup time in the cancel details");
 assert.ok(o.token, "the confirmation email has a cancel link");
 assert.equal(o.confirm.cancelUrl, `${baseEnv.SITE_ORIGIN}/order/cancel#${o.token}`);
 assert.equal(o.confirm.cancelByLabel, "Wednesday 25 Nov at 23:59");

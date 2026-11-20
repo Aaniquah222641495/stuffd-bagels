@@ -327,7 +327,7 @@ assert.ok(!/awaiting payment|AWAITING/i.test(code), "Code.gs has no 'awaiting pa
   const paid = mk("SB-CNL234", { pickupDate: "2026-11-28" });
   assert.equal(post(paid).ok, true);
   assert.ok(propStore.has("rem_SB-CNL234"), "the reminder exists before the cancellation");
-  const cancel = (o = "refunded", extra = {}) => ({ type: "cancel", outcome: o, checkoutId: paid.checkoutId, ref: "SB-CNL234", name: "Aisha <b>Khan</b>", phone: "+27821234567", email: paid.email, pickupDate: "2026-11-28", pickupPlace: "Strandfontein collection, Strandfontein", items: [{ name: "Classic Bagel", qty: 2, unit: 65, line: 1 }], total: 1, ...extra });
+  const cancel = (o = "refunded", extra = {}) => ({ type: "cancel", outcome: o, checkoutId: paid.checkoutId, ref: "SB-CNL234", name: "Aisha <b>Khan</b>", email: paid.email, pickupDate: "2026-11-28", pickupPlace: "Strandfontein collection, Strandfontein", items: [{ name: "Classic Bagel", qty: 2, unit: 65, line: 1 }], total: 1, ...extra });
   const capBefore = propStore.get("cap_total");
   labelled.length = 0; before = sent.length;
   assert.deepEqual(post(cancel()), { ok: true });
@@ -352,14 +352,14 @@ assert.ok(!/awaiting payment|AWAITING/i.test(code), "Code.gs has no 'awaiting pa
   assert.match(sent[pend].body, /still pending\. Check in the Yoco app/); assert.match(sent[pend + 1].body, /Yoco is processing your refund of R130/);
   const fail = sent.length; assert.equal(post(cancel("failed")).ok, true);
   assert.equal(sent[fail].subject, "SB-CNL234 cancelled: REFUND FAILED, check Yoco");
-  assert.match(sent[fail].body, /THE REFUND DID NOT GO THROUGH[\s\S]*refund this payment in full/); assert.match(sent[fail].htmlBody, /Refund failed/);
+  assert.match(sent[fail].body, /BUT THE REFUND WAS NOT CONFIRMED[\s\S]*FIRST check the Yoco app: it may already show a refund[\s\S]*Only if it does not, refund this payment in full/); assert.ok(!/phone|wa\.me|tel:/i.test((sent[fail].body + sent[fail].htmlBody).replace(/phone: see the original order email/gi, "")), "a cancellation email carries no phone number or WhatsApp / call button"); assert.match(sent[fail].body, /Phone: see the original order email/); assert.match(sent[fail].htmlBody, /Refund failed/);
   assert.equal(sent[fail + 1].subject, "STUFF'D: we've got your cancellation SB-CNL234");
   assert.match(sent[fail + 1].body, /couldn't finish your refund of R130 automatically\. We've been told and we will sort it out/); assert.match(sent[fail + 1].body, /To be refunded: R130/);
   assert.ok(!/credit|market/i.test(sent.slice(before).map((m) => m.body).join("\n")), "refund emails say nothing about credit");
 
   // Refusals: nothing is emailed for a malformed cancel, and a made-up outcome is not accepted.
   const b0 = sent.length;
-  for (const bad of [cancel("done"), cancel(null), cancel("refunded", { ref: "BK-CNL234" }), cancel("refunded", { checkoutId: "" }), cancel("refunded", { items: [] }), cancel("refunded", { pickupPlace: "" }), cancel("refunded", { pickupDate: "tomorrow" }), cancel("refunded", { phone: "0821234567" }), cancel("refunded", { email: "nope" })])
+  for (const bad of [cancel("done"), cancel(null), cancel("refunded", { ref: "BK-CNL234" }), cancel("refunded", { checkoutId: "" }), cancel("refunded", { items: [] }), cancel("refunded", { pickupPlace: "" }), cancel("refunded", { pickupDate: "tomorrow" }), cancel("refunded", { email: "nope" })])
     assert.equal(post(bad).ok, false, JSON.stringify(bad));
   assert.equal(post(cancel("refunded"), NONE).ok, false, "no token: refused"); assert.equal(post(cancel("pending"), "wrong").ok, false, "wrong token: refused");
   assert.equal(sent.length, b0);

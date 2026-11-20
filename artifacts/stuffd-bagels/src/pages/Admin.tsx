@@ -52,13 +52,14 @@ function apiUrl(path: string) {
 const ATTENTION_LABEL: Record<AttentionItem["status"], string> = {
   mismatch: "amount paid didn't match",
   email_failed: "emails not sent",
-  refund_failed: "cancelled, REFUND DID NOT GO THROUGH: refund it in Yoco",
+  refund_failed: "cancelled, refund NOT CONFIRMED: check the Yoco app first, refund only if it shows none",
+  refund_stuck: "cancelled, refund started but not confirmed: check the Yoco app first, refund only if it shows none",
   cancel_email_failed: "cancelled, cancellation emails not sent",
 };
 
 interface AttentionItem {
   ref: string;
-  status: "email_failed" | "mismatch" | "refund_failed" | "cancel_email_failed";
+  status: "email_failed" | "mismatch" | "refund_failed" | "refund_stuck" | "cancel_email_failed";
   amountCents: number;
   checkoutId: string | null;
   order: unknown;
@@ -467,7 +468,7 @@ export default function Admin() {
             <h2 id="attention-heading" className="m-0 text-base font-black text-red-700">
               {attention.length} paid {attention.length === 1 ? "order needs" : "orders need"} you
             </h2>
-            <p className="text-sm mt-2 mb-0 text-ink">The customer has paid (check your Yoco app) but we could not send the order emails, or the amount paid did not match. Contact them and fulfil the order by hand. If it says the refund did not go through, the customer cancelled in time: open your Yoco app and refund that payment in full.</p>
+            <p className="text-sm mt-2 mb-0 text-ink">The customer has paid (check your Yoco app) but we could not send the order emails, or the amount paid did not match. Contact them and fulfil the order by hand. If it says the refund was not confirmed, the customer cancelled in time: open your Yoco app and check whether it already shows a refund for that payment. Only if it does not, refund it in full.</p>
             <ul className="list-none p-0 mt-3 mb-0 space-y-3">
               {attention.map((a) => {
                 const o = (a.order ?? {}) as { name?: string; phone?: string; email?: string; pickupDate?: string; pickupPlace?: string; items?: { name: string; qty: number }[] };

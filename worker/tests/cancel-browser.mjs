@@ -35,7 +35,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   await ctx.route("**/api/**", (route) => route.fallback({ headers: { ...route.request().headers(), "CF-Connecting-IP": H.ip } }));
   const page = await ctx.newPage();
   const cdp = await ctx.newCDPSession(page); await cdp.send("Network.enable"); await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
-  const bad = []; page.on("console", (m) => { if (["error", "warning"].includes(m.type()) && !/status of (4\d\d|5\d\d)/.test(m.text()) && !/Turnstile\] Error: 200100/.test(m.text())) bad.push(m.text()); });
+  const bad = []; page.on("console", (m) => { if (["error", "warning"].includes(m.type()) && !/status of (4\d\d|5\d\d)/.test(m.text()) && !/Turnstile\] Error: 200100/.test(m.text()) && !/Permissions-Policy header: Unrecognized feature: .interest-cohort./.test(m.text())) bad.push(m.text()); });
   const urls = []; page.on("request", (r) => urls.push(r.url()));
   const card = () => page.getByTestId("result-card");
   const stateOf = async () => card().getAttribute("data-state");
@@ -157,6 +157,10 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   const rf = (await yoco()).refunds; assert.equal(rf.length, 1); assert.equal(rf[0].body, "{}"); assert.equal(rf[0].headers["idempotency-key"], `refund-${j.ref}`);
   await shot("real-refunded"); await axeRun(page, "real link, refunded");
   await H.until(() => logged().some((x) => x.body.type === "cancel" && x.body.ref === j.ref && x.body.outcome === "refunded"), "the cancellation email request");
+  // the Yoco result page now says cancelled, not confirmed
+  await page.goto(`${B}/order/result?r=success&ref=${j.ref}`, { waitUntil: "networkidle" }); await card().waitFor();
+  await page.waitForFunction(() => document.querySelector("[data-testid=result-card]")?.getAttribute("data-state") === "cancelled", null, { timeout: 15000 });
+  assert.match(await text(), /This order was cancelled/); assert.ok(!/Order confirmed/.test(await text())); await axeRun(page, "result page: cancelled");
   // reload: the page remembers (idempotent), and a second look never refunds again
   await go(`#${real}`, "refunded"); assert.equal((await yoco()).refunds.length, 1);
   // the token never travelled in a URL

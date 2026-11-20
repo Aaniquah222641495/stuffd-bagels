@@ -74,7 +74,7 @@ await until(() => cancelMails(a.ref).length >= 1, "the cancellation email reques
 await sleep(2500);
 let cm = cancelMails(a.ref); assert.equal(cm.length, 1, "one request to the script (it emails owner and customer and deletes the reminder)");
 assert.equal(cm[0].outcome, "refunded"); assert.equal(cm[0].checkoutId, a.checkoutId); assert.equal(cm[0].name, WHO); assert.equal(cm[0].email, a.email); assert.equal(cm[0].total, a.total);
-assert.ok(!("note" in cm[0]), "the note is not part of the cancellation details");
+assert.ok(!("note" in cm[0]) && !("phone" in cm[0]), "neither the note nor the phone is part of the cancellation details");
 ok("one cancellation email request (outcome refunded) sent by the Durable Object alarm");
 
 // 5. Idempotent: again and again
@@ -144,8 +144,8 @@ assert.equal((await yoco()).refunds.length, 1);
 ok("per-order limit: the 7th press in an hour is 429, and still only one refund call");
 
 // 12. Orders are refused while paying (the secret is in this test run, so this checks the happy path stays open) and the status endpoint is unchanged
-r = await (await fetch(`${B}/api/order/status?ref=${a.ref}`)).json(); assert.deepEqual(r, { status: "paid" });
-ok("the Yoco result page still sees 'paid' for a cancelled order");
+r = await (await fetch(`${B}/api/order/status?ref=${a.ref}`)).json(); assert.deepEqual(r, { status: "cancelled" });
+ok("the Yoco result page sees 'cancelled', not 'paid', for a cancelled order");
 
 // 13. Nothing sensitive in wrangler's output
 if (process.argv[3]) {
