@@ -94,7 +94,7 @@ export class Orders extends DurableObject {
       put: (r) => {
         sql.exec(
           `INSERT INTO orders (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(ref) DO UPDATE SET checkout_id = excluded.checkout_id, redirect_url = excluded.redirect_url, status = excluded.status,
+           ON CONFLICT(ref) DO UPDATE SET content_hash = excluded.content_hash, checkout_id = excluded.checkout_id, redirect_url = excluded.redirect_url, status = excluded.status,
              order_json = excluded.order_json, payment_id = excluded.payment_id, last_webhook_id = excluded.last_webhook_id,
              expires_at = excluded.expires_at, paid_at = excluded.paid_at, email_tries = excluded.email_tries,
              next_try_at = excluded.next_try_at, delete_at = excluded.delete_at, cancel_by = excluded.cancel_by, cancel_json = excluded.cancel_json,

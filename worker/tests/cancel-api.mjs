@@ -32,7 +32,7 @@ async function placed(items = { "Classic Bagel": 1 }) {
   const w = await webhook(paidPayload(checkoutId, { amount: j.total * 100 })); assert.equal(w.status, 200);
   await until(() => logged().some((x) => x.body.type === "order" && x.body.ref === j.ref), "the confirmation email request");
   const mail = logged().find((x) => x.body.type === "order" && x.body.ref === j.ref).body;
-  return { ref: j.ref, total: j.total, checkoutId, mail, token: mail.cancelUrl?.split("#")[1], email: o.email };
+  return { ref: j.ref, total: j.total, checkoutId, mail, token: mail.cancelUrl?.split("#")[1], email: o.email, body: o };
 }
 const cancelMails = (ref) => logged().filter((x) => x.body.type === "cancel" && x.body.ref === ref).map((x) => x.body);
 
@@ -147,7 +147,19 @@ ok("per-order limit: the 7th press in an hour is 429, and still only one refund 
 r = await (await fetch(`${B}/api/order/status?ref=${a.ref}`)).json(); assert.deepEqual(r, { status: "cancelled" });
 ok("the Yoco result page sees 'cancelled', not 'paid', for a cancelled order");
 
-// 13. Nothing sensitive in wrangler's output
+// 13. The hash of name, phone and email is really dropped in the SQL row (web-security PR #19): once the refund emails are accepted, a repeat of that attempt
+// with ANY content reads 'already paid'. While the hash was still stored, a changed cart answered 409 'Your order changed'.
+await resetYoco();
+a = await placed();
+let rep = await post("/api/order", { ...a.body, items: { "Classic Bagel": 3 } });
+assert.equal(rep.status, 409); assert.match((await rep.json()).error, /Your order changed/, "before the cancellation the hash is still there");
+assert.equal((await cancel(a.token)).body.state, "refunded");
+await until(() => cancelMails(a.ref).length >= 1, "email"); await sleep(1500);
+rep = await post("/api/order", { ...a.body, items: { "Classic Bagel": 3 } });
+assert.equal(rep.status, 409); assert.match((await rep.json()).error, /already been paid/, "the stored hash is gone from the real Durable Object row");
+ok("content hash cleared in the real SQL row after the cancellation emails: a repeat press reads 'already paid'");
+
+// 14. Nothing sensitive in wrangler's output
 if (process.argv[3]) {
   const outp = fs.readFileSync(process.argv[3], "utf8");
   for (const needle of ["Cancelia", "Refundtest", "canceller", "082 123 4567", "secret note", process.env.CANCEL, process.env.WHSEC, "sk_test_localfake", "rfd_"].filter(Boolean)) assert.ok(!outp.includes(needle), "wrangler output contains: " + needle);
