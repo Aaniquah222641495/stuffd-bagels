@@ -103,7 +103,6 @@ export const EVENTS: MarketEvent[] = [
   { id: "luxe-cape-club", name: "Luxe Cape Club", venue: "Sans Souci Grounds, Newlands", start: "2026-10-31", end: "2026-11-01" },
   { id: "spring-lovers", name: "Spring Lovers Pop Up", venue: "18 Schaap Rd, Schaapkraal", start: "2026-11-01", end: "2026-11-01" },
   { id: "summer-social-26", name: "Summer Social '26", venue: "Whitebox by Limitless, 30A Plantation Road, Wetton", start: "2026-12-05", end: "2026-12-05" },
-  { id: "mgm-26", name: "MGM '26", venue: "Venue to be announced", start: "2026-12-16", end: "2026-12-20" },
 ];
 
 export function upcomingEvents(list: MarketEvent[] = EVENTS, today = new Date()): MarketEvent[] {
