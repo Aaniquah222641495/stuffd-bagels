@@ -770,7 +770,7 @@ export default function Home() {
                 muted
                 loop
                 playsInline
-                preload="metadata"
+                preload="auto"
                 aria-hidden="true"
               />
               <div
