@@ -751,13 +751,27 @@ export default function Home() {
           {/* The food, full bleed. */}
           <div className="relative min-h-[440px] sm:min-h-[560px] lg:min-h-0">
             <div className="absolute inset-0 overflow-hidden">
+              {/* Still first (fast paint, and what reduced-motion visitors keep), the muted loop plays over it. */}
               <img
-                src="/hero-bagel.jpeg"
-                alt="Two hands holding half a STUFF'D jalapeno bagel, stuffed with cream cheese and topped with jalapeno slices and paprika"
-                width={802}
-                height={1067}
+                src="/hero-poster.jpg"
+                alt="A woman biting into a STUFF'D jalapeno bagel, with the Cape mountains behind her"
+                width={720}
+                height={1280}
                 fetchPriority="high"
                 className="hero-settle absolute inset-0 w-full h-full object-cover"
+              />
+              <video
+                className="hero-video absolute inset-0 w-full h-full object-cover"
+                src="/hero-video.mp4"
+                poster="/hero-poster.jpg"
+                width={720}
+                height={1280}
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+                aria-hidden="true"
               />
               <div
                 aria-hidden="true"
