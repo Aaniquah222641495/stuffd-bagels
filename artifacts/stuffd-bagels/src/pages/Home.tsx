@@ -134,6 +134,7 @@ const ABOUT_PHOTOS = [
   { src: "/bite-mountains.jpeg", avif: "/bite-mountains.avif", alt: "A woman biting into a STUFF'D jalapeno bagel with the Cape mountains behind her", caption: "jalapeno, mid-bite", width: 760, height: 1013, aspect: "3/4", position: "50% 30%" },
   { src: "/ig/made-fresh.jpg", alt: "Bagels being stuffed by hand at the STUFF'D cart", caption: "made fresh", width: 506, height: 900, position: "50% 60%" },
   { src: "/ig/chic.jpg", alt: "A customer biting into a STUFF'D bagel at a market", caption: "market day", width: 393, height: 700, position: "50% 40%" },
+  { src: "/ig/table.jpg", alt: "Two STUFF'D pizza bagels in takeaway boxes on a white garden table, with iced matcha drinks", caption: "lunch, sorted", width: 623, height: 900, position: "50% 60%" },
   { src: "/ig/box-of-four.jpg", alt: "A box of five stuffed bagels: four cheesy garlic and one pizza", caption: "box of five", width: 675, height: 900 },
   { src: "/ig/unboxing.jpg", alt: "Opening a STUFF'D takeaway box", caption: "the unboxing", width: 450, height: 800, position: "50% 35%" },
   { src: "/ig/merch.jpg", alt: "A STUFF'D team member holding a fresh pizza bagel", caption: "hot off the cart", width: 675, height: 900, position: "50% 70%" },
@@ -761,7 +762,7 @@ export default function Home() {
                 className="hero-settle absolute inset-0 w-full h-full object-cover"
               />
               <video
-                className="hero-video absolute inset-0 w-full h-full object-cover"
+                className="hero-video absolute inset-0 w-full h-full object-cover object-[50%_18%]"
                 src="/hero-video.mp4"
                 poster="/hero-poster.jpg"
                 width={720}
