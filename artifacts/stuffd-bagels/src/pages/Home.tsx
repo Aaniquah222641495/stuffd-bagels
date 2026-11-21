@@ -784,14 +784,14 @@ export default function Home() {
               <span className="eyebrow block text-white/90">On the menu</span>
               <span className="font-bubble text-2xl sm:text-3xl leading-tight">Classic · Jalapeno · Cheesy · Pizza · Steak'd</span>
             </p>
-            {/* A sesame bagel floating over the seam. Decorative. */}
+            {/* A bagel resting over the seam (no spin, founder 2026-11-22). Decorative. */}
             <img
               src="/bagel-cutout.webp"
               alt=""
               aria-hidden="true"
               width={440}
               height={440}
-              className="spin-slow pointer-events-none absolute z-20 w-[130px] sm:w-[170px] lg:w-[220px] -top-[65px] sm:-top-[85px] right-6 lg:right-auto lg:top-[56%] lg:-left-[110px]"
+              className="pointer-events-none absolute z-20 w-[130px] sm:w-[170px] lg:w-[220px] -top-[65px] sm:-top-[85px] right-6 lg:right-auto lg:top-[56%] lg:-left-[110px]"
               style={{ filter: "drop-shadow(0 22px 26px rgba(10, 20, 70, 0.4))" }}
             />
           </div>
