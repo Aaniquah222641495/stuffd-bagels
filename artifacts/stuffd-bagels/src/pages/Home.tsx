@@ -708,7 +708,7 @@ export default function Home() {
               className="hero-pop text-white text-lg lg:text-xl font-medium leading-relaxed max-w-[36ch] m-0 text-balance"
               style={{ "--d": "180ms" } as CSSProperties}
             >
-              Classic New York bagels, stuffed with cream cheese and bold
+              Korean street-food style bagels, stuffed with cream cheese and bold
               fillings. Order ahead for Saturday pickup, or find the cart at a market.
             </p>
             <div
@@ -1213,9 +1213,9 @@ export default function Home() {
               </h2>
               <p className="text-lg leading-relaxed mt-8 mb-0 max-w-[46ch] text-white/90">
                 STUFF'D started with one question: why does Cape Town not have
-                a proper stuffed bagel? We took the classic New York bagel,
-                packed it with bold fillings, and brought it to the streets of
-                the Mother City.
+                a proper stuffed bagel? We took our cue from Korean street food,
+                packed our bagels with cream cheese and bold fillings, and brought
+                them to the streets of the Mother City.
               </p>
               <p className="text-lg leading-relaxed mt-4 mb-0 max-w-[46ch] text-white/90">
                 Find the cart at markets and festivals across Cape Town. No
