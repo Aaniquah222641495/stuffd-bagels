@@ -822,7 +822,7 @@ export default function Home() {
             label="Markets"
             id="where"
             title="Where we at"
-            note="The cart moves around Cape Town. No order needed, come and buy at the cart."
+            note="The cart moves around Cape Town. Just come and buy at the cart, no order needed."
           />
 
           {scheduleCards.length === 0 && (
