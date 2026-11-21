@@ -29,7 +29,7 @@ const business = {
   name: SITE_NAME,
   slogan: "Every bite packed right.",
   description:
-    "Cape Town's first stuffed bagel. Fresh, handmade stuffed bagels from our cart at markets and festivals across Cape Town. Halal menu. Order on the website by Wednesday and collect on Saturday at one of our pickup points, or just buy at the cart at a market. Online orders are confirmed once paid.",
+    "Cape Town's first stuffed bagel. Korean-inspired, handmade stuffed bagels from our cart at markets and festivals across Cape Town. Halal menu. Order on the website by Wednesday and collect on Saturday at one of our pickup points, or just buy at the cart at a market. Online orders are confirmed once paid.",
   url: `${SITE_URL}/`,
   image: [OG_IMAGE, `${SITE_URL}/hero-bagel.jpeg`],
   logo: `${SITE_URL}/logo-badge.png`,
@@ -64,9 +64,9 @@ const business = {
 export const PAGES: PageMeta[] = [
   {
     path: "/",
-    title: "STUFF'D Bagels | Stuffed Bagels in Cape Town",
+    title: "STUFF'D Bagels | Korean-Inspired Stuffed Bagels in Cape Town",
     description:
-      "Cape Town's first stuffed bagel. Fresh, handmade stuffed bagels at markets and events across Cape Town. Order ahead online.",
+      "Cape Town's first stuffed bagel. Korean-inspired, handmade stuffed bagels at markets and events across Cape Town. Order ahead online.",
     jsonLd: [
       {
         "@context": "https://schema.org",
