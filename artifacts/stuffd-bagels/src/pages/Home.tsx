@@ -753,7 +753,7 @@ export default function Home() {
             <div className="absolute inset-0 overflow-hidden">
               <img
                 src="/hero-bagel.jpeg"
-                alt="A hand holding a STUFF'D jalapeno bagel, stuffed with cream cheese and topped with jalapeno slices and paprika"
+                alt="Two hands holding half a STUFF'D jalapeno bagel, stuffed with cream cheese and topped with jalapeno slices and paprika"
                 width={802}
                 height={1067}
                 fetchPriority="high"
