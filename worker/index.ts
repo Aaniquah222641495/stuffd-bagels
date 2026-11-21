@@ -218,12 +218,47 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
   throw new HttpError(404, "Not found");
 }
 
+/**
+ * Static assets answer a Range request with the whole file (200). iPhone Safari will not play a video served that way, and
+ * other browsers stutter when they loop or seek. So videos get proper byte ranges (206). Our videos are small (a few MB).
+ */
+async function videoWithRanges(request: Request, env: Env): Promise<Response> {
+  const res = await env.ASSETS.fetch(new Request(request.url, { method: "GET", headers: { Accept: "*/*" } }));
+  if (!res.ok) return res;
+  const buf = await res.arrayBuffer();
+  const size = buf.byteLength;
+  const headers = new Headers(res.headers);
+  headers.set("Accept-Ranges", "bytes");
+  headers.delete("Content-Length");
+  const m = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get("Range") ?? "");
+  if (!m || (m[1] === "" && m[2] === "")) {
+    headers.set("Content-Length", String(size));
+    return new Response(request.method === "HEAD" ? null : buf, { status: 200, headers });
+  }
+  let start: number;
+  let end: number;
+  if (m[1] === "") {
+    start = Math.max(0, size - Number(m[2]));
+    end = size - 1;
+  } else {
+    start = Number(m[1]);
+    end = m[2] === "" ? size - 1 : Math.min(Number(m[2]), size - 1);
+  }
+  if (start >= size || start > end) {
+    headers.set("Content-Range", `bytes */${size}`);
+    return new Response(null, { status: 416, headers });
+  }
+  headers.set("Content-Range", `bytes ${start}-${end}/${size}`);
+  headers.set("Content-Length", String(end - start + 1));
+  return new Response(request.method === "HEAD" ? null : buf.slice(start, end + 1), { status: 206, headers });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const { pathname } = url;
     if (pathname !== "/api" && !pathname.startsWith("/api/")) {
-      const res = await env.ASSETS.fetch(request);
+      const res = pathname.endsWith(".mp4") ? await videoWithRanges(request, env) : await env.ASSETS.fetch(request);
       return env.NOINDEX === "1" ? withNoindex(res) : res;
     }
     // The API is HTTPS only (passwords and orders). The zone's "Always Use HTTPS" redirects browsers; this refuses anything that
