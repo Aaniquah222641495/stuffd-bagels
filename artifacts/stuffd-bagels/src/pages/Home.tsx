@@ -191,9 +191,11 @@ function Polaroid({
 function TrailLinks({
   sched,
   center = false,
+  preorder = false,
 }: {
   sched: { name: string; venue: string; start: string; end: string };
   center?: boolean;
+  preorder?: boolean;
 }) {
   const map = mapsUrl(sched.venue);
   const cls =
@@ -214,6 +216,11 @@ function TrailLinks({
       >
         Add to calendar
       </a>
+      {preorder && (
+        <a href="#order" className={cls} aria-label={`Pre-order for ${sched.name}`}>
+          Pre-order
+        </a>
+      )}
     </div>
   );
 }
@@ -833,9 +840,13 @@ export default function Home() {
           {showPreorderLine && nextUp && (
             <p className="-mt-4 mb-10 text-base font-medium max-w-[52ch]">
               Skip the queue: pre-order online and collect at the stall on market day.{" "}
-              <a href="#order" className="font-bold text-blue underline underline-offset-4">
-                Pre-order for {nextUp.name} →
-              </a>
+              {scheduleCards.length === 1 ? (
+                <a href="#order" className="font-bold text-blue underline underline-offset-4">
+                  Pre-order for {nextUp.name} →
+                </a>
+              ) : (
+                <span className="font-bold">Tap Pre-order under any market below.</span>
+              )}
             </p>
           )}
 
@@ -874,7 +885,7 @@ export default function Home() {
                     )}
                     <div className="font-bold text-xl leading-snug mt-3">{sched.name}</div>
                     <div className="text-ink/75 text-base mt-1 max-w-[26ch]">{sched.venue}</div>
-                    <TrailLinks sched={sched} center />
+                    <TrailLinks sched={sched} center preorder={showPreorderLine} />
                   </li>
                 ))}
                 {/* Only one market listed: the cart fills the empty right-hand side (founder 2026-11-22). Decorative. */}
@@ -904,7 +915,7 @@ export default function Home() {
                       <div className="font-bold text-lg leading-snug mt-2">{sched.name}</div>
                       <div className="text-ink/75 text-sm">{sched.venue}</div>
                       <div className="text-ink/75 text-sm">{sched.when}</div>
-                      <TrailLinks sched={sched} />
+                      <TrailLinks sched={sched} preorder={showPreorderLine} />
                     </div>
                   </li>
                 ))}
