@@ -841,7 +841,7 @@ export default function Home() {
               {/* Desktop: across the page */}
               <ol
                 className="hidden lg:grid list-none p-0 m-0 relative"
-                style={{ gridTemplateColumns: `repeat(${scheduleCards.length}, minmax(0, 1fr))` }}
+                style={{ gridTemplateColumns: `repeat(${Math.max(scheduleCards.length, 2)}, minmax(0, 1fr))` }}
               >
                 {scheduleCards.length > 1 && (
                   <div
@@ -863,6 +863,12 @@ export default function Home() {
                     <TrailLinks sched={sched} center />
                   </li>
                 ))}
+                {/* Only one market listed: the cart fills the empty right-hand side (founder 2026-11-22). Decorative. */}
+                {scheduleCards.length === 1 && (
+                  <li aria-hidden="true" className="flex items-center justify-center px-4">
+                    <img src="/cart.svg" alt="" width={520} height={460} loading="lazy" className="cart-bob w-full max-w-[20rem]" />
+                  </li>
+                )}
               </ol>
 
               {/* Phone: down the side */}
