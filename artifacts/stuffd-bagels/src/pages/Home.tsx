@@ -639,6 +639,12 @@ export default function Home() {
   const itemCount = Object.values(quantities).reduce((a, b) => a + b, 0);
   const scheduleCards = events.map(eventToCard);
   const nextUp = scheduleCards[0];
+  // Market pre-order line: PREVIEW ONLY until SB-20 ships (founder 2026-11-22). Production never shows it from this build;
+  // SB-20 replaces this with the per-market "Take pre-orders" toggle and a link that preselects the market.
+  const [showPreorderLine, setShowPreorderLine] = useState(false);
+  useEffect(() => {
+    setShowPreorderLine(window.location.hostname.startsWith("stuffdbagels-preview."));
+  }, []);
 
   const ordersOffRaw =
     availability !== null &&
@@ -822,8 +828,16 @@ export default function Home() {
             label="Markets"
             id="where"
             title="Where we at"
-            note="The cart moves around Cape Town. Just come and buy at the cart, no order needed."
+            note="The cart moves around Cape Town."
           />
+          {showPreorderLine && nextUp && (
+            <p className="-mt-4 mb-10 text-base font-medium max-w-[52ch]">
+              Skip the queue: pre-order online and collect at the stall on market day.{" "}
+              <a href="#order" className="font-bold text-blue underline underline-offset-4">
+                Pre-order for {nextUp.name} →
+              </a>
+            </p>
+          )}
 
           {scheduleCards.length === 0 && (
             <p className="rounded-[22px] bg-photo shadow-soft px-5 py-5 text-base font-medium">
