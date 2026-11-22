@@ -72,7 +72,7 @@ export const FAQ = [
   },
   {
     q: "What if I cancel or can't collect my order?",
-    a: "If you cancel before the Wednesday cut-off, you can choose a refund or credit. If you cancel after the cut-off, or you pay and don't collect, your order becomes credit for another collection Saturday or one of our markets, valid for 6 months from your original collection Saturday. Credit is not paid out as cash.",
+    a: "If you cancel before the Wednesday cut-off, you can choose a refund or credit. If you cancel after the cut-off, or you pay and don't collect, your order becomes credit for another collection Saturday or one of our markets, valid for 6 months from your original collection Saturday. Credit is not paid out as cash. To cancel for a refund, use the \"Cancel my order\" button in your confirmation email. To choose credit instead, email us before the cut-off.",
     time: "10:45",
   },
   {

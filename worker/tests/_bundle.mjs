@@ -83,8 +83,11 @@ export function fakeSiteverify(url, init) {
   return new Response(JSON.stringify(good ? { success: true, hostname: "example.com", challenge_ts: new Date().toISOString() } : { success: false, "error-codes": ["invalid-input-response"] }));
 }
 
+/** A made-up CANCEL_LINK_SECRET for tests (32+ characters, like the real one). Never a real secret. */
+export const TEST_CANCEL_SECRET = "test-cancel-link-secret-0123456789-abcdefghij";
+
 /** Yoco settings for Node tests of the order path: a test key that is obviously fake, and a test-mode origin. APP_ENV development lets the Turnstile test keys work (never in production). */
-export const YOCO_TEST_ENV = { APP_ENV: "development",  YOCO_SECRET_KEY: "sk_test_localfake1234567890", YOCO_WEBHOOK_SECRET: "whsec_" + Buffer.alloc(24, 7).toString("base64"), YOCO_MODE: "test", SITE_ORIGIN: "https://preview.example.workers.dev" };
+export const YOCO_TEST_ENV = { APP_ENV: "development", CANCEL_LINK_SECRET: TEST_CANCEL_SECRET, YOCO_SECRET_KEY: "sk_test_localfake1234567890", YOCO_WEBHOOK_SECRET: "whsec_" + Buffer.alloc(24, 7).toString("base64"), YOCO_MODE: "test", SITE_ORIGIN: "https://preview.example.workers.dev" };
 
 /** A fetch that answers Yoco's create-checkout call like Yoco would, and hands every other request to `other`. `calls` records the Yoco ones. */
 export function fakeYocoFetch(other = async () => new Response('{"ok":true}')) {

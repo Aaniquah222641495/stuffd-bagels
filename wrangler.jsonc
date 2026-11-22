@@ -23,6 +23,15 @@
 // The preview uses Cloudflare's documented always-pass test keys (the site key is below; the Worker falls back to the matching test secret
 // when APP_ENV is preview). In production a missing secret refuses every order and booking and says so in `wrangler tail`.
 //
+// Automatic refunds (founder 2026-11-19): the confirmation email carries a signed "Cancel my order" link. The Worker signs it with a secret of its own,
+// CANCEL_LINK_SECRET: 32 or more random characters, set by the founder at the prompt (never here, in chat or in git):
+//   openssl rand -base64 48        (make one; paste it into the prompt, then `clear`)
+//   npx wrangler@4.148.0 secret put CANCEL_LINK_SECRET            (production, no --env)
+//   npx wrangler@4.148.0 secret put CANCEL_LINK_SECRET --env preview
+// Without it (or under 32 characters) the Worker refuses every order (503, with a log line) and every cancellation, so no money is taken for
+// an order that could not carry a cancel link. Changing it later makes every link already emailed stop working (customers then write to the shop).
+// The Orders object gets new columns for refunds when it starts (ALTER TABLE in worker/orders.ts), so there is NO new wrangler migration.
+//
 // Rate limits: Durable Object class Limiter (worker/limiter.ts), SQLite-backed so it runs on the Workers Free plan.
 // Bindings are not inherited by environments, so the preview repeats it; the migration is inherited.
 //

@@ -2,38 +2,18 @@
 // Never says "confirmed" because of the redirect alone: only the server's status (set by Yoco's signed webhook) does.
 import { useEffect, useState } from "react";
 import { DRAFT_KEY } from "@/components/order-forms";
+import { ResultShell, resultBtn, shopMail } from "@/components/result-shell";
 
-const EMAIL = "stuffd.bagels@gmail.com";
 const REF = /^SB-[A-Z2-9]{6}$/;
 const POLL_MS = 2000;
 const POLL_FOR_MS = 30000;
 
 type Kind = "success" | "cancel" | "failure" | "unknown";
-type Phase = "loading" | "confirming" | "confirmed" | "slow" | "expired" | "notfound";
+type Phase = "loading" | "confirming" | "confirmed" | "cancelled" | "slow" | "expired" | "notfound";
 
-function Shell({ children, testId }: { children: React.ReactNode; testId: string }) {
-  return (
-    <main className="min-h-screen bg-paper text-ink">
-      <div className="bg-blue text-white">
-        <div className="max-w-3xl mx-auto px-5 sm:px-8 py-10">
-          <a href="/" className="eyebrow text-white underline underline-offset-4">Back to the menu</a>
-          <h1 className="font-bubble text-5xl sm:text-6xl leading-[0.95] m-0 mt-5">Your order</h1>
-        </div>
-      </div>
-      <div className="max-w-3xl mx-auto px-5 sm:px-8 py-12">
-        <div role="status" aria-live="polite" data-testid="result-card" data-state={testId} className="rounded-[22px] bg-photo shadow-soft p-7 sm:p-9">
-          {children}
-        </div>
-      </div>
-    </main>
-  );
-}
-
-const btn =
-  "inline-block mt-6 rounded-full border-2 border-ink px-6 py-3 font-black uppercase tracking-widest text-sm text-ink no-underline transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0.5";
-const mail = (ref: string) => (
-  <a className="font-bold text-blue underline underline-offset-4" href={`mailto:${EMAIL}${ref ? `?subject=${encodeURIComponent("Order " + ref)}` : ""}`}>{EMAIL}</a>
-);
+const Shell = ResultShell;
+const btn = resultBtn;
+const mail = shopMail;
 
 export default function OrderResult() {
   const [kind, setKind] = useState<Kind | null>(null); // null until the page is running in the browser (the prerendered HTML has no query string)
@@ -76,7 +56,8 @@ export default function OrderResult() {
           /* ignore */
         }
         setPhase("confirmed");
-      } else if (status === "expired") setPhase("expired");
+      } else if (status === "cancelled") setPhase("cancelled");
+      else if (status === "expired") setPhase("expired");
       else if (status === "unknown") setPhase("notfound");
       else if (status === "slow" || Date.now() - started >= POLL_FOR_MS) setPhase("slow");
       else setTimeout(tick, POLL_MS);
@@ -134,6 +115,17 @@ export default function OrderResult() {
         <h2 className="font-bubble text-4xl leading-none m-0 mt-3">We've got it!</h2>
         <p className="text-base leading-relaxed mt-4 mb-0">Order confirmed. Your confirmation email is on its way.</p>
         <p className="text-sm text-ink/75 leading-relaxed mt-3 mb-0">Your reference is <strong>{ref}</strong>. Check your spam folder if you can't see the email.</p>
+        <a href="/" className={btn}>Back to the menu</a>
+      </Shell>
+    );
+  }
+  if (phase === "cancelled") {
+    return (
+      <Shell testId="cancelled">
+        <p className="eyebrow m-0 text-blue">Order cancelled</p>
+        <h2 className="font-bubble text-4xl leading-none m-0 mt-3">This order was cancelled</h2>
+        <p className="text-base leading-relaxed mt-4 mb-0">Your order is cancelled and your refund is on its way back to your card. We've emailed you a confirmation.</p>
+        <p className="text-sm text-ink/75 leading-relaxed mt-3 mb-0">Your reference is <strong>{ref}</strong>.</p>
         <a href="/" className={btn}>Back to the menu</a>
       </Shell>
     );

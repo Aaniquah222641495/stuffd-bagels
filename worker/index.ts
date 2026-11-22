@@ -7,6 +7,7 @@ export { Orders } from "./orders";
 import { handleForm } from "./forms";
 import { turnstileSiteKey } from "./turnstile";
 import { handleAttention, handleStatus, handleWebhook } from "./payments";
+import { handleCancel, handleCancelCheck } from "./cancel";
 import { HttpError, errorResponse, json, plainHttpRefused, readJsonObject, withNoindex } from "./http";
 import {
   LIMITS,
@@ -56,6 +57,9 @@ export interface Env {
   TURNSTILE_SECRET_KEY?: string;
   // Tests only: honoured only for http://127.0.0.1 (a local fake siteverify).
   TURNSTILE_API_BASE?: string;
+  // Signs the "Cancel my order" link in the confirmation email (worker/cancel-token.ts). Worker secret, 32+ random characters, set by the founder.
+  // Missing or shorter: no order is accepted and no cancellation works (fails closed).
+  CANCEL_LINK_SECRET?: string;
 }
 
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -210,6 +214,14 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
   if (parts.length === 3 && parts[1] === "order" && parts[2] === "status") {
     methodOnly(request, ["GET", "HEAD"]);
     return handleStatus(request, env);
+  }
+  if (parts.length === 3 && parts[1] === "order" && parts[2] === "cancel") {
+    methodOnly(request, ["POST"]);
+    return handleCancel(request, env);
+  }
+  if (parts.length === 4 && parts[1] === "order" && parts[2] === "cancel" && parts[3] === "check") {
+    methodOnly(request, ["POST"]);
+    return handleCancelCheck(request, env);
   }
   if (parts.length === 3 && parts[1] === "yoco" && parts[2] === "webhook") {
     methodOnly(request, ["POST"]);

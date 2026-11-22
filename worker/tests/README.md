@@ -14,6 +14,11 @@ None of these send real email: the "Apps Script" is a fake (`fake-apps-script.mj
 | `turnstile.mjs` | Turnstile server check (D-SB-7) with the real Worker code and a fake siteverify with real-key behaviour: good token, missing / empty / oversize token (400 before any call), bad and spent tokens (403), no rate-limit allowance used by failed checks, hostname (www. ok) and action (order vs booking), production without the secret or with a documented TEST secret (503 + clear log line), preview / development fall back to the always-pass test keys, Cloudflare down / 500 / not JSON / secret rejected (503, fails closed), no secret or token in logs, a repeat of the same press needs no second token | Node only |
 | `turnstile-api.mjs` | The same over HTTP: `/api/config` serves the site key, no token 400, forged token 403, no Yoco checkout or email, `remoteip` passed | wrangler dev + fake Yoco (also the fake siteverify) + fake script |
 | `turnstile-browser.mjs` | The widget in Chrome with the REAL CSP (the other browser tests bypass it) at 390 and 1280: script and frame load, token in the order and booking, reset after a refusal, no CSP violations, script blocked gives a plain message, a visible interactive challenge (documented forced-interactive test key) fits the card, axe 0 | wrangler dev + fakes + Chrome + internet (the widget script comes from challenges.cloudflare.com) |
+| `cancel-token.mjs` | Automatic refunds: the signed cancel link (round trip, any changed reference / cut-off / signature, the spare-bit spelling, wrong or missing or short secret, link shape, the "Wednesday 25 Nov at 23:59" label) and the Yoco refund client (request shape, every bad answer) | Node only |
+| `cancel-core.mjs` | Automatic refunds in the state machine with a fake clock: one claim for 10 parallel clicks, Wed 23:59:59.999 SAST vs Thu 00:00:00.000, closed after the cut-off, link expiry only shortens, unpaid / mismatch / old orders refused, failed -> retry, pending, stuck claim after 2 minutes, cancellation email outbox and retries, personal data dropped, retention | Node only |
+| `cancel-handler.mjs` | Automatic refunds end to end in Node (real order, webhook and cancel handlers, fake Yoco refund): secret missing refuses orders, check is read only, exactly one `{}` refund with `Idempotency-Key: refund-<ref>`, the browser's amount ignored, double / parallel clicks, cut-off boundary, pending, Yoco 500 / network / garbage / `failed` status, Yoco answered but the save failed, bad tokens cost nothing, Turnstile, rate limits, fails closed, repeat-press limit, logs | Node only |
+| `cancel-api.mjs` | The same over HTTP against `wrangler dev` with the real Durable Object (alarm sends the signed link and the cancellation emails): link matches an independent HMAC, GET never cancels, one refund for 5 parallel presses, pending, failure + retry, attention list, expired link, per-order limit, no personal data in wrangler's output | wrangler dev (with `CANCEL_LINK_SECRET`) + fake Yoco + fake script |
+| `cancel-browser.mjs` | The `/order/cancel` page in Chrome at 390 and 1280: every state (invalid link, open, refunded, pending, busy, closed with the policy word for word, unknown, failed + Try again, refusals), the browser sends only `{ token, turnstileToken }`, the token never appears in a URL, a real cancellation against the real Worker, headers, axe 0 | wrangler dev + fakes + Chrome + internet |
 | `pickup-slots.mjs` | Collection hours to one-hour time chips: structured opens/closes, old free text ("13:00 to 18:00", "10am to 1pm", "1pm - 6pm"), unclear text gives none; Worker keeps old points and validates new hours | Node only |
 | `webkit-form.mjs` | Order form in WebKit at 390 and 1280 (single-choice line, chips + keyboard, notes, mobile bar, axe). Strips the CSP header locally because WebKit upgrades http://localhost files to https | wrangler dev + fakes |
 | `limiter-unit.mjs` | Counter logic: IPv6 /64 keys, email normalising, windows, refunds, daily cap, 12 parallel takes allow exactly 5 | Node only |
@@ -39,6 +44,9 @@ node worker/tests/orders-core.mjs
 node worker/tests/payments-handler.mjs
 node worker/tests/pickup-slots.mjs
 node worker/tests/turnstile.mjs
+node worker/tests/cancel-token.mjs
+node worker/tests/cancel-core.mjs
+node worker/tests/cancel-handler.mjs
 
 # in two terminals. TOKEN is any 32+ character value (the Worker will not forward without one).
 # A fresh --persist-to folder per session keeps the shared daily counters (40 submissions) from carrying over.
@@ -46,10 +54,12 @@ FAKE_PORT=8899 node worker/tests/fake-apps-script.mjs /tmp/fake.log   # FAKE_POR
 FAKE_YOCO_PORT=8798 node worker/tests/fake-yoco.mjs
 export WHSEC="whsec_$(openssl rand -base64 24)"   # made-up local value; never a real Yoco secret
 export TOKEN=$(openssl rand -base64 36 | tr -d '/+=\n')
+export CANCEL=$(openssl rand -base64 36 | tr -d '/+=\n')   # CANCEL_LINK_SECRET for the automatic-refund tests
 # TURNSTILE_SITE_KEY must be overridden with Cloudflare's test key: the top level of wrangler.jsonc holds the REAL production site key, which only works on stuffdbagels.co.za.
 # --var APP_ENV:development is REQUIRED: the top level of wrangler.jsonc is production, which refuses the short test password
 npx wrangler@4.148.0 dev --port 8787 --persist-to /tmp/stuffd-state --var APP_ENV:development --var TURNSTILE_SITE_KEY:1x00000000000000000000AA --var TURNSTILE_API_BASE:http://127.0.0.1:8798 --var APPS_SCRIPT_URL:http://127.0.0.1:8899/exec --var APPS_SCRIPT_TOKEN:$TOKEN \
-  --var YOCO_API_BASE:http://127.0.0.1:8798 --var YOCO_SECRET_KEY:sk_test_localfake0123456789 --var YOCO_WEBHOOK_SECRET:$WHSEC --var YOCO_MODE:test --var SITE_ORIGIN:http://localhost:8787
+  --var YOCO_API_BASE:http://127.0.0.1:8798 --var YOCO_SECRET_KEY:sk_test_localfake0123456789 --var YOCO_WEBHOOK_SECRET:$WHSEC --var YOCO_MODE:test --var SITE_ORIGIN:http://localhost:8787 \
+  --var CANCEL_LINK_SECRET:$CANCEL   # any made-up 32+ character value: orders are refused without it
 
 # then
 rm -f /tmp/fake.log
@@ -59,6 +69,8 @@ TOKEN=$TOKEN node worker/tests/forms-api.mjs /tmp/fake.log
 node worker/tests/prices.mjs      /tmp/fake.log
 node worker/tests/turnstile-api.mjs /tmp/fake.log
 WHSEC=$WHSEC node worker/tests/payments-api.mjs /tmp/fake.log /tmp/wrangler.out   # wrangler's output, started with > /tmp/wrangler.out 2>&1
+rm -f /tmp/fake.log; curl -s -X POST http://127.0.0.1:8798/_reset
+CANCEL=$CANCEL WHSEC=$WHSEC node worker/tests/cancel-api.mjs /tmp/fake.log /tmp/wrangler.out
 ```
 The API tests read the admin password from the git-ignored `.dev.vars`, create their own pickup points and use a fresh pretend
 client IP (the Worker reads CF-Connecting-IP, which wrangler dev lets a test set) for a clean rate-limit slate. They end with no pickup points saved: the site's "no pickup points yet" state.
@@ -77,3 +89,9 @@ with `APP_ENV:development` uses the documented always-pass test secret; `--var T
 fake Yoco server (honoured only for http://127.0.0.1) so no test needs the internet, except `turnstile-browser.mjs`, which loads Cloudflare's real
 widget script. Browser tests add the pretend CF-Connecting-IP to our own /api calls with `ctx.route`, never `extraHTTPHeaders` (a custom header on
 calls to challenges.cloudflare.com breaks the widget). A page clock pretending to be days off gives Turnstile error 200100 (clock incorrect).
+
+Automatic refunds: Yoco only refunds LIVE checkouts, so every test here uses the fake Yoco's refund route (`fake-yoco.mjs`: `POST /_refund {mode}` picks succeeded,
+pending, fail, garbage or status; a second refund of one checkout under a different Idempotency-Key answers 422, so a double refund would show). The real refund was
+proved by hand on live order SB-N9SE2N (2026-11-20); the first live test through the site is in the PR's manual test plan. Frontend build on this Mac: the repo's pnpm
+overrides drop the Mac native binaries, so run the build with `NODE_PATH` pointing at a scratch folder holding `@rollup/rollup-darwin-x64`, `@esbuild/darwin-x64`,
+`lightningcss-darwin-x64` and `@tailwindcss/oxide-darwin-x64` (installed with `npm install --no-save` there, never into the repo).
