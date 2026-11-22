@@ -569,3 +569,8 @@
 @media (prefers-reduced-motion: no-preference) {
   .order-bar { animation: order-bar-in 0.25s ease-out both; }
 }
+
+/* Hero video: never for visitors who ask for less motion; they keep the still underneath. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-video { display: none; }
+}

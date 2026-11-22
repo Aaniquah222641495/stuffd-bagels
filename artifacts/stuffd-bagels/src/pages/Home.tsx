@@ -124,7 +124,7 @@ const BELT: { src: string; avif?: string; word: string }[] = [
   { src: "/pizza-bagel.png", word: "Pizza" },
   { src: "/jalapeno-bagel.png", word: "Jalapeno" },
   { src: "/cheesy-bagel.png", word: "Cheesy" },
-  { src: "/plain-bagel.png", word: "Classic" },
+  { src: "/plain-bagel.webp", word: "Classic" }, // client photo IMG_6064, background removed (founder 2026-11-22)
   { src: "/steakd-bagel.png", word: "Steak'd" }, // cut out of the client's 2026-11-16 box photo (Vision subject lift), same style as the others
   { src: "/hero-bagel.jpeg", word: "Packed right" },
 ];
@@ -133,7 +133,7 @@ const ABOUT_PHOTOS = [
   { src: "/ig/cart.jpg", alt: "The STUFF'D Bagels cart at a market, blue counter and cloud sign", caption: "find the cart", width: 506, height: 900, position: "50% 85%" },
   { src: "/bite-mountains.jpeg", avif: "/bite-mountains.avif", alt: "A woman biting into a STUFF'D jalapeno bagel with the Cape mountains behind her", caption: "jalapeno, mid-bite", width: 760, height: 1013, aspect: "3/4", position: "50% 30%" },
   { src: "/ig/made-fresh.jpg", alt: "Bagels being stuffed by hand at the STUFF'D cart", caption: "made fresh", width: 506, height: 900, position: "50% 60%" },
-  { src: "/ig/chic.jpg", alt: "A customer biting into a STUFF'D bagel at a market", caption: "market day", width: 393, height: 700, position: "50% 40%" },
+  { src: "/ig/table.jpg", alt: "Two STUFF'D pizza bagels in takeaway boxes on a white garden table, with iced matcha drinks", caption: "market day", width: 623, height: 900, position: "50% 60%" },
   { src: "/ig/box-of-four.jpg", alt: "A box of five stuffed bagels: four cheesy garlic and one pizza", caption: "box of five", width: 675, height: 900 },
   { src: "/ig/unboxing.jpg", alt: "Opening a STUFF'D takeaway box", caption: "the unboxing", width: 450, height: 800, position: "50% 35%" },
   { src: "/ig/merch.jpg", alt: "A STUFF'D team member holding a fresh pizza bagel", caption: "hot off the cart", width: 675, height: 900, position: "50% 70%" },
@@ -191,9 +191,11 @@ function Polaroid({
 function TrailLinks({
   sched,
   center = false,
+  preorder = false,
 }: {
   sched: { name: string; venue: string; start: string; end: string };
   center?: boolean;
+  preorder?: boolean;
 }) {
   const map = mapsUrl(sched.venue);
   const cls =
@@ -214,6 +216,11 @@ function TrailLinks({
       >
         Add to calendar
       </a>
+      {preorder && (
+        <a href="#order" className={cls} aria-label={`Pre-order for ${sched.name}`}>
+          Pre-order
+        </a>
+      )}
     </div>
   );
 }
@@ -640,6 +647,48 @@ export default function Home() {
   const scheduleCards = events.map(eventToCard);
   const nextUp = scheduleCards[0];
 
+  // Hero video autoplay, made sure: React doesn't always put `muted` on the element in time, and some phones (iPhone Low
+  // Power Mode) refuse autoplay. So: force muted, try play() when ready and when the tab comes back; if the browser still
+  // says no, start on the visitor's first tap or scroll. Reduced-motion visitors never get the video (CSS hides it).
+  const heroVideo = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = heroVideo.current;
+    if (!v || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    v.muted = true;
+    v.defaultMuted = true;
+    v.setAttribute("muted", "");
+    v.setAttribute("playsinline", "");
+    const tryPlay = () => {
+      if (v.paused) v.play().catch(() => {});
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") tryPlay();
+    };
+    const firstGesture = () => {
+      tryPlay();
+      window.removeEventListener("touchstart", firstGesture);
+      window.removeEventListener("scroll", firstGesture);
+      window.removeEventListener("pointerdown", firstGesture);
+    };
+    tryPlay();
+    v.addEventListener("canplay", tryPlay);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("touchstart", firstGesture, { passive: true });
+    window.addEventListener("scroll", firstGesture, { passive: true });
+    window.addEventListener("pointerdown", firstGesture);
+    return () => {
+      v.removeEventListener("canplay", tryPlay);
+      document.removeEventListener("visibilitychange", onVisible);
+      firstGesture();
+    };
+  }, []);
+  // Market pre-order line: PREVIEW ONLY until SB-20 ships (founder 2026-11-22). Production never shows it from this build;
+  // SB-20 replaces this with the per-market "Take pre-orders" toggle and a link that preselects the market.
+  const [showPreorderLine, setShowPreorderLine] = useState(false);
+  useEffect(() => {
+    setShowPreorderLine(window.location.hostname.startsWith("stuffdbagels-preview."));
+  }, []);
+
   const ordersOffRaw =
     availability !== null &&
     (!availability.ordersEnabled || availability.closedToday);
@@ -708,7 +757,7 @@ export default function Home() {
               className="hero-pop text-white text-lg lg:text-xl font-medium leading-relaxed max-w-[36ch] m-0 text-balance"
               style={{ "--d": "180ms" } as CSSProperties}
             >
-              Classic New York bagels, stuffed with cream cheese and bold
+              Korean street-food style bagels, stuffed with cream cheese and bold
               fillings. Order ahead for Saturday pickup, or find the cart at a market.
             </p>
             <div
@@ -751,13 +800,28 @@ export default function Home() {
           {/* The food, full bleed. */}
           <div className="relative min-h-[440px] sm:min-h-[560px] lg:min-h-0">
             <div className="absolute inset-0 overflow-hidden">
+              {/* Still first (fast paint, and what reduced-motion visitors keep), the muted loop plays over it. */}
               <img
-                src="/hero-bagel.jpeg"
-                alt="A table of STUFF'D bagels, stuffed and topped with herbs and melted cheese"
-                width={736}
-                height={978}
+                src="/hero-poster.jpg"
+                alt="A woman biting into a STUFF'D jalapeno bagel, with the Cape mountains behind her"
+                width={720}
+                height={1280}
                 fetchPriority="high"
                 className="hero-settle absolute inset-0 w-full h-full object-cover"
+              />
+              <video
+                ref={heroVideo}
+                className="hero-video absolute inset-0 w-full h-full object-cover object-[50%_18%]"
+                src="/hero-video.mp4"
+                poster="/hero-poster.jpg"
+                width={720}
+                height={1280}
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="auto"
+                aria-hidden="true"
               />
               <div
                 aria-hidden="true"
@@ -769,16 +833,6 @@ export default function Home() {
               <span className="eyebrow block text-white/90">On the menu</span>
               <span className="font-bubble text-2xl sm:text-3xl leading-tight">Classic · Jalapeno · Cheesy · Pizza · Steak'd</span>
             </p>
-            {/* A sesame bagel floating over the seam. Decorative. */}
-            <img
-              src="/bagel-cutout.webp"
-              alt=""
-              aria-hidden="true"
-              width={440}
-              height={440}
-              className="spin-slow pointer-events-none absolute z-20 w-[130px] sm:w-[170px] lg:w-[220px] -top-[65px] sm:-top-[85px] right-6 lg:right-auto lg:top-[56%] lg:-left-[110px]"
-              style={{ filter: "drop-shadow(0 22px 26px rgba(10, 20, 70, 0.4))" }}
-            />
           </div>
         </div>
       </header>
@@ -818,8 +872,20 @@ export default function Home() {
             label="Markets"
             id="where"
             title="Where we at"
-            note="The cart moves around Cape Town. No order needed, come and buy at the cart."
+            note="The cart moves around Cape Town."
           />
+          {showPreorderLine && nextUp && (
+            <p className="-mt-4 mb-10 text-base font-medium max-w-[52ch]">
+              Skip the queue: pre-order online and collect at the stall on market day.{" "}
+              {scheduleCards.length === 1 ? (
+                <a href="#order" className="font-bold text-blue underline underline-offset-4">
+                  Pre-order for {nextUp.name} →
+                </a>
+              ) : (
+                <span className="font-bold">Tap Pre-order under any market below.</span>
+              )}
+            </p>
+          )}
 
           {scheduleCards.length === 0 && (
             <p className="rounded-[22px] bg-photo shadow-soft px-5 py-5 text-base font-medium">
@@ -837,7 +903,7 @@ export default function Home() {
               {/* Desktop: across the page */}
               <ol
                 className="hidden lg:grid list-none p-0 m-0 relative"
-                style={{ gridTemplateColumns: `repeat(${scheduleCards.length}, minmax(0, 1fr))` }}
+                style={{ gridTemplateColumns: `repeat(${Math.max(scheduleCards.length, 2)}, minmax(0, 1fr))` }}
               >
                 {scheduleCards.length > 1 && (
                   <div
@@ -856,9 +922,15 @@ export default function Home() {
                     )}
                     <div className="font-bold text-xl leading-snug mt-3">{sched.name}</div>
                     <div className="text-ink/75 text-base mt-1 max-w-[26ch]">{sched.venue}</div>
-                    <TrailLinks sched={sched} center />
+                    <TrailLinks sched={sched} center preorder={showPreorderLine} />
                   </li>
                 ))}
+                {/* Only one market listed: the cart fills the empty right-hand side (founder 2026-11-22). Decorative. */}
+                {scheduleCards.length === 1 && (
+                  <li aria-hidden="true" className="flex items-center justify-center px-4">
+                    <img src="/cart.svg" alt="" width={520} height={460} loading="lazy" className="cart-bob w-full max-w-[20rem]" />
+                  </li>
+                )}
               </ol>
 
               {/* Phone: down the side */}
@@ -880,7 +952,7 @@ export default function Home() {
                       <div className="font-bold text-lg leading-snug mt-2">{sched.name}</div>
                       <div className="text-ink/75 text-sm">{sched.venue}</div>
                       <div className="text-ink/75 text-sm">{sched.when}</div>
-                      <TrailLinks sched={sched} />
+                      <TrailLinks sched={sched} preorder={showPreorderLine} />
                     </div>
                   </li>
                 ))}
@@ -1209,9 +1281,9 @@ export default function Home() {
               </h2>
               <p className="text-lg leading-relaxed mt-8 mb-0 max-w-[46ch] text-white/90">
                 STUFF'D started with one question: why does Cape Town not have
-                a proper stuffed bagel? We took the classic New York bagel,
-                packed it with bold fillings, and brought it to the streets of
-                the Mother City.
+                a proper stuffed bagel? We took our cue from Korean street food,
+                packed our bagels with cream cheese and bold fillings, and brought
+                them to the streets of the Mother City.
               </p>
               <p className="text-lg leading-relaxed mt-4 mb-0 max-w-[46ch] text-white/90">
                 Find the cart at markets and festivals across Cape Town. No

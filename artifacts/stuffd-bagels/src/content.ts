@@ -14,13 +14,13 @@ export const menuPricingObject: Record<
 > = {
   "Classic Bagel": {
     price: 65,
-    image: "/card-classic.jpg", // straightened 2026-11-16 (the box was shot about 4 degrees off level)
+    image: "/card-classic.jpg", // client photo IMG_6064 (founder 2026-11-22), framed like the other cards
     avif: "/card-classic.avif",
     desc: "Cream Cheese",
   },
   "Jalapeno Bagel": {
     price: 75,
-    image: "/card-jalapeno.jpg", // the original box photo (founder 2026-11-16: keep the previous jalapeno picture), straightened
+    image: "/card-jalapeno.jpg", // client box photo 2026-11-16, right box (founder 2026-11-21: use it), cut 675x900 (3:4 like the others), zoomed about 10% tighter (founder 2026-11-21), blue backdrop recoloured to the light card surface
     avif: "/card-jalapeno.avif",
     desc: "Jalapeno Cream Cheese · Jalapenos",
   },
@@ -103,7 +103,6 @@ export const EVENTS: MarketEvent[] = [
   { id: "luxe-cape-club", name: "Luxe Cape Club", venue: "Sans Souci Grounds, Newlands", start: "2026-10-31", end: "2026-11-01" },
   { id: "spring-lovers", name: "Spring Lovers Pop Up", venue: "18 Schaap Rd, Schaapkraal", start: "2026-11-01", end: "2026-11-01" },
   { id: "summer-social-26", name: "Summer Social '26", venue: "Whitebox by Limitless, 30A Plantation Road, Wetton", start: "2026-12-05", end: "2026-12-05" },
-  { id: "mgm-26", name: "MGM '26", venue: "Venue to be announced", start: "2026-12-16", end: "2026-12-20" },
 ];
 
 export function upcomingEvents(list: MarketEvent[] = EVENTS, today = new Date()): MarketEvent[] {
