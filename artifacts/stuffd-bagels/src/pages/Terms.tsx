@@ -25,7 +25,7 @@ export default function Terms() {
           <li>We bake for one collection Saturday a month. Orders for it open on the 15th of the month.</li>
           <li>Order by Wednesday {DEFAULT_CUTOFF} before that Saturday. After that, orders for that Saturday close.</li>
           <li>Prices are in rand and are the prices shown on the site when you order. No VAT is charged.</li>
-          <li>For a market we have switched pre-orders on for, you can order and pay online and collect at our stall on the market day you pick. The same cut-off applies: the Wednesday before the market's first day.</li>
+          <li>For a market we have switched pre-orders on for, you can order and pay online and collect at our stall on the market day you pick. The same cancellation rules apply, and the cut-off is the Wednesday before the market's first day. It is shown at checkout.</li>
           <li>Our bagels contain gluten and dairy. Ask us about other allergens before you order.</li>
         </ul>
 
