@@ -218,7 +218,7 @@ export default function CancelOrder() {
             You can cancel until <strong>{info.cancelBy}</strong>. We'll refund the full {money(info.total)} to the card you paid with, through Yoco. It can take a few days to show on your statement, depending on your bank.
           </p>
           <p className="text-sm text-ink/75 leading-relaxed mt-3 mb-0">
-            Would you rather have credit for another collection Saturday or one of our markets? Don't cancel here. Email {shopMail(ref)} with your reference and tell us which one.
+            Would you rather have credit for another collection day or one of our markets? Don't cancel here. Email {shopMail(ref)} with your reference and tell us which one.
           </p>
         </>
       )}

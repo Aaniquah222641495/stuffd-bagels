@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { collectionSaturdays, isSaturday, marketClash, niceDay, opensOnFor, sastDay, saturdayWarning, skippedSaturdays } from "@/collection";
+import { collectionSaturdays, isSaturday, marketClash, marketCutoffDay, niceDay, opensOnFor, sastDay, saturdayWarning, skippedSaturdays } from "@/collection";
+import type { MarketPreorder } from "@/content";
 
 const ACCENT = "var(--sb-blue)";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -35,6 +36,7 @@ interface ScheduleEvent {
   venue: string;
   start: string;
   end: string;
+  preorder?: MarketPreorder;
 }
 
 const BLANK_EVENT = { name: "", venue: "", start: "", end: "" };
@@ -879,8 +881,9 @@ export default function Admin() {
         <section className="border-t-2 border-ink pt-10">
           <SectionHead num="06" label="Markets: Where We At" />
           <p className="text-xs text-ink/75 mb-6 tracking-wide">
-            Market dates appear on the home page under "Where we at". They are for information only: no online orders are taken
-            for markets, people just buy at the cart. Changes can take up to a minute to show.
+            Market dates appear on the home page under "Where we at". By default people just buy at the cart. Switch on
+            "Take pre-orders" for a market and customers can order and pay online, then collect at your stall on the day they
+            pick. Changes can take up to a minute to show.
           </p>
 
           {/* Add new event form */}
@@ -971,19 +974,22 @@ export default function Admin() {
                     ? niceDate(ev.start, { weekday: "long", day: "numeric", month: "long", year: "numeric" })
                     : `${niceDate(ev.start, { day: "numeric", month: "long" })} to ${niceDate(ev.end, { day: "numeric", month: "long", year: "numeric" })}`;
                 return (
-                  <div key={ev.id} className="flex items-start justify-between border-2 border-ink px-4 py-3">
-                    <div>
-                      <div className="font-black text-sm">{ev.name}</div>
-                      <div className="text-xs text-ink/75 font-medium mt-0.5">{ev.venue}</div>
-                      <div className="text-xs text-ink/75 mt-0.5">{when}</div>
+                  <div key={ev.id} className="border-2 border-ink px-4 py-3" data-testid={`event-${ev.id}`}>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="font-black text-sm">{ev.name}</div>
+                        <div className="text-xs text-ink/75 font-medium mt-0.5">{ev.venue}</div>
+                        <div className="text-xs text-ink/75 mt-0.5">{when}</div>
+                      </div>
+                      <button
+                        onClick={() => deleteEvent(ev.id)}
+                        aria-label={`Remove ${ev.name}`}
+                        className="text-xs tracking-widest uppercase font-black text-red-700 hover:text-red-900 transition-colors ml-4 shrink-0"
+                      >
+                        Remove
+                      </button>
                     </div>
-                    <button
-                      onClick={() => deleteEvent(ev.id)}
-                      aria-label={`Remove ${ev.name}`}
-                      className="text-xs tracking-widest uppercase font-black text-red-700 hover:text-red-900 transition-colors ml-4 shrink-0"
-                    >
-                      Remove
-                    </button>
+                    <PreorderEditor ev={ev} password={password} cutoffTime={data?.cutoffTime ?? "23:59"} inputCls={inputCls} btnCls={btnCls} onSaved={() => loadEvents(password)} />
                   </div>
                 );
               })}
@@ -993,6 +999,118 @@ export default function Admin() {
 
       </main>
     </div>
+  );
+}
+
+const LONGEST_PREORDER_MARKET_DAYS = 14;
+
+/** Every date from first to last day, inclusive (YYYY-MM-DD). */
+function daysBetween(start: string, end: string): string[] {
+  const out: string[] = [];
+  for (let t = Date.parse(`${start}T00:00:00Z`); t <= Date.parse(`${end}T00:00:00Z`) && out.length <= LONGEST_PREORDER_MARKET_DAYS; t += 86400000) {
+    out.push(new Date(t).toISOString().slice(0, 10));
+  }
+  return out;
+}
+
+/** SB-20: one market's pre-order settings: the toggle, the day orders open, which days, and the stall hours. */
+function PreorderEditor({
+  ev, password, cutoffTime, inputCls, btnCls, onSaved,
+}: {
+  ev: ScheduleEvent;
+  password: string;
+  cutoffTime: string;
+  inputCls: string;
+  btnCls: string;
+  onSaved: () => void;
+}) {
+  const days = daysBetween(ev.start, ev.end);
+  const tooLong = days.length > LONGEST_PREORDER_MARKET_DAYS;
+  const saved = ev.preorder;
+  const [enabled, setEnabled] = useState(saved?.enabled ?? false);
+  const [opensOn, setOpensOn] = useState(saved?.opensOn ?? "");
+  // Never set before: every day of the market is ticked, as the spec says.
+  const [picked, setPicked] = useState<string[]>(saved && saved.days.length > 0 ? saved.days : days);
+  const [opens, setOpens] = useState(saved && saved.opens !== "00:00" ? saved.opens : "");
+  const [closes, setCloses] = useState(saved && saved.closes !== "00:01" ? saved.closes : "");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const id = `po-${ev.id}`;
+  const label = "block text-[10px] font-black tracking-widest uppercase text-ink/75 mb-1";
+
+  async function save() {
+    setMsg("");
+    setBusy(true);
+    const res = await fetch(`${BASE}/api/admin/events/${encodeURIComponent(ev.id)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      body: JSON.stringify({ preorder: { enabled, opensOn: opensOn || undefined, days: picked, opens, closes } }),
+    });
+    setBusy(false);
+    if (res.ok) {
+      setMsg(enabled ? "Saved. Pre-orders are on for this market." : "Saved. Pre-orders are off: people just buy at the cart.");
+      onSaved();
+      return;
+    }
+    const body: { error?: string } = await res.json().catch(() => ({}));
+    setMsg(res.status === 400 && body.error ? body.error : res.status === 429 ? TOO_MANY : SOMETHING_WRONG);
+  }
+
+  return (
+    <fieldset className="mt-4 border-t-2 border-ink/20 pt-3" data-testid={`preorder-${ev.id}`}>
+      <legend className="sr-only">Pre-orders for {ev.name}</legend>
+      {tooLong ? (
+        <p className="text-xs text-ink/75">Pre-orders work for markets of up to {LONGEST_PREORDER_MARKET_DAYS} days. This one is longer.</p>
+      ) : (
+        <div className="space-y-3">
+          <label className="flex items-center gap-3 text-sm font-black min-h-11">
+            <input type="checkbox" data-testid={`${id}-toggle`} checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-5 w-5 accent-[var(--sb-blue)]" />
+            Take pre-orders
+          </label>
+          {enabled && (
+            <p className="text-xs text-ink/75">
+              Customers can order until Wednesday {niceDay(marketCutoffDay(ev.start)).replace(/^\w+ /, "")} at {cutoffTime} (the Wednesday before the first day), then pre-orders close.
+              Before that they can cancel for an automatic refund.
+            </p>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor={`${id}-open`} className={label}>Stall opens</label>
+              <input id={`${id}-open`} type="time" data-testid={`${id}-opens`} className={inputCls} value={opens} onChange={(e) => setOpens(e.target.value)} />
+            </div>
+            <div>
+              <label htmlFor={`${id}-close`} className={label}>Stall closes</label>
+              <input id={`${id}-close`} type="time" data-testid={`${id}-closes`} className={inputCls} value={closes} onChange={(e) => setCloses(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label htmlFor={`${id}-from`} className={label}>Orders open on (optional)</label>
+            <input id={`${id}-from`} type="date" data-testid={`${id}-opens-on`} className={inputCls} value={opensOn} max={marketCutoffDay(ev.start)} onChange={(e) => setOpensOn(e.target.value)} />
+            <p className="text-xs text-ink/75 mt-1">Leave empty to open as soon as you switch it on.</p>
+          </div>
+          <div role="group" aria-label={`Pre-order days for ${ev.name}`}>
+            <div className={label}>Pre-order days</div>
+            <div className="flex flex-wrap gap-2">
+              {days.map((d) => (
+                <label key={d} className="inline-flex items-center gap-2 border-2 border-ink px-3 min-h-11 text-xs font-black">
+                  <input
+                    type="checkbox" data-testid={`${id}-day-${d}`} checked={picked.includes(d)} className="h-4 w-4 accent-[var(--sb-blue)]"
+                    onChange={(e) => setPicked(e.target.checked ? [...picked, d].sort() : picked.filter((x) => x !== d))}
+                  />
+                  {niceDay(d)}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" onClick={save} disabled={busy} data-testid={`${id}-save`} className={`${btnCls} text-white`} style={{ background: ACCENT, borderColor: ACCENT }}>
+              {busy ? "Saving…" : "Save pre-order settings"}
+            </button>
+            {msg && <p role="status" className="text-xs font-medium">{msg}</p>}
+          </div>
+        </div>
+      )}
+    </fieldset>
   );
 }
 

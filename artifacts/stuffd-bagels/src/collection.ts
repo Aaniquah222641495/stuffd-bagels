@@ -10,6 +10,8 @@
 //    is never skipped (admin shows a warning instead), and neither is one already open for orders when a market is added.
 //  - The owner can add Saturdays (addedSaturdays) and take default ones off (removedSaturdays). There is no
 //    "weeks ahead" setting any more: the list itself says what can be ordered. Closed dates still win.
+import type { MarketEvent } from "./content";
+
 const SAST_MS = 2 * 3600 * 1000;
 const DAY_MS = 86400000;
 
@@ -55,14 +57,33 @@ export function isSaturday(iso: string): boolean {
  * Wednesday three days before. Date.UTC rolls month and year ends for us (Sat 1 Aug -> Wed 29 Jul).
  */
 export function cutoffInstant(saturdayIso: string, cutoffTime: string): number {
+  return wednesdayCutoffInstant(cutoffDay(saturdayIso), cutoffTime);
+}
+
+/** The first refused instant for a given Wednesday (YYYY-MM-DD): the end of its cut-off minute, South African time. */
+function wednesdayCutoffInstant(wednesdayIso: string, cutoffTime: string): number {
   const [h, m] = cutoffTime.split(":").map(Number);
-  const wedMidnightUtc = dayStartUtc(saturdayIso) - 3 * DAY_MS;
-  return wedMidnightUtc + (h * 60 + m + 1) * 60000 - SAST_MS;
+  return dayStartUtc(wednesdayIso) + (h * 60 + m + 1) * 60000 - SAST_MS;
 }
 
 /** The Wednesday (YYYY-MM-DD) that orders for this Saturday close on. */
 export function cutoffDay(saturdayIso: string): string {
   return new Date(dayStartUtc(saturdayIso) - 3 * DAY_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * SB-20: the Wednesday pre-orders for a market close on: the latest Wednesday STRICTLY before its first day (a Wednesday start
+ * closes the Wednesday a week earlier, a Thursday start the day before). Never free-typed, so "Wednesday cut-off" stays true.
+ */
+export function marketCutoffDay(startIso: string): string {
+  let t = dayStartUtc(startIso) - DAY_MS;
+  while (new Date(t).getUTCDay() !== 3) t -= DAY_MS;
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+/** The first instant pre-orders for this market are refused (and the first instant a customer can no longer self-cancel). */
+export function marketCutoffInstant(startIso: string, cutoffTime: string): number {
+  return wednesdayCutoffInstant(marketCutoffDay(startIso), cutoffTime);
 }
 
 /** The last Saturday of a month (month is 1 to 12). */
@@ -271,4 +292,58 @@ export function openingNote(now: number, rules: CollectionRules): string {
  * auto-reply (apps-script/Code.gs keeps its own copy: keep them identical).
  */
 export const CANCELLATION_POLICY =
-  "If you cancel before the Wednesday cut-off, you can choose a refund or credit. If you cancel after the cut-off, or you pay and don't collect, your order becomes credit for another collection Saturday or one of our markets, valid for 6 months from your original collection Saturday. Credit is not paid out as cash.";
+  "If you cancel before the Wednesday cut-off, you can choose a refund or credit. If you cancel after the cut-off, or you pay and don't collect, your order becomes credit for another collection day or one of our markets, valid for 6 months from your original collection day. Credit is not paid out as cash.";
+
+// ---------------------------------------------------------------------------------------------
+// SB-20: market pre-orders. Same pay-first flow as a Saturday; the customer picks ONE market day and collects at the stall.
+// One copy of the rules, used by the page and the Worker. The owner's master switch (orders on/off) is checked by the caller.
+// ---------------------------------------------------------------------------------------------
+export type MarketDayStatus = "ok" | "not_enabled" | "not_a_day" | "past" | "cutoff_passed" | "not_open_yet" | "closed_date";
+export type MarketState = "off" | "not_open_yet" | "open" | "closed";
+type MarketLike = Pick<MarketEvent, "start" | "end" | "preorder">;
+const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** True when the toggle is on AND the market has usable stall hours and at least one day (the Worker refuses a save without them). */
+export function preorderConfigured(m: MarketLike): boolean {
+  const p = m.preorder;
+  return !!p && p.enabled === true && HHMM_RE.test(p.opens) && HHMM_RE.test(p.closes) && p.closes > p.opens
+    && p.days.some((d) => d >= m.start && d <= m.end);
+}
+
+/** The days inside the market that the owner ticked, soonest first. */
+export function marketPreorderDays(m: MarketLike): string[] {
+  return (m.preorder?.days ?? []).filter((d) => d >= m.start && d <= m.end).sort();
+}
+
+export function marketDayStatus(iso: string, now: number, m: MarketLike, rules: Pick<CollectionRules, "cutoffTime" | "closedDates">): MarketDayStatus {
+  if (!preorderConfigured(m)) return "not_enabled";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || Number.isNaN(dayStartUtc(iso)) || !marketPreorderDays(m).includes(iso)) return "not_a_day";
+  const today = sastDay(now);
+  if (iso < today) return "past";
+  if (now >= marketCutoffInstant(m.start, rules.cutoffTime)) return "cutoff_passed";
+  const opens = m.preorder?.opensOn;
+  if (opens && today < opens) return "not_open_yet";
+  if (rules.closedDates.includes(iso)) return "closed_date";
+  return "ok";
+}
+
+/** Market days a customer can order for right now. */
+export function availableMarketDays(now: number, m: MarketLike, rules: Pick<CollectionRules, "cutoffTime" | "closedDates">): string[] {
+  return marketPreorderDays(m).filter((d) => marketDayStatus(d, now, m, rules) === "ok");
+}
+
+/** What the page says about a market: off (walk-up only), waiting to open, open, or closed (cut-off passed). */
+export function marketState(now: number, m: MarketLike, rules: Pick<CollectionRules, "cutoffTime" | "closedDates">): MarketState {
+  if (!preorderConfigured(m)) return "off";
+  if (now >= marketCutoffInstant(m.start, rules.cutoffTime)) return "closed";
+  if (availableMarketDays(now, m, rules).length > 0) return "open";
+  const opens = m.preorder?.opensOn;
+  if (opens && sastDay(now) < opens && marketPreorderDays(m).some((d) => d >= sastDay(now) && !rules.closedDates.includes(d))) return "not_open_yet";
+  return "off"; // every day is past or closed
+}
+
+/** Stall hours as "10am to 7pm", or "" when not set. */
+export function marketHoursLabel(m: MarketLike): string {
+  const p = m.preorder;
+  return p && HHMM_RE.test(p.opens) && HHMM_RE.test(p.closes) && p.closes > p.opens ? hoursLabel({ opens: p.opens, closes: p.closes }) : "";
+}

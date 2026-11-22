@@ -155,7 +155,10 @@ export interface OrderDraft {
   phone: string;
   email: string;
   pickup: string;
+  /** The collection day: a Saturday, or the market day for a market pre-order. */
   saturday: string;
+  /** SB-20: the market id when the order was a market pre-order, else "". */
+  market: string;
   pickupTime: string;
   notes: string;
 }
@@ -173,7 +176,7 @@ export function readDraft(): OrderDraft | null {
     }
     return {
       ref: str(d.ref, 20), quantities: d.quantities as Record<string, number>, toppingQty: (typeof d.toppingQty === "object" && d.toppingQty ? d.toppingQty : {}) as Record<string, number>,
-      name: str(d.name, 60), phone: str(d.phone, 20), email: str(d.email, 254), pickup: str(d.pickup, 64), saturday: str(d.saturday, 10), pickupTime: str(d.pickupTime, 40), notes: str(d.notes, 300),
+      name: str(d.name, 60), phone: str(d.phone, 20), email: str(d.email, 254), pickup: str(d.pickup, 64), saturday: str(d.saturday, 10), market: /^[A-Za-z0-9_-]{0,64}$/.test(str(d.market, 64)) ? str(d.market, 64) : "", pickupTime: str(d.pickupTime, 40), notes: str(d.notes, 300),
     };
   } catch {
     return null;

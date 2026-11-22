@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { BookingForm } from "@/components/booking-form";
 import { TURNSTILE_WAIT_MESSAGE, TurnstileBox, useTurnstile } from "@/components/turnstile";
-import { DEFAULT_CUTOFF, availableSaturdays, cutoffDay, hoursCaveat, hoursLabel, niceDay, openingNote, pickupHours, timeSlots } from "@/collection";
+import { DEFAULT_CUTOFF, availableMarketDays, availableSaturdays, cutoffDay, hoursCaveat, hoursLabel, marketCutoffDay, marketHoursLabel, marketState, niceDay, openingNote, pickupHours, timeSlots } from "@/collection";
 import {
   DRAFT_KEY,
   FieldRow,
@@ -191,11 +191,12 @@ function Polaroid({
 function TrailLinks({
   sched,
   center = false,
-  preorder = false,
+  preorder,
 }: {
   sched: { name: string; venue: string; start: string; end: string };
   center?: boolean;
-  preorder?: boolean;
+  /** Set only for a market whose "Take pre-orders" switch is on and whose pre-order window is open (SB-20). */
+  preorder?: { id: string; onPick: (id: string) => void };
 }) {
   const map = mapsUrl(sched.venue);
   const cls =
@@ -217,7 +218,15 @@ function TrailLinks({
         Add to calendar
       </a>
       {preorder && (
-        <a href="#order" className={cls} aria-label={`Pre-order for ${sched.name}`}>
+        <a
+          href={`/?market=${encodeURIComponent(preorder.id)}#order`}
+          className={cls}
+          aria-label={`Pre-order for ${sched.name}`}
+          onClick={(e) => {
+            e.preventDefault();
+            preorder.onPick(preorder.id);
+          }}
+        >
           Pre-order
         </a>
       )}
@@ -389,6 +398,11 @@ export default function Home() {
   const [pickup, setPickup] = useState(""); // pickup point id
   const [saturday, setSaturday] = useState(""); // collection Saturday, YYYY-MM-DD
   const [pickupTime, setPickupTime] = useState("");
+  // SB-20: what the customer collects from: "" / "sat" = a pickup point on a Saturday, "m:<market id>" = the stall at a market.
+  const [collect, setCollect] = useState("");
+  const [marketDay, setMarketDay] = useState("");
+  // From a Pre-order link (/?market=<id>#order): that market is preselected when its pre-orders are open.
+  const [wantedMarket, setWantedMarket] = useState("");
   const [pickups, setPickups] = useState<Pickup[]>([]);
   const [pickupsLoaded, setPickupsLoaded] = useState(false);
   const [notes, setNotes] = useState("");
@@ -435,6 +449,8 @@ export default function Home() {
       .finally(() => setPickupsLoaded(true));
 
   useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("market");
+    if (wanted && /^[A-Za-z0-9_-]{1,64}$/.test(wanted)) setWantedMarket(wanted);
     loadPickups();
     // Static list first (works with no API), then the live list from the admin if it answers.
     setToday(isoOf(new Date()));
@@ -509,7 +525,12 @@ export default function Home() {
     setPhone(d.phone);
     setEmail(d.email);
     setPickup(d.pickup);
-    setSaturday(d.saturday);
+    if (d.market) {
+      setCollect(`m:${d.market}`);
+      setMarketDay(d.saturday);
+    } else {
+      setSaturday(d.saturday);
+    }
     setPickupTime(d.pickupTime);
     setNotes(d.notes);
     if (d.notes) setNoteOpen(true);
@@ -542,8 +563,12 @@ export default function Home() {
     if (!name.trim()) errs.name = "Please add your name.";
     if (!looksLikePhone(phone)) errs.phone = "Add a phone number we can reach you on, like 082 123 4567.";
     if (!looksLikeEmail(email)) errs.email = "Add your email so we can send your order details.";
-    if (!chosenPoint) errs.pickup = "Choose where you'll collect from.";
-    if (!chosenSat) errs.saturday = "Choose a Saturday to collect on.";
+    if (chosenMarket) {
+      if (!chosenDay) errs.saturday = "Choose a day to collect on.";
+    } else {
+      if (!chosenPoint) errs.pickup = "Choose where you'll collect from.";
+      if (!chosenSat) errs.saturday = "Choose a Saturday to collect on.";
+    }
     setOrderErrors(errs);
     setOrderProblem("");
     if (Object.keys(errs).length) {
@@ -568,8 +593,8 @@ export default function Home() {
       name,
       phone,
       email,
-      pickupId: chosenPoint!.id,
-      pickupDate: chosenSat,
+      // A market pre-order names the market and its day; the Worker re-checks everything (toggle, window, day) from its own copy.
+      ...(chosenMarket ? { marketId: chosenMarket.id, pickupDate: chosenDay } : { pickupId: chosenPoint!.id, pickupDate: chosenSat }),
       pickupTime: chosenTime,
       items: Object.fromEntries(Object.entries(quantities).filter(([, q]) => q > 0)),
       toppings: Object.fromEntries(Object.entries(toppingQty).filter(([, q]) => q > 0)),
@@ -586,7 +611,7 @@ export default function Home() {
       try {
         sessionStorage.setItem(
           DRAFT_KEY,
-          JSON.stringify({ v: 1, savedAt: Date.now(), ref: r.data?.ref ?? "", quantities, toppingQty, name, phone, email, pickup: chosenPoint!.id, saturday: chosenSat, pickupTime: chosenTime, notes }),
+          JSON.stringify({ v: 1, savedAt: Date.now(), ref: r.data?.ref ?? "", quantities, toppingQty, name, phone, email, pickup: chosenPoint?.id ?? "", saturday: chosenMarket ? chosenDay : chosenSat, market: chosenMarket?.id ?? "", pickupTime: chosenTime, notes }),
         );
       } catch {
         /* private mode: the customer just retypes */
@@ -682,12 +707,6 @@ export default function Home() {
       firstGesture();
     };
   }, []);
-  // Market pre-order line: PREVIEW ONLY until SB-20 ships (founder 2026-11-22). Production never shows it from this build;
-  // SB-20 replaces this with the per-market "Take pre-orders" toggle and a link that preselects the market.
-  const [showPreorderLine, setShowPreorderLine] = useState(false);
-  useEffect(() => {
-    setShowPreorderLine(window.location.hostname.startsWith("stuffdbagels-preview."));
-  }, []);
 
   const ordersOffRaw =
     availability !== null &&
@@ -708,7 +727,28 @@ export default function Home() {
   const chosenPoint = pickups.find((p) => p.id === pickup) ?? pickups[0];
   // Preferred time: one-hour chips from the point's collection hours (none when the hours are not known). A time that
   // belongs to another point's hours is dropped, so the payload only ever carries a slot of the point being collected from.
-  const slots = chosenPoint ? timeSlots(chosenPoint) : [];
+  // Market pre-orders (SB-20): a market is offered only while its "Take pre-orders" switch is on and its window is open
+  // (collection.ts, also enforced by the Worker). The customer picks one market day and collects at the stall.
+  const marketRules = { cutoffTime: rules.cutoffTime, closedDates: rules.closedDates };
+  const openMarkets = today ? events.filter((e) => marketState(nowMs, e, marketRules) === "open") : [];
+  const satOpen = pickups.length > 0 && saturdays.length > 0;
+  const options = [...(satOpen ? ["sat"] : []), ...openMarkets.map((m) => `m:${m.id}`)];
+  const preferred = openMarkets.some((m) => m.id === wantedMarket) ? `m:${wantedMarket}` : (options[0] ?? "");
+  const chosenOption = options.includes(collect) ? collect : preferred;
+  const chosenMarket = chosenOption.startsWith("m:") ? openMarkets.find((m) => `m:${m.id}` === chosenOption) : undefined;
+  const marketDays = chosenMarket ? availableMarketDays(nowMs, chosenMarket, marketRules) : [];
+  const chosenDay = marketDays.includes(marketDay) ? marketDay : (marketDays[0] ?? "");
+  const marketCutoffLine = chosenMarket ? `Pre-orders for ${chosenMarket.name} close on ${niceDay(marketCutoffDay(chosenMarket.start))} at ${rules.cutoffTime}.` : "";
+  // A Pre-order link to a market that is not open: say why, then the normal Saturday form carries on.
+  const wanted = wantedMarket ? events.find((e) => e.id === wantedMarket) : undefined;
+  const wantedState = wanted && today ? marketState(nowMs, wanted, marketRules) : "off";
+  const preorderNote =
+    wanted && wantedState === "closed"
+      ? `Pre-orders for ${wanted.name} closed on ${niceDay(marketCutoffDay(wanted.start))}.`
+      : wanted && wantedState === "not_open_yet" && wanted.preorder?.opensOn
+        ? `Pre-orders for ${wanted.name} open on ${niceDay(wanted.preorder.opensOn)}.`
+        : "";
+  const slots = chosenMarket ? timeSlots({ opens: chosenMarket.preorder?.opens, closes: chosenMarket.preorder?.closes }) : chosenPoint ? timeSlots(chosenPoint) : [];
   const chosenTime = slots.includes(pickupTime) ? pickupTime : "";
   const hours = chosenPoint ? pickupHours(chosenPoint) : null;
   const caveat = hoursCaveat(chosenPoint?.days);
@@ -716,16 +756,37 @@ export default function Home() {
   const oneSat = saturdays.length === 1;
   const satNote = today ? openingNote(nowMs, rules) : "";
   const cutoffLine = chosenSat ? `Orders for ${niceDay(chosenSat)} close on ${niceDay(cutoffDay(chosenSat))} at ${rules.cutoffTime}.` : "";
-  // Ordering is hidden (not just disabled) when it is switched off, today is closed, there is no active
-  // pickup point, or no Saturday is open. Markets play no part: at a market people just buy at the cart.
+  // Ordering is hidden (not just disabled) when it is switched off, today is closed, or nothing can be collected: no active
+  // pickup point with an open Saturday AND no market with pre-orders open. A market with its switch off stays walk-up only.
   const hiddenMessage: string | null = ordersOffRaw
     ? availability?.closedMessage || "Orders are closed right now. See you next time."
-    : pickupsLoaded && pickups.length === 0
-      ? "Online ordering opens soon. We're setting up our pickup points. Questions? Email stuffd.bagels@gmail.com"
-      : today !== null && saturdays.length === 0
-        ? availability?.closedMessage || satNote || "There's no Saturday open for orders right now. Please check back soon."
+    : pickupsLoaded && pickups.length === 0 && openMarkets.length === 0
+      ? [preorderNote, "Online ordering opens soon. We're setting up our pickup points. Questions? Email stuffd.bagels@gmail.com"].filter(Boolean).join(" ")
+      : today !== null && saturdays.length === 0 && openMarkets.length === 0
+        ? [preorderNote, availability?.closedMessage || satNote || "There's no Saturday open for orders right now. Please check back soon."].filter(Boolean).join(" ")
         : null;
   const orderingHidden = hiddenMessage !== null;
+  const preorderFor = (id: string) => (!ordersOffRaw && openMarkets.some((m) => m.id === id) ? { id, onPick: pickMarket } : undefined);
+  // Pre-order link under a market: select it, put the address in the bar (so the link can be shared) and go to the form.
+  const pickMarket = (id: string) => {
+    setCollect(`m:${id}`);
+    setMarketDay("");
+    setPickupTime("");
+    setWantedMarket(id);
+    try {
+      window.history.replaceState(null, "", `/?market=${encodeURIComponent(id)}#order`);
+    } catch {
+      /* ignore */
+    }
+    document.getElementById("order")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  // Arriving from a Pre-order link: once the page has its data, scroll to the form (it shifts while the data loads).
+  const scrolledToOrder = useRef(false);
+  useEffect(() => {
+    if (!wantedMarket || scrolledToOrder.current || availability === null || !pickupsLoaded || window.location.hash !== "#order") return;
+    scrolledToOrder.current = true;
+    setTimeout(() => document.getElementById("order")?.scrollIntoView({ block: "start" }), 250);
+  }, [wantedMarket, availability, pickupsLoaded]);
   const ts = useTurnstile("order", !orderingHidden);
   tsReset.current = ts.reset;
 
@@ -874,12 +935,19 @@ export default function Home() {
             title="Where we at"
             note="The cart moves around Cape Town."
           />
-          {showPreorderLine && nextUp && (
-            <p className="-mt-4 mb-10 text-base font-medium max-w-[52ch]">
+          {openMarkets.length > 0 && !ordersOffRaw && (
+            <p className="-mt-4 mb-10 text-base font-medium max-w-[52ch]" data-testid="preorder-line">
               Skip the queue: pre-order online and collect at the stall on market day.{" "}
-              {scheduleCards.length === 1 ? (
-                <a href="#order" className="font-bold text-blue underline underline-offset-4">
-                  Pre-order for {nextUp.name} →
+              {openMarkets.length === 1 ? (
+                <a
+                  href={`/?market=${encodeURIComponent(openMarkets[0].id)}#order`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    pickMarket(openMarkets[0].id);
+                  }}
+                  className="font-bold text-blue underline underline-offset-4"
+                >
+                  Pre-order for {openMarkets[0].name} →
                 </a>
               ) : (
                 <span className="font-bold">Tap Pre-order under any market below.</span>
@@ -922,7 +990,7 @@ export default function Home() {
                     )}
                     <div className="font-bold text-xl leading-snug mt-3">{sched.name}</div>
                     <div className="text-ink/75 text-base mt-1 max-w-[26ch]">{sched.venue}</div>
-                    <TrailLinks sched={sched} center preorder={showPreorderLine} />
+                    <TrailLinks sched={sched} center preorder={preorderFor(sched.id)} />
                   </li>
                 ))}
                 {/* Only one market listed: the cart fills the empty right-hand side (founder 2026-11-22). Decorative. */}
@@ -952,7 +1020,7 @@ export default function Home() {
                       <div className="font-bold text-lg leading-snug mt-2">{sched.name}</div>
                       <div className="text-ink/75 text-sm">{sched.venue}</div>
                       <div className="text-ink/75 text-sm">{sched.when}</div>
-                      <TrailLinks sched={sched} preorder={showPreorderLine} />
+                      <TrailLinks sched={sched} preorder={preorderFor(sched.id)} />
                     </div>
                   </li>
                 ))}
@@ -1133,6 +1201,11 @@ export default function Home() {
                   </div>
                 ) : (
                   <form id="order-form" onSubmit={submitOrder} noValidate aria-label="Pay for your order" data-testid="order-form" className="scroll-mt-10">
+                    {preorderNote && (
+                      <p role="status" data-testid="preorder-note" className="mb-4 rounded-2xl bg-ink text-paper px-4 py-3 text-sm font-bold leading-snug m-0">
+                        {preorderNote}
+                      </p>
+                    )}
                     {satNote && (
                       <p role="status" data-testid="saturday-note" className="mb-4 rounded-2xl bg-ink text-paper px-4 py-3 text-sm font-bold leading-snug m-0">
                         {satNote}
@@ -1161,7 +1234,55 @@ export default function Home() {
                             value={email} onChange={(e) => { setEmail(e.target.value); clearError("email"); }} className={inputClass} />
                         )}
                       </FieldRow>
-                      {onePoint && oneSat && chosenPoint && chosenSat ? (
+                      {options.length > 1 && (
+                        <FieldRow label="Collect">
+                          {(p) => (
+                            <div className="relative min-w-0">
+                              <select id={p.id} data-testid="select-collect" aria-describedby={p.describedBy}
+                                value={chosenOption} onChange={(e) => { setCollect(e.target.value); setPickupTime(""); }}
+                                className="w-full min-w-0 pl-5 pr-12 pb-4 bg-transparent font-semibold text-base outline-none appearance-none focus-visible:bg-sky/30 text-ink">
+                                {satOpen && <option value="sat">At a pickup point, on a Saturday</option>}
+                                {openMarkets.map((m) => (
+                                  <option key={m.id} value={`m:${m.id}`}>At the stall at {m.name}</option>
+                                ))}
+                              </select>
+                              <svg aria-hidden="true" className="pointer-events-none absolute right-5 top-[0.35rem] w-4 h-4 text-ink/75" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 8l5 5 5-5" /></svg>
+                            </div>
+                          )}
+                        </FieldRow>
+                      )}
+                      {chosenMarket ? (
+                        <>
+                          {options.length === 1 && (
+                            <FixedRow
+                              label="Collect"
+                              testId="collect-summary"
+                              value={`At the stall at ${chosenMarket.name}`}
+                              hint={[chosenMarket.venue, marketHoursLabel(chosenMarket)].filter(Boolean).join(", ")}
+                            />
+                          )}
+                          {marketDays.length === 1 ? (
+                            <FixedRow label="Collection day" testId="market-day-fixed" value={niceDay(marketDays[0])} hint={[options.length > 1 ? `Stall hours ${marketHoursLabel(chosenMarket)}` : "", marketCutoffLine].filter(Boolean).join(". ") || undefined} />
+                          ) : (
+                            <FieldRow label="Collection day" error={orderErrors.saturday} hint={[options.length > 1 ? `Stall hours ${marketHoursLabel(chosenMarket)}` : "", marketCutoffLine].filter(Boolean).join(". ") || undefined}>
+                              {(p) => (
+                                <div className="relative min-w-0">
+                                  <select id={p.id} data-testid="select-market-day" aria-invalid={p.invalid} aria-describedby={p.describedBy}
+                                    value={chosenDay} onChange={(e) => { setMarketDay(e.target.value); clearError("saturday"); }}
+                                    className="w-full min-w-0 pl-5 pr-12 pb-4 bg-transparent font-semibold text-base outline-none appearance-none focus-visible:bg-sky/30 text-ink">
+                                    {marketDays.map((d) => (
+                                      <option key={d} value={d}>{niceDay(d)}</option>
+                                    ))}
+                                  </select>
+                                  <svg aria-hidden="true" className="pointer-events-none absolute right-5 top-[0.35rem] w-4 h-4 text-ink/75" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 8l5 5 5-5" /></svg>
+                                </div>
+                              )}
+                            </FieldRow>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                      {options.length <= 1 && onePoint && oneSat && chosenPoint && chosenSat ? (
                         // One pickup point and one Saturday: nothing to choose, so just say it.
                         <FixedRow
                           label="Collect"
@@ -1216,6 +1337,8 @@ export default function Home() {
                               )}
                             </FieldRow>
                           )}
+                        </>
+                      )}
                         </>
                       )}
                       {slots.length > 0 && (

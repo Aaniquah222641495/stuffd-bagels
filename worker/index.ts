@@ -14,6 +14,7 @@ import {
   parseAvailabilityInput,
   parseEventInput,
   parsePickupInput,
+  parsePreorderInput,
   publicAvailability,
   publicEvents,
   publicPickups,
@@ -104,11 +105,18 @@ async function handleAdmin(request: Request, env: Env, parts: string[]): Promise
   }
 
   if (resource === "events" && id !== undefined && extra.length === 0) {
-    methodOnly(request, ["DELETE"]);
+    methodOnly(request, ["PUT", "DELETE"]);
     if (!SAFE_ID.test(id)) throw new HttpError(400, "Invalid fields");
     const kv = needKv(env);
     const events = await readEventsSafe(kv);
-    if (!events.some((e) => e.id === id)) throw new HttpError(404, "Not found");
+    const target = events.find((e) => e.id === id);
+    if (!target) throw new HttpError(404, "Not found");
+    if (request.method === "PUT") {
+      // SB-20: this market's pre-order settings (toggle, opens-on, days, stall hours). Name, venue and dates are not editable here.
+      const preorder = parsePreorderInput(await readJsonObject(request), target);
+      await writeEvents(kv, events.map((e) => (e.id === id ? { ...e, preorder } : e)));
+      return json({ ok: true });
+    }
     await writeEvents(kv, events.filter((e) => e.id !== id));
     return json({ ok: true });
   }

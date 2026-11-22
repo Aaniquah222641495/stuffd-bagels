@@ -24,7 +24,7 @@ straight away. For each one the script:
    id you need if you ever refund) or **"Booking enquiry: <name>, <date>"**,
 2. emails the customer a short branded reply **from stuffd.bagels@gmail.com** (orders: **"STUFF'D: order confirmed <ref>"**;
    booking enquiries say nothing is booked until you confirm),
-3. files the owner email under the Gmail label **Orders** or **Bookings** (Gmail labels are its folders).
+3. files the owner email under the Gmail label **Orders** or **Bookings** (Gmail labels are its folders). A market pre-order is filed under **Market Pre-orders**, with a sub-label made from the market's name (for example **Market Pre-orders/Summer Social '26**), created the first time it is used. A new market needs no code change.
 
 **Cancellations.** The confirmation email has a **Cancel my order** button until the order's Wednesday 23:59 cut-off. The
 website (not this script) signs that link and does the refund through Yoco. Afterwards the website asks this script to email
@@ -90,7 +90,8 @@ address could make your Gmail send email to anybody, so the script refuses to wo
    - **New order: Test Customer, ...** (the owner email: "PAID ONLINE (Yoco)", the checkout id, pickup point, Saturday, items, total),
    - **STUFF'D: order confirmed SB-...** (what the customer receives: the branded one; the test uses a fresh reference each run).
 3. The owner email carries the **Orders** label straight away or within 5 minutes.
-4. Choose **testBooking** and Run. You get **Booking enquiry: Test Customer, ...**, a customer reply, and the **Bookings** label.
+4. Choose **testMarketOrder** and Run. You get **New order: Test Customer, ... (Test Market)**, filed under **Market Pre-orders/Test Market** (delete that label and the two test emails afterwards).
+5. Choose **testBooking** and Run. You get **Booking enquiry: Test Customer, ...**, a customer reply, and the **Bookings** label.
 5. Choose **testReminder** and Run. You get **STUFF'D: collection day! Your order SB-TEST77**, the pickup-day reminder
    every paid customer gets between 8:00 and 9:00 on their collection Saturday (nothing is saved by this test).
 6a. Choose **testCancel** and Run. You get **SB-TESTC7 cancelled and refunded** (under **Orders**) and **STUFF'D: refund processed SB-TESTC7** (the customer copy, to yourself). No money moves: it is only the two emails. Running it again within 6 hours does nothing (duplicate guard).

@@ -59,7 +59,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   let t = await text();
   assert.match(t, /Cancel your order\?/); assert.match(t, /You paid R65 for collection on /); assert.ok(t.includes(col.niceDay(SAT)));
   assert.match(t, /You can cancel until Wednesday 25 Nov at 23:59\. We'll refund the full R65 to the card you paid with, through Yoco\./);
-  assert.match(t, /Would you rather have credit for another collection Saturday or one of our markets\? Don't cancel here\. Email stuffd\.bagels@gmail\.com/);
+  assert.match(t, /Would you rather have credit for another collection day or one of our markets\? Don't cancel here\. Email stuffd\.bagels@gmail\.com/);
   assert.match(await page.getByTestId("cancel-confirm").textContent(), /^Yes, cancel and refund R65$/);
   assert.equal(await page.getByTestId("turnstile-box").count(), 1, "the Turnstile box is on the page");
   assert.equal(await page.getByTestId("cancel-keep").getAttribute("href"), "/");

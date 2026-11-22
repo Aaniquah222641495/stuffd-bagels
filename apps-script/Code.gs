@@ -39,6 +39,10 @@ const CONFIG = {
   TIMEZONE: 'Africa/Johannesburg',
   ORDERS_LABEL: 'Orders',
   BOOKINGS_LABEL: 'Bookings',
+  // Market pre-orders (SB-20): owner emails are filed under this label, with one sub-label per market made from the market's own name,
+  // e.g. "Market Pre-orders/Summer Social '26". Any market works with no code change; the label is created the first time it is used.
+  MARKET_LABEL: 'Market Pre-orders',
+  MARKET_NAME_MAX: 40,
   // REQUIRED. A random secret of 32 or more characters. Put the same text in the Worker secret APPS_SCRIPT_TOKEN.
   // While this is empty (or shorter than MIN_TOKEN_LENGTH) the script refuses EVERY request, so nobody who finds the
   // web app address can use it to send email from this Gmail account. See README.md, "The token".
@@ -113,6 +117,36 @@ function validEmail_(v) { return /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(\.[A-Za-z0-
 function validCheckoutId_(v) { return typeof v === 'string' && /^[A-Za-z0-9_\-]{4,100}$/.test(v); }
 function validRef_(v, prefix) { return typeof v === 'string' && new RegExp('^' + prefix + '-[A-Z0-9]{6}$').test(v); }
 
+/**
+ * A market name made safe to use as a Gmail sub-label and in an email subject: "/" (which would make stray nesting), brackets (the
+ * label is read back from the subject's "(<market>)"), and control characters are removed, spaces collapsed, then trimmed and cut to
+ * MARKET_NAME_MAX characters. Returns '' when nothing usable is left (then the order is filed under the plain "Market Pre-orders" label).
+ */
+function marketName_(v) {
+  if (typeof v !== 'string') return '';
+  return v.replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, ' ').replace(/[\/\\()]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, CONFIG.MARKET_NAME_MAX).trim();
+}
+/** True for an order or cancellation the Worker marked as a market pre-order (it sends marketName, even if it cleans to nothing). */
+function isMarket_(a) { return typeof a.marketName === 'string'; }
+/** The text in the subject's "(...)": the market's name, or the parent label's own name when the name was missing. */
+function marketTag_(a) { return a.marketName || CONFIG.MARKET_LABEL; }
+/** "Market Pre-orders/<name>" for a name, or "Market Pre-orders" when there is none. */
+function marketLabelPath_(name) {
+  const n = marketName_(name);
+  return n && n !== CONFIG.MARKET_LABEL ? CONFIG.MARKET_LABEL + '/' + n : CONFIG.MARKET_LABEL;
+}
+/** An existing Gmail label, or a new one. A nested label ("A/B") gets its parent first, so Gmail shows it in the folder. */
+function getOrCreateLabel_(path) {
+  const slash = path.indexOf('/');
+  if (slash > 0) getOrCreateLabel_(path.slice(0, slash));
+  return GmailApp.getUserLabelByName(path) || GmailApp.createLabel(path);
+}
+/** The market in an owner subject ("... (Summer Social '26)"), or null for a Saturday order. */
+function marketFromSubject_(subject) {
+  const m = /\(([^()]+)\)$/.exec(String(subject).trim());
+  return m ? m[1] : null;
+}
+
 /** The items of an order or a cancellation, checked and totalled by us (never the sender's total), or null. */
 function cleanItems_(raw) {
   if (!Array.isArray(raw) || raw.length < 1 || raw.length > 12) return null;
@@ -151,7 +185,7 @@ function clean_(d) {
   // A cancellation carries no phone (the owner already has it in the order email): only orders and bookings need one.
   if (!common.name || !validEmail_(common.email) || (d.type !== 'cancel' && !/^\+\d{8,15}$/.test(common.phone))) return { ok: false };
   if (d.type === 'order') {
-    // Orders are collected on a Saturday at one of the owner's pickup points (never at a market).
+    // Orders are collected on a Saturday at one of the owner's pickup points, or (SB-20) on a market day at her stall (marketName is then set).
     const place = line_(d.pickupPlace, 200);
     if (!validRef_(d.ref, 'SB') || !place || !validDate_(d.pickupDate) || !Array.isArray(d.items) || d.items.length < 1 || d.items.length > 12) return { ok: false };
     // A paid order only (ADR-0041). The Worker sends it after Yoco's signed webhook; nothing else may send an order.
@@ -160,7 +194,9 @@ function clean_(d) {
     if (!cleaned) return { ok: false };
     const link = cancelUrl_(d.cancelUrl);
     const by = link ? cancelByLabel_(d.cancelByLabel) : '';
-    return { ok: true, data: Object.assign(common, { type: 'order', paid: true, checkoutId: d.checkoutId, ref: d.ref, pickupDate: d.pickupDate, pickupTime: line_(d.pickupTime, 40), pickupPlace: place, pickupDays: line_(d.pickupDays, 120), items: cleaned.items, total: cleaned.total, note: str_(d.note, 300), cancelUrl: by ? link : '', cancelByLabel: by }) };
+    const data = Object.assign(common, { type: 'order', paid: true, checkoutId: d.checkoutId, ref: d.ref, pickupDate: d.pickupDate, pickupTime: line_(d.pickupTime, 40), pickupPlace: place, pickupDays: line_(d.pickupDays, 120), items: cleaned.items, total: cleaned.total, note: str_(d.note, 300), cancelUrl: by ? link : '', cancelByLabel: by });
+    if (typeof d.marketName === 'string') data.marketName = marketName_(d.marketName); // a market pre-order (SB-20)
+    return { ok: true, data: data };
   }
   if (d.type === 'cancel') {
     // The Worker posts this after it has asked Yoco for the refund. outcome: refunded and pending are refunds Yoco accepted; failed means it did not confirm one.
@@ -168,7 +204,9 @@ function clean_(d) {
     const cleaned = cleanItems_(d.items);
     if (!validRef_(d.ref, 'SB') || !validCheckoutId_(d.checkoutId) || ['refunded', 'pending', 'failed'].indexOf(d.outcome) < 0 || !place || !validDate_(d.pickupDate) || !cleaned) return { ok: false };
     delete common.phone;
-    return { ok: true, data: Object.assign(common, { type: 'cancel', ref: d.ref, outcome: d.outcome, checkoutId: d.checkoutId, pickupDate: d.pickupDate, pickupPlace: place, items: cleaned.items, total: cleaned.total }) };
+    const cdata = Object.assign(common, { type: 'cancel', ref: d.ref, outcome: d.outcome, checkoutId: d.checkoutId, pickupDate: d.pickupDate, pickupPlace: place, items: cleaned.items, total: cleaned.total });
+    if (typeof d.marketName === 'string') cdata.marketName = marketName_(d.marketName);
+    return { ok: true, data: cdata };
   }
   if (d.type === 'booking') {
     const guests = Number(d.guests);
@@ -316,22 +354,29 @@ function orderLines_(a) {
 }
 
 function cancelOwnerSubject_(a) {
-  if (a.outcome === 'refunded') return a.ref + ' cancelled and refunded';
-  if (a.outcome === 'pending') return a.ref + ' cancelled, refund pending';
-  return a.ref + ' cancelled: REFUND FAILED, check Yoco';
+  const tag = isMarket_(a) ? ' (' + marketTag_(a) + ')' : ''; // the market in brackets is how the label is found again
+  if (a.outcome === 'refunded') return a.ref + ' cancelled and refunded' + tag;
+  if (a.outcome === 'pending') return a.ref + ' cancelled, refund pending' + tag;
+  return a.ref + ' cancelled: REFUND FAILED, check Yoco' + tag;
 }
 
 function ownerSubject_(a) {
   if (a.type === 'booking') return 'Booking enquiry: ' + a.name + ', ' + day_(a.eventDate, true);
-  return 'New order: ' + a.name + ', ' + day_(a.pickupDate, false); // the collection Saturday
+  return 'New order: ' + a.name + ', ' + day_(a.pickupDate, false) + (isMarket_(a) ? ' (' + marketTag_(a) + ')' : ''); // the collection day (a Saturday, or the market day)
 }
 
 /** Pickup details for emails, one [label, value] pair per line. */
 function pickupRows_(a) {
-  const rows = [['Pickup point', a.pickupPlace], ['Collection Saturday', day_(a.pickupDate, true)]];
+  const market = isMarket_(a);
+  const rows = [[market ? 'Collect at' : 'Pickup point', a.pickupPlace], ['Collection day', day_(a.pickupDate, true)]];
   if (a.pickupTime) rows.push(['Preferred time', a.pickupTime]);
-  if (a.pickupDays) rows.push(['Collection times', a.pickupDays]);
+  if (a.pickupDays) rows.push([market ? 'Stall hours' : 'Collection times', a.pickupDays]);
   return rows;
+}
+
+/** "at our stall at Summer Social '26, Fri 18 Dec, 10am to 7pm": the sentence that says where, which day and when for a market pre-order. */
+function stallLine_(a) {
+  return 'Collect at our stall at ' + (a.marketName || 'the market') + ', ' + day_(a.pickupDate, true) + (a.pickupDays ? ', ' + a.pickupDays : '') + '.';
 }
 
 function sendOwner_(a) {
@@ -370,7 +415,7 @@ function sendOwner_(a) {
 
 // DRAFT wording from the client's rule (2026-11-18), pending dp-counsel (CPA s17 advance-booking cancellations).
 // dp-counsel option 1a, founder yes 2026-11-19: credit lasts 6 months. Keep in step with CANCELLATION_POLICY in src/collection.ts.
-const CANCELLATION_POLICY_ = "If you cancel before the Wednesday cut-off, you can choose a refund or credit. If you cancel after the cut-off, or you pay and don't collect, your order becomes credit for another collection Saturday or one of our markets, valid for 6 months from your original collection Saturday. Credit is not paid out as cash.";
+const CANCELLATION_POLICY_ = "If you cancel before the Wednesday cut-off, you can choose a refund or credit. If you cancel after the cut-off, or you pay and don't collect, your order becomes credit for another collection day or one of our markets, valid for 6 months from your original collection day. Credit is not paid out as cash.";
 
 function sendCustomer_(a) {
   if (MailApp.getRemainingDailyQuota() < 1) return;
@@ -383,7 +428,7 @@ function sendCustomer_(a) {
       .concat(a.items.map(function (i) { return [i.qty + ' x ' + i.name, rand_(i.line)]; }))
       .concat([['Total', rand_(a.total)]]);
     if (a.note) rows.push(['Your note', a.note]);
-    outro = 'Your payment has been received and your order is confirmed. We will email you a reminder on the morning of your collection day. ' + CANCELLATION_POLICY_ + ' Questions? Just reply to this email.';
+    outro = (isMarket_(a) ? stallLine_(a) + ' ' : '') + 'Your payment has been received and your order is confirmed. We will email you a reminder on the morning of your collection day. ' + CANCELLATION_POLICY_ + ' Questions? Just reply to this email.';
     // The link is signed by the Worker. Without one (or after the cut-off) the customer is asked to reply instead.
     if (a.cancelUrl) outro += '\n\nNeed to cancel? You can cancel and get a full refund until ' + a.cancelByLabel + ': ' + a.cancelUrl + '\nPrefer credit? Reply to this email before the cut-off instead.';
   } else {
@@ -512,7 +557,8 @@ function customerHtml_(a) {
   if (a.type === 'order') {
     return shell_('Paid and confirmed. Collect on ' + day_(a.pickupDate, false) + '.', 'Order ' + a.ref,
       h1_('Order confirmed!', 'Thanks, ' + f + '. Your payment came through and your bagels are on the list.') +
-      box_('Collect', day_(a.pickupDate, true), [a.pickupPlace, a.pickupTime ? 'Your preferred time: ' + a.pickupTime : '', a.pickupDays]) +
+      box_('Collect', day_(a.pickupDate, true), [a.pickupPlace, a.pickupTime ? 'Your preferred time: ' + a.pickupTime : '', a.pickupDays ? (isMarket_(a) ? 'Stall hours: ' : '') + a.pickupDays : '']) +
+      (isMarket_(a) ? para_(stallLine_(a)) : '') +
       itemsTable_(a) +
       note_('Your note', a.note) +
       para_('We\'ll email you a reminder on the morning of your collection day. Questions or need to change something? Just reply to this email.') +
@@ -594,7 +640,7 @@ function ownerHtml_(a) {
   if (a.type === 'order') {
     return shell_('Paid ' + rand_(a.total) + '. ' + a.name + ', collecting ' + day_(a.pickupDate, false) + '.', 'Paid ' + rand_(a.total),
       h1_('New order ' + a.ref, 'Paid online with Yoco. Nothing to chase.') +
-      box_('Collecting', day_(a.pickupDate, true), [a.pickupTime ? 'Preferred time: ' + a.pickupTime : 'Any time', a.pickupPlace]) +
+      box_(isMarket_(a) ? 'Collecting at the stall' : 'Collecting', day_(a.pickupDate, true), [a.pickupTime ? 'Preferred time: ' + a.pickupTime : 'Any time', a.pickupPlace, isMarket_(a) && a.pickupDays ? 'Stall hours: ' + a.pickupDays : '']) +
       itemsTable_(a) +
       note_('Their note', a.note) +
       customerCard_(a) +
@@ -613,17 +659,28 @@ function ownerHtml_(a) {
 
 /** Gmail has no folders; labels are the folders. This finds our owner emails and files them. */
 function labelRecent_() {
-  const orders = GmailApp.getUserLabelByName(CONFIG.ORDERS_LABEL) || GmailApp.createLabel(CONFIG.ORDERS_LABEL);
-  const bookings = GmailApp.getUserLabelByName(CONFIG.BOOKINGS_LABEL) || GmailApp.createLabel(CONFIG.BOOKINGS_LABEL);
+  const orders = getOrCreateLabel_(CONFIG.ORDERS_LABEL);
+  const bookings = getOrCreateLabel_(CONFIG.BOOKINGS_LABEL);
   // The email we just sent can take a moment to show up in search; the 5-minute trigger catches any left over.
   // Cancellation emails ("SB-xxxx cancelled and refunded") go under Orders too, next to the order they cancel.
   const cancelled = function (subject) { return /^SB-[A-Z0-9]{6} cancelled/.test(subject); };
+  const marketLabel = CONFIG.MARKET_LABEL.toLowerCase().replace(/ /g, '-'); // Gmail search spells a label with hyphens
+  // A market pre-order's subject ends with the market in brackets: it is filed under "Market Pre-orders/<market>" (and the parent), not under Orders.
+  // The sub-label is made from that name the first time it is seen, so a new market needs no code change.
+  const fileOrder = function (t, orderLabel) {
+    const tag = marketFromSubject_(t.getFirstMessageSubject());
+    if (tag === null) { t.addLabel(orderLabel); return; }
+    const path = marketLabelPath_(tag);
+    t.addLabel(getOrCreateLabel_(CONFIG.MARKET_LABEL));
+    if (path !== CONFIG.MARKET_LABEL) t.addLabel(getOrCreateLabel_(path));
+  };
   [['New order', function (sub) { return sub.indexOf('New order: ') === 0; }, orders],
    ['Booking enquiry', function (sub) { return sub.indexOf('Booking enquiry: ') === 0; }, bookings],
    ['cancelled', cancelled, orders]].forEach(function (g) {
-    const threads = GmailApp.search('subject:"' + g[0] + '" newer_than:2d -label:' + g[2].getName().toLowerCase(), 0, 30);
+    const threads = GmailApp.search('subject:"' + g[0] + '" newer_than:2d -label:' + g[2].getName().toLowerCase() + (g[2] === orders ? ' -label:' + marketLabel : ''), 0, 30);
     threads.forEach(function (t) {
-      if (g[1](t.getFirstMessageSubject())) t.addLabel(g[2]);
+      if (!g[1](t.getFirstMessageSubject())) return;
+      if (g[2] === orders) fileOrder(t, orders); else t.addLabel(g[2]);
     });
   });
 }
@@ -646,12 +703,12 @@ const FOLDERS_ = [
 
 /** Labels matching threads; `window` like '2d' limits it to recent mail ('' = everything, for the first run). */
 function organise_(window) {
-  const business = ['Orders', 'Bookings', 'Payments', 'Markets', 'Enquiries'];
+  const business = ['Orders', 'Bookings', CONFIG.MARKET_LABEL, 'Payments', 'Markets', 'Enquiries'];
   FOLDERS_.forEach(function (f) {
     const label = GmailApp.getUserLabelByName(f.label) || GmailApp.createLabel(f.label);
     let q = '(' + f.query + ') -from:me -label:' + f.label.toLowerCase();
     // Never hide business mail: promotions skip anything already filed as business.
-    if (f.archive) q += business.map(function (b) { return ' -label:' + b.toLowerCase(); }).join('');
+    if (f.archive) q += business.map(function (b) { return ' -label:' + b.toLowerCase().replace(/ /g, '-'); }).join('');
     if (window) q += ' newer_than:' + window;
     for (let round = 0; round < 10; round++) { // 10 x 100 threads per label per run keeps us inside Apps Script's time limit
       const threads = GmailApp.search(q, 0, 100);
@@ -682,7 +739,7 @@ const REMINDER_PREFIX_ = 'rem_';
 function saveReminder_(props, a) {
   props.setProperty(REMINDER_PREFIX_ + a.ref, JSON.stringify({
     ref: a.ref, first: first_(a.name), email: a.email, pickupDate: a.pickupDate, pickupTime: a.pickupTime,
-    pickupPlace: a.pickupPlace, pickupDays: a.pickupDays,
+    pickupPlace: a.pickupPlace, pickupDays: a.pickupDays, marketName: isMarket_(a) ? a.marketName : undefined,
     items: a.items.map(function (i) { return { name: i.name, qty: i.qty }; })
   }));
 }
@@ -725,11 +782,12 @@ function reminderItems_(r) {
 function sendReminder_(r) {
   const subject = "STUFF'D: collection day! Your order " + r.ref;
   const when = r.pickupTime ? 'Your preferred time: ' + r.pickupTime : '';
+  const market = isMarket_(r);
   const plain = [
     'Hi ' + r.first + ', today is collection day!', '',
     'Collect: today, ' + day_(r.pickupDate, true),
     'Where: ' + r.pickupPlace
-  ].concat(when ? [when] : [], r.pickupDays ? ['Collection times: ' + r.pickupDays] : [],
+  ].concat(when ? [when] : [], r.pickupDays ? [(market ? 'Stall hours: ' : 'Collection times: ') + r.pickupDays] : [], market ? ['Come and see us at our stall at ' + (r.marketName || 'the market') + (r.pickupDays ? ', ' + r.pickupDays : '') + '.'] : [],
     ['', 'Your order ' + r.ref + ':'], reminderItems_(r),
     ['', "Can't make it or running late? Just reply to this email or call " + CONFIG.PHONE_DISPLAY + '.', '', "STUFF'D Bagels", 'Cape Town', CONFIG.SITE_URL]).join('\n');
   MailApp.sendEmail({ to: r.email, subject: subject, body: plain, htmlBody: reminderHtml_(r), name: CONFIG.BUSINESS_NAME, replyTo: owner_() });
@@ -743,7 +801,7 @@ function reminderHtml_(r) {
   }).join('') + '</table></td></tr>';
   return shell_('Today is collection day. ' + r.pickupPlace + '.', 'Order ' + r.ref,
     h1_('Collection day!', 'Hi ' + r.first + ', your bagels are being stuffed for today.') +
-    box_('Collect today', day_(r.pickupDate, true), [r.pickupPlace, r.pickupTime ? 'Your preferred time: ' + r.pickupTime : '', r.pickupDays]) +
+    box_('Collect today', day_(r.pickupDate, true), [r.pickupPlace, r.pickupTime ? 'Your preferred time: ' + r.pickupTime : '', r.pickupDays ? (isMarket_(r) ? 'Stall hours: ' : '') + r.pickupDays : '']) +
     items +
     para_("Can't make it or running late? Just reply to this email or call " + CONFIG.PHONE_DISPLAY + '.'));
 }
@@ -779,6 +837,17 @@ function testOrder() {
     pickupPlace: 'Test pickup point, Cape Town',
     items: [{ name: 'Pizza Bagel', qty: 2, unit: 85, line: 170 }, { name: 'Extra Jalapeno', qty: 1, unit: 5, line: 5 }],
     total: 175, note: 'This is a test, please ignore.'
+  })));
+}
+/** Sends a pretend MARKET pre-order to the owner's own address: check it lands under "Market Pre-orders/Test Market" (delete that label and the test emails afterwards). */
+function testMarketOrder() {
+  console.log(JSON.stringify(process_({
+    type: 'order', paid: true, checkoutId: 'ch_TEST0002',
+    ref: 'SB-' + Math.random().toString(36).slice(2, 8).toUpperCase().padEnd(6, '7'), name: 'Test Customer', phone: '+27820000000', email: owner_(),
+    pickupDate: '2026-12-19', pickupTime: '10am to 11am', pickupDays: '10am to 7pm', marketName: 'Test Market',
+    pickupPlace: 'Our stall at Test Market, Cape Town',
+    items: [{ name: 'Pizza Bagel', qty: 2, unit: 85, line: 170 }],
+    total: 170, note: 'This is a test, please ignore.'
   })));
 }
 /** Sends a pretend pickup reminder to the owner's own address (nothing is saved). */

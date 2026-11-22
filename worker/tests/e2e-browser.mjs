@@ -53,7 +53,8 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   assert.equal(await page.locator("aside[aria-label='Your order so far']").count(), 0, "no checkout bar while ordering is hidden");
   const t0 = await page.locator("body").textContent();
   assert.ok(t0.includes("Order by Wednesday, collect on Saturday."), "collection rule on the menu");
-  assert.ok(t0.includes("No order needed, come and buy at the cart."), "markets: no order needed");
+  assert.ok(t0.includes("The cart moves around Cape Town."), "markets note (a market with pre-orders off is walk-up only: no pre-order line)");
+  assert.ok(!t0.includes("Skip the queue"), "no pre-order line when no market takes pre-orders");
   assert.ok(t0.includes("Where and when do I collect my order?") && t0.includes("Order by Wednesday, collect on Saturday."), "FAQ states the rule");
   assert.equal(await page.locator("a[href*='wa.me'], a[href^='tel:']").count(), 0, "no WhatsApp or phone link on the public page (client's number is private)");
   assert.ok(!/8472|whatsapp/i.test(t0), "no phone number or WhatsApp wording on the public page");
@@ -371,6 +372,8 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   // markets and collection Saturdays (only while the bundled MGM weekend and the test dates are still in the future)
   if (Date.now() < Date.parse("2026-12-15T00:00:00+02:00")) {
     const mk = await (await admin("/events", "POST", { name: "Test Market", venue: "Test hall", start: "2026-12-27", end: "2026-12-27" })).json();
+    // MGM '26 was removed from the bundled list (client is not attending), so this test adds its own market for the 16 to 20 Dec weekend.
+    const mgm = await (await admin("/events", "POST", { name: "MGM '26", venue: "Test hall", start: "2026-12-16", end: "2026-12-20" })).json();
     await page.reload(); await page.getByTestId("collection-saturdays").waitFor();
     const skipped = page.getByTestId("skipped-2026-12-26");
     assert.match(await skipped.textContent(), /Skipped: Test Market that weekend/, "a default Saturday with a market on its Sunday is shown as skipped");
@@ -383,6 +386,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
     await axeRun(page, "admin with market warnings");
     await page.screenshot({ path: `${process.env.SHOTS ?? "."}/admin-market-warnings-${w}.png`, fullPage: false });
     await admin(`/events/${mk.id}`, "DELETE");
+    await admin(`/events/${mgm.id}`, "DELETE");
     await page.reload(); await page.getByTestId("collection-saturdays").waitFor();
   }
   // collection rules
@@ -391,7 +395,8 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   assert.ok(listed.length >= 5, "the admin lists the collection Saturdays");
   await page.getByRole("button", { name: `Remove ${nice(listed[0])} from collection Saturdays` }).click();
   assert.equal(await page.getByTestId(`sat-${listed[0]}`).count(), 0, "removed from the list");
-  const farSat = (() => { const t = Date.now() + 120 * 86400000; let d = new Date(t); while (d.getUTCDay() !== 6) d = new Date(d.getTime() + 86400000); return d.toISOString().slice(0, 10); })();
+  // A Saturday about 4 months away that is NOT the last Saturday of its month (that one is already on the default list, so "adding" it would be a no-op).
+  const farSat = (() => { let d = new Date(Date.now() + 120 * 86400000); const ok = (x) => x.getUTCDay() === 6 && col.lastSaturdayOfMonth(x.getUTCFullYear(), x.getUTCMonth() + 1) !== x.toISOString().slice(0, 10); while (!ok(d)) d = new Date(d.getTime() + 86400000); return d.toISOString().slice(0, 10); })();
   await page.getByLabel("Saturday to add").fill(farSat); await page.getByRole("button", { name: "Add Saturday" }).click();
   assert.equal(await page.getByTestId(`sat-${farSat}`).count(), 1, "added to the list");
   const earlier = new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10);
