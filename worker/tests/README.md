@@ -26,6 +26,8 @@ None of these send real email: the "Apps Script" is a fake (`fake-apps-script.mj
 | `admin-lockout.mjs` | M2: 12 parallel wrong passwords give 5 x 401 and 7 x 429, /64 rotation does not help, good logins are refunded | wrangler dev |
 | `image-ratios.mjs` | No rendered image is stretched (box ratio vs real ratio, at 390 and 1280, home, privacy, admin) | wrangler dev + Chrome |
 | `saturday-rules.mjs` | The real Worker order code with a fake clock: Wednesday 23:59 vs Thursday 00:00 SAST, Saturday-only, closed Saturday, the last-Saturday default list, opens on the 15th, added and removed Saturdays, owner-set cut-off, month/year/leap-year ends, pickup point checks | Node only |
+| `market-preorders.mjs` | SB-20 with the real Worker code and a fake clock: cut-off is always the Wednesday before the first day (Wed/Thu/Sun starts, month, year, leap-year ends), Wed 23:59:59 accepted / Thu 00:00:00 refused, toggle, days, opens-on, closed dates, orders off, no checkout on any refusal, admin save rules, paid order names the market, signed cancel link and refund use the market's cut-off | Node only |
+| `market-browser.mjs` | SB-20 in Chrome at 390 and 1280: Pre-order link only under open markets, Collect selector, stall-hour chips, /?market=<id>#order prefill, closed message, Pay hand-off (marketId + day, stops at Yoco), admin panel, axe 0 | wrangler dev + fakes + Chrome |
 | `forms-api.mjs` | Live HTTP path: validation, honeypot, closed dates, orders off, point switched off, rate limits | wrangler dev + fake script |
 | `prices.mjs` | Totals come from content.ts on the server; unpriced toppings refused | wrangler dev + fake script |
 | `pickups-api.mjs` | Admin pickup points: auth, validation, limits, edit, on/off, remove; cut-off and weeks-ahead settings | wrangler dev |
@@ -47,6 +49,7 @@ node worker/tests/turnstile.mjs
 node worker/tests/cancel-token.mjs
 node worker/tests/cancel-core.mjs
 node worker/tests/cancel-handler.mjs
+node worker/tests/market-preorders.mjs
 
 # in two terminals. TOKEN is any 32+ character value (the Worker will not forward without one).
 # A fresh --persist-to folder per session keeps the shared daily counters (40 submissions) from carrying over.
