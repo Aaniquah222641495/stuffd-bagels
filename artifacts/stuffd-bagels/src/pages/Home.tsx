@@ -124,7 +124,7 @@ const BELT: { src: string; avif?: string; word: string }[] = [
   { src: "/pizza-bagel.png", word: "Pizza" },
   { src: "/jalapeno-bagel.png", word: "Jalapeno" },
   { src: "/cheesy-bagel.png", word: "Cheesy" },
-  { src: "/plain-bagel.png", word: "Classic" },
+  { src: "/plain-bagel.webp", word: "Classic" }, // client photo IMG_6064, background removed (founder 2026-11-22)
   { src: "/steakd-bagel.png", word: "Steak'd" }, // cut out of the client's 2026-11-16 box photo (Vision subject lift), same style as the others
   { src: "/hero-bagel.jpeg", word: "Packed right" },
 ];
