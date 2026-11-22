@@ -646,6 +646,42 @@ export default function Home() {
   const itemCount = Object.values(quantities).reduce((a, b) => a + b, 0);
   const scheduleCards = events.map(eventToCard);
   const nextUp = scheduleCards[0];
+
+  // Hero video autoplay, made sure: React doesn't always put `muted` on the element in time, and some phones (iPhone Low
+  // Power Mode) refuse autoplay. So: force muted, try play() when ready and when the tab comes back; if the browser still
+  // says no, start on the visitor's first tap or scroll. Reduced-motion visitors never get the video (CSS hides it).
+  const heroVideo = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = heroVideo.current;
+    if (!v || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    v.muted = true;
+    v.defaultMuted = true;
+    v.setAttribute("muted", "");
+    v.setAttribute("playsinline", "");
+    const tryPlay = () => {
+      if (v.paused) v.play().catch(() => {});
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") tryPlay();
+    };
+    const firstGesture = () => {
+      tryPlay();
+      window.removeEventListener("touchstart", firstGesture);
+      window.removeEventListener("scroll", firstGesture);
+      window.removeEventListener("pointerdown", firstGesture);
+    };
+    tryPlay();
+    v.addEventListener("canplay", tryPlay);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("touchstart", firstGesture, { passive: true });
+    window.addEventListener("scroll", firstGesture, { passive: true });
+    window.addEventListener("pointerdown", firstGesture);
+    return () => {
+      v.removeEventListener("canplay", tryPlay);
+      document.removeEventListener("visibilitychange", onVisible);
+      firstGesture();
+    };
+  }, []);
   // Market pre-order line: PREVIEW ONLY until SB-20 ships (founder 2026-11-22). Production never shows it from this build;
   // SB-20 replaces this with the per-market "Take pre-orders" toggle and a link that preselects the market.
   const [showPreorderLine, setShowPreorderLine] = useState(false);
@@ -774,6 +810,7 @@ export default function Home() {
                 className="hero-settle absolute inset-0 w-full h-full object-cover"
               />
               <video
+                ref={heroVideo}
                 className="hero-video absolute inset-0 w-full h-full object-cover object-[50%_18%]"
                 src="/hero-video.mp4"
                 poster="/hero-poster.jpg"
