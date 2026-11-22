@@ -78,14 +78,14 @@ assert.equal(customer.subject, "STUFF'D: order confirmed SB-ABC234");
 assert.match(customer.body, /Paid and confirmed/);
 assert.match(customer.body, /Your payment has been received and your order is confirmed/);
 assert.doesNotMatch(customer.body + customer.htmlBody, /awaiting|how to pay|be in touch/i, "no 'awaiting payment' wording in the customer email");
-assert.match(customer.body, /becomes credit for another collection Saturday or one of our markets, valid for 6 months/, "cancellation policy (DRAFT) is in the order auto-reply");
+assert.match(customer.body, /becomes credit for another collection day or one of our markets, valid for 6 months/, "cancellation policy (DRAFT) is in the order auto-reply");
 assert.ok(customer.htmlBody.includes("you can choose a refund or credit"));
 assert.ok(customer.htmlBody.includes("&lt;i&gt;please"), "customer text is escaped in the HTML email");
 assert.ok(!customer.htmlBody.includes("<i>please"), "no raw HTML from the customer");
 assert.deepEqual(labelled.map((l) => l[1]), ["Orders"]);
 
 assert.match(owner.body, /Pickup point: Kenilworth Corner, Main Rd, Kenilworth/);
-assert.match(owner.body, /Collection Saturday: Sat 19 Dec 2026/);
+assert.match(owner.body, /Collection day: Sat 19 Dec 2026/);
 assert.match(customer.body, /Pickup point: Kenilworth Corner/);
 
 // Duplicate (same ref) is accepted but sends nothing.
@@ -98,12 +98,12 @@ assert.equal(post(point).ok, true);
 const [pOwner, pCustomer] = sent.slice(-2);
 assert.equal(pOwner.subject, "New order: Zaid, Sat 19 Dec");
 assert.match(pOwner.body, /Pickup point: Kenilworth Corner, Main Rd, Kenilworth/);
-assert.match(pOwner.body, /Collection Saturday: Sat 19 Dec 2026/);
+assert.match(pOwner.body, /Collection day: Sat 19 Dec 2026/);
 assert.match(pOwner.body, /Preferred time: 10:30/);
 assert.match(pOwner.body, /Collection times: Saturdays, 10am to 1pm/);
 assert.doesNotMatch(pOwner.body, /market/i, "no market wording in the owner email");
 // The customer email may mention markets only through the cancellation policy (credit can be used at a market), never as a collection place.
-assert.doesNotMatch(pCustomer.body.replace(/becomes credit for another collection Saturday or one of our markets, valid for 6 months/, ""), /market/i, "no market wording in order emails apart from the credit policy");
+assert.doesNotMatch(pCustomer.body.replace(/becomes credit for another collection day or one of our markets, valid for 6 months/, ""), /market/i, "no market wording in order emails apart from the credit policy");
 assert.match(pCustomer.body, /Pickup point: Kenilworth Corner/);
 assert.match(pCustomer.htmlBody, />Collect<\/div>[\s\S]*Kenilworth Corner/, "branded customer email shows where to collect");
 assert.ok(pCustomer.htmlBody.includes("/logo-white.png") && /alt="STUFF'D"/.test(pCustomer.htmlBody), "customer email carries the logo, with alt text");
@@ -293,6 +293,7 @@ assert.ok(!/awaiting payment|AWAITING/i.test(code), "Code.gs has no 'awaiting pa
   assert.ok(!oOwner.body.includes("order/cancel#") && !oOwner.htmlBody.includes("order/cancel#"), "the owner email never carries the customer's link");
   assert.match(oOwner.body, /website refunds them automatically and emails you/, "owner is told refunds are automatic");
   assert.doesNotMatch(oOwner.body + oOwner.htmlBody, /you need the id to refund\.|what you need to refund/, "old 'you refund by hand' wording is gone");
+  let badCount = 0;
   for (const [name, bad] of [
     ["another host", { cancelUrl: link("evil.example"), cancelByLabel: label }],
     ["look-alike host", { cancelUrl: link("stuffdbagels.co.za.evil.example"), cancelByLabel: label }],
@@ -307,7 +308,7 @@ assert.ok(!/awaiting payment|AWAITING/i.test(code), "Code.gs has no 'awaiting pa
     ["not a string", { cancelUrl: { a: 1 }, cancelByLabel: label }],
   ]) {
     const b4 = sent.length;
-    const ref = "SB-" + "BAD" + String(100 + Math.floor(Math.random() * 899));
+    const ref = "SB-" + "BAD" + String(100 + badCount++); // distinct every time (a random number sometimes repeated and was swallowed as a duplicate)
     assert.equal(post(mk(ref, bad)).ok, true, name + ": the PAID order is still accepted");
     const cust = sent[b4 + 1];
     assert.ok(!cust.body.includes("Need to cancel?") && !cust.htmlBody.includes("order/cancel"), name + ": link left out");
@@ -397,6 +398,80 @@ assert.ok(!/awaiting payment|AWAITING/i.test(code), "Code.gs has no 'awaiting pa
   const added = code.split("\n").filter((l) => /cancel|refund/i.test(l)).join("\n");
   assert.ok(!/[—–\u{1F300}-\u{1FAFF}☀-➿]/u.test(added), "no em dash, en dash or emoji in the cancel and refund wording");
   console.log("automatic refunds in Code.gs: link printing, cancel emails, reminder deletion, quota, caps");
+}
+
+// Market pre-orders (SB-20): wording, owner subject, Gmail label for ANY market name with no code change, reminder, cancellation.
+{
+  propStore.clear(); cacheStore.clear(); labelled.length = 0; labels.clear(); sent.length = 0;
+  const mkt = (ref, marketName, extra = {}) => ({
+    ...order, ref, name: "Maryam", email: `${ref.toLowerCase()}@example.com`, pickupDate: "2026-12-18", pickupTime: "10am to 11am", pickupDays: "10am to 7pm",
+    pickupPlace: "Our stall at Summer Social '26, Whitebox by Limitless, Wetton", marketName, items: [{ name: "Classic Bagel", qty: 2, unit: 65, line: 130 }], ...extra,
+  });
+  const fresh = () => { sent.length = 0; labelled.length = 0; }; // the fake Gmail search ignores "-label:", so earlier emails would be re-filed
+  assert.equal(post(mkt("SB-MKT234", "Summer Social '26")).ok, true);
+  const [mOwner, mCust] = sent.slice(-2);
+  assert.equal(mOwner.subject, "New order: Maryam, Fri 18 Dec (Summer Social '26)", "owner subject names the market");
+  assert.match(mOwner.body, /Collect at: Our stall at Summer Social '26, Whitebox by Limitless, Wetton/);
+  assert.match(mOwner.body, /Collection day: Fri 18 Dec 2026/);
+  assert.match(mOwner.body, /Stall hours: 10am to 7pm/);
+  assert.doesNotMatch(mOwner.body, /Pickup point|Collection Saturday/);
+  assert.match(mCust.body, /Collect at our stall at Summer Social '26, Fri 18 Dec 2026, 10am to 7pm\./, "customer email says where, which day and the hours");
+  assert.doesNotMatch(mCust.body + mCust.htmlBody, /collection Saturday/i, "'collection day' wording only");
+  assert.ok(mCust.htmlBody.includes("Stall hours: 10am to 7pm"));
+  // Filed under the parent and a sub-label made from the name; created parent first; NOT under Orders.
+  assert.deepEqual(labelled.map((l) => l[1]), ["Market Pre-orders", "Market Pre-orders/Summer Social '26"]);
+  assert.ok(labels.has("Market Pre-orders") && labels.has("Market Pre-orders/Summer Social '26"), "both labels were created");
+  assert.deepEqual([...labels.keys()].filter((k) => k.startsWith("Market")), ["Market Pre-orders", "Market Pre-orders/Summer Social '26"], "parent first, then the child");
+  assert.ok(propStore.get("rem_SB-MKT234").includes("Summer Social"), "the reminder keeps the market name");
+
+  // ANY new market name works with no code change: a made-up one gets its own label.
+  fresh();
+  assert.equal(post(mkt("SB-NEW234", "Oranjezicht City Farm Market")).ok, true);
+  assert.deepEqual(labelled.map((l) => l[1]), ["Market Pre-orders", "Market Pre-orders/Oranjezicht City Farm Market"]);
+  // Unsafe names: "/" would nest, control characters and brackets are removed, long names are cut to 40, spaces are trimmed.
+  const tidy = (n) => vm.runInContext(`marketLabelPath_(${JSON.stringify(n)})`, ctx);
+  assert.equal(tidy("Evil/Nested/Name"), "Market Pre-orders/Evil Nested Name", "no stray nesting");
+  assert.equal(tidy("  Night\u0007 Market\n(x)  "), "Market Pre-orders/Night Market x");
+  assert.equal(tidy("A".repeat(60)), "Market Pre-orders/" + "A".repeat(40), "capped at 40 characters");
+  assert.equal(tidy(""), "Market Pre-orders", "missing name: the parent label");
+  assert.equal(tidy("///"), "Market Pre-orders", "nothing usable left: the parent label");
+  assert.equal(tidy(undefined), "Market Pre-orders");
+  assert.equal(tidy("Market Pre-orders"), "Market Pre-orders", "a market called the same as the parent does not nest into itself");
+  fresh();
+  assert.equal(post(mkt("SB-SLH234", "Bad/Slash Market")).ok, true);
+  assert.equal(sent.at(-2).subject, "New order: Maryam, Fri 18 Dec (Bad Slash Market)");
+  assert.deepEqual(labelled.map((l) => l[1]), ["Market Pre-orders", "Market Pre-orders/Bad Slash Market"]);
+  // Name missing or empty on a market order: filed under the plain parent label only.
+  fresh();
+  assert.equal(post(mkt("SB-EMP234", "")).ok, true);
+  assert.equal(sent.at(-2).subject, "New order: Maryam, Fri 18 Dec (Market Pre-orders)");
+  assert.deepEqual(labelled.map((l) => l[1]), ["Market Pre-orders"]);
+  assert.ok(![...labels.keys()].includes("Market Pre-orders/Market Pre-orders"), "no Market Pre-orders/Market Pre-orders");
+  // Saturday orders still go to Orders only.
+  fresh();
+  assert.equal(post({ ...order, ref: "SB-SAT234" }).ok, true);
+  assert.deepEqual(labelled.map((l) => l[1]), ["Orders"]);
+
+  // Reminder on the market morning names the stall.
+  { const realDate = ctx.Date; const iso = "2026-12-18T08:15:00+02:00";
+    ctx.Date = class extends realDate { constructor(...a) { super(...(a.length ? a : [iso])); } static now() { return new realDate(iso).getTime(); } };
+    const s0 = sent.length; ctx.sendReminders(); ctx.Date = realDate;
+    const rem = sent.slice(s0).find((m) => m.to === "sb-mkt234@example.com");
+    assert.ok(rem, "the market order's reminder is sent on the market day");
+    assert.match(rem.body, /Come and see us at our stall at Summer Social '26, 10am to 7pm\./);
+    assert.match(rem.body, /Stall hours: 10am to 7pm/);
+    assert.ok(!propStore.has("rem_SB-MKT234"), "and deleted"); }
+  // A cancellation of a market order: subject carries the market, filed under it, reminder deleted.
+  propStore.clear(); cacheStore.clear(); fresh();
+  assert.equal(post(mkt("SB-CMK234", "Summer Social '26")).ok, true);
+  labelled.length = 0;
+  assert.equal(post({ type: "cancel", outcome: "refunded", checkoutId: "ch_CMK234", ref: "SB-CMK234", name: "Maryam", email: "sb-cmk234@example.com", pickupDate: "2026-12-18",
+    pickupPlace: "Our stall at Summer Social '26, Whitebox by Limitless, Wetton", marketName: "Summer Social '26", items: [{ name: "Classic Bagel", qty: 2, unit: 65, line: 130 }], total: 130 }).ok, true);
+  assert.ok(sent.some((m) => m.subject === "SB-CMK234 cancelled and refunded (Summer Social '26)"), "cancel subject carries the market");
+  assert.ok(labelled.some((l) => l[0].startsWith("SB-CMK234 cancelled") && l[1] === "Market Pre-orders/Summer Social '26"), "cancellation filed under the market");
+  assert.ok(!propStore.has("rem_SB-CMK234"));
+  propStore.clear(); cacheStore.clear(); labelled.length = 0; labels.clear();
+  console.log("market pre-orders in Code.gs: wording, subject, labels for any market name, reminder, cancellation");
 }
 
 // Quota.

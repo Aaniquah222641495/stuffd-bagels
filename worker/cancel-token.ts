@@ -7,7 +7,7 @@
 // stored order and the clock at the moment of the refund (worker/orders-core.ts beginCancel), never from the token alone.
 // The link puts the token after a # so it never reaches a server log or a Referer header; the page sends it in a POST body.
 // No Cloudflare imports: Node tests bundle this file and run the real code.
-import { cutoffInstant } from "../artifacts/stuffd-bagels/src/collection";
+import { cutoffInstant, marketCutoffInstant } from "../artifacts/stuffd-bagels/src/collection";
 import { sameBytes, siteOrigin, type YocoEnv } from "./yoco";
 
 export interface CancelEnv {
@@ -93,11 +93,16 @@ export function cancelByLabel(cancelByMs: number): string {
 }
 
 /**
- * THE one place that says when self-cancel stops for an order: the first instant after the Wednesday cut-off before its collection day.
- * Today every collection day is a Saturday, and this is the same rule that closes ordering (collection.ts cutoffInstant). Everything
- * downstream (the stored `cancelBy`, the signed link, the refund check, the emails) only ever sees the resulting instant, never a
- * Saturday, so market pre-orders (SB-20) change ONLY this function: give it the market's first day and cut-off time.
+ * THE place that says when self-cancel stops for an order: the first instant after the Wednesday cut-off before its collection day.
+ * For a Saturday order this is the same rule that closes ordering (collection.ts cutoffInstant). Everything downstream (the stored
+ * `cancelBy`, the signed link, the refund check, the emails) only ever sees the resulting instant, never a date.
+ * SB-20: a market pre-order closes on the Wednesday before the market's FIRST day, whichever day the customer picked
+ * (cancelDeadlineMarket, collection.ts marketCutoffInstant).
  */
 export function cancelDeadline(collectionIso: string, cutoffTime: string): number {
   return cutoffInstant(collectionIso, cutoffTime);
+}
+
+export function cancelDeadlineMarket(marketStartIso: string, cutoffTime: string): number {
+  return marketCutoffInstant(marketStartIso, cutoffTime);
 }

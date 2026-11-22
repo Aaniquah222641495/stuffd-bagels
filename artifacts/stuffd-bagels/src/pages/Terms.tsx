@@ -15,7 +15,7 @@ export default function Terms() {
         </div>
       </div>
       <div className="max-w-3xl mx-auto px-5 sm:px-8 py-12 leading-relaxed text-base [&_h2]:font-bubble [&_h2]:text-3xl [&_h2]:mt-10 [&_h2]:mb-3 [&_h2]:leading-none [&_ul]:pl-5 [&_li]:mt-1.5 [&_a]:font-bold [&_a]:text-blue [&_a]:underline [&_a]:underline-offset-4">
-        <p className="m-0">Last updated 19 November 2026.</p>
+        <p className="m-0">Last updated 22 November 2026.</p>
 
         <h2>Who we are</h2>
         <p className="m-0">Stuff'd Bagels is a trading name of Sherezaan Khan (sole proprietor). Our address for legal notices: 33 Ulm Way, Strandfontein. Phone: {PHONE}. Email: <a href={`mailto:${EMAIL}`}>{EMAIL}</a>. Website: stuffdbagels.co.za.</p>
@@ -25,6 +25,7 @@ export default function Terms() {
           <li>We bake for one collection Saturday a month. Orders for it open on the 15th of the month.</li>
           <li>Order by Wednesday {DEFAULT_CUTOFF} before that Saturday. After that, orders for that Saturday close.</li>
           <li>Prices are in rand and are the prices shown on the site when you order. No VAT is charged.</li>
+          <li>For a market we have switched pre-orders on for, you can order and pay online and collect at our stall on the market day you pick. The same cut-off applies: the Wednesday before the market's first day.</li>
           <li>Our bagels contain gluten and dairy. Ask us about other allergens before you order.</li>
         </ul>
 
@@ -37,7 +38,7 @@ export default function Terms() {
 
         <h2>Collecting</h2>
         <ul className="m-0">
-          <li>Collect your order at the pickup point, on the Saturday and within the hours shown when you ordered.</li>
+          <li>Collect your order at the pickup point, on the Saturday and within the hours shown when you ordered. For a market pre-order, collect at our stall at that market, on the day you picked and within the stall hours shown.</li>
           <li>Your preferred time helps us plan, but it isn't a fixed appointment.</li>
         </ul>
 

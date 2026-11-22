@@ -62,7 +62,7 @@ export function pricedToppings(): Record<string, number> {
 export const FAQ = [
   {
     q: "Where and when do I collect my order?",
-    a: "Online orders are collected on a Saturday at one of our pickup points 📍 Order by Wednesday, collect on Saturday. For now that is the last Saturday of each month, and orders for it open on the 15th. At a market? No order needed, just come and buy at the cart!",
+    a: "Online orders are collected on a Saturday at one of our pickup points, or at our stall on a market day we have switched pre-orders on for 📍 Order by Wednesday, collect on the day. For now that is the last Saturday of each month, and orders for it open on the 15th. At a market? Just come and buy at the cart, or pre-order for that market when we switch it on and collect at the stall.",
     time: "10:42",
   },
   {
@@ -72,7 +72,7 @@ export const FAQ = [
   },
   {
     q: "What if I cancel or can't collect my order?",
-    a: "If you cancel before the Wednesday cut-off, you can choose a refund or credit. If you cancel after the cut-off, or you pay and don't collect, your order becomes credit for another collection Saturday or one of our markets, valid for 6 months from your original collection Saturday. Credit is not paid out as cash. To cancel for a refund, use the \"Cancel my order\" button in your confirmation email. To choose credit instead, email us before the cut-off.",
+    a: "If you cancel before the Wednesday cut-off, you can choose a refund or credit. If you cancel after the cut-off, or you pay and don't collect, your order becomes credit for another collection day or one of our markets, valid for 6 months from your original collection day. Credit is not paid out as cash. To cancel for a refund, use the \"Cancel my order\" button in your confirmation email. To choose credit instead, email us before the cut-off.",
     time: "10:45",
   },
   {
@@ -90,12 +90,25 @@ export const FAQ = [
 // Where we'll be. Static list we keep up to date (no admin needed).
 // Dates are YYYY-MM-DD. Events drop off the site automatically after their end date.
 // Source: @stuffd.bagels Instagram posts (checked 2026-10-24). No times are posted, so none are shown.
+/** SB-20 market pre-orders, set per market by the owner in the admin. Missing or enabled:false = walk-up only, as before. */
+export interface MarketPreorder {
+  enabled: boolean;
+  /** First day pre-orders are taken (YYYY-MM-DD, from 00:00 SAST). Missing = open as soon as switched on. */
+  opensOn?: string;
+  /** The market days a customer can pick (YYYY-MM-DD, each inside start..end). One order = one day. */
+  days: string[];
+  /** Stall hours ("HH:MM", 24-hour, SAST): the order form turns them into one-hour chips. */
+  opens: string;
+  closes: string;
+}
+
 export interface MarketEvent {
   id: string;
   name: string;
   venue: string;
   start: string;
   end: string;
+  preorder?: MarketPreorder;
 }
 
 export const EVENTS: MarketEvent[] = [

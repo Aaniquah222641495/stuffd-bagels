@@ -15,10 +15,10 @@ import { MIN_TOKEN, assertSwitchedOn, forward, type MailerEnv } from "./mailer";
 import { contentHash } from "./orders-core";
 import { orders, type OrdersEnv } from "./orders-client";
 import { YocoError, createCheckout, modeOk, type YocoEnv } from "./yoco";
-import { niceDay, opensOnFor, saturdayStatus, sastDay } from "../artifacts/stuffd-bagels/src/collection";
-import { cancelDeadline, cancelReady, type CancelEnv } from "./cancel-token";
+import { marketCutoffDay, marketDayStatus, marketHoursLabel, niceDay, opensOnFor, saturdayStatus, sastDay } from "../artifacts/stuffd-bagels/src/collection";
+import { cancelDeadline, cancelDeadlineMarket, cancelReady, type CancelEnv } from "./cancel-token";
 import { precheckTurnstile, verifyTurnstile, type TurnstileEnv } from "./turnstile";
-import { isRealDate, marketsForRules, publicAvailability, publicPickups, sastToday, secondsToSastMidnight } from "./store";
+import { isRealDate, marketsForRules, publicAvailability, publicEvents, publicPickups, sastToday, secondsToSastMidnight } from "./store";
 
 export interface FormsEnv extends LimiterEnv, OrdersEnv, YocoEnv, MailerEnv, TurnstileEnv, CancelEnv {
   STUFFD_KV?: KVNamespace;
@@ -102,14 +102,16 @@ export interface OrderPayload {
   name: string;
   phone: string;
   email: string;
-  /** The Saturday the customer will collect on (YYYY-MM-DD). Always a Saturday. */
+  /** The day the customer will collect on (YYYY-MM-DD): a collection Saturday, or the market day for a market pre-order. */
   pickupDate: string;
   /** Preferred collection time the customer typed (optional: a request, not a booking). */
   pickupTime: string;
-  /** The owner's pickup point: "<name>, <area>". Online orders are never collected at markets. */
+  /** Where to collect: the owner's pickup point "<name>, <area>", or for a market pre-order "Our stall at <market>, <venue>". */
   pickupPlace: string;
-  /** The point's own collection times, as the owner wrote them (may be empty). */
+  /** The point's own collection times as the owner wrote them (may be empty), or for a market pre-order the stall hours ("10am to 7pm"). */
   pickupDays: string;
+  /** Market pre-orders only (SB-20): the market's name. Code.gs files the owner email under "Market Pre-orders/<name>". */
+  marketName?: string;
   items: { name: string; qty: number; unit: number; line: number }[];
   total: number;
   note: string;
@@ -139,8 +141,8 @@ function readQuantities(v: unknown, prices: Record<string, number>): { name: str
   return out;
 }
 
-/** The parsed order and the first instant the customer can no longer cancel it by themselves (its Wednesday cut-off, the same rule that closes ordering). */
-async function parseOrder(body: Record<string, unknown>, env: FormsEnv, now: number): Promise<{ payload: OrderPayload; cancelBy: number }> {
+/** The parsed order, the first instant the customer can no longer cancel it by themselves (its Wednesday cut-off, the same rule that closes ordering), and a key for the pick-up option (for the duplicate-press hash). */
+async function parseOrder(body: Record<string, unknown>, env: FormsEnv, now: number): Promise<{ payload: OrderPayload; cancelBy: number; pickupKey: string }> {
   const name = line(body.name, FORM_LIMITS.name, true);
   const tel = phone(body.phone);
   const mail = email(body.email);
@@ -154,8 +156,36 @@ async function parseOrder(body: Record<string, unknown>, env: FormsEnv, now: num
   if (bagels.length === 0 || count > FORM_LIMITS.totalItems) throw bad();
   const total = items.reduce((n, i) => n + i.line, 0);
 
-  // Collection: a listed collection Saturday, on or after the day orders open, before its Wednesday cut-off, not closed (collection.ts).
   const avail = await publicAvailability(env.STUFFD_KV);
+
+  // SB-20 market pre-order: the customer names a market and one of its days. Everything is decided here from the stored settings
+  // (toggle on, inside the window, a day the owner ticked, not a closed date). The browser's word is never enough.
+  if (body.marketId !== undefined && body.marketId !== null && body.marketId !== "") {
+    const marketId = body.marketId;
+    if (typeof marketId !== "string" || !SAFE_ID.test(marketId) || typeof body.pickupDate !== "string") throw bad();
+    const market = (await publicEvents(env.STUFFD_KV)).find((e) => e.id === marketId);
+    if (!market || !market.preorder?.enabled) throw new HttpError(409, "Pre-orders aren't open for that market. Please choose another collection option.");
+    const day = body.pickupDate;
+    const rules = { cutoffTime: avail.cutoffTime, closedDates: avail.closedDates };
+    const st = marketDayStatus(day, now, market, rules);
+    if (st === "cutoff_passed") throw new HttpError(409, `Pre-orders for ${market.name} closed on ${niceDay(marketCutoffDay(market.start))}.`);
+    if (st === "not_open_yet") throw new HttpError(409, `Pre-orders for ${market.name} open on ${niceDay(market.preorder.opensOn as string)}. Please try again then.`);
+    if (st === "closed_date") throw new HttpError(409, avail.closedMessage || "We're closed on that day. Please choose another.");
+    if (st === "not_a_day") throw new HttpError(409, `That isn't a pre-order day for ${market.name}. Please choose one from the list.`);
+    if (st !== "ok") throw bad(); // past, or not enabled
+    const time = line(body.pickupTime, FORM_LIMITS.pickupTime, false);
+    return {
+      payload: {
+        type: "order", ref: reference("SB"), name, phone: tel, email: mail,
+        pickupDate: day, pickupTime: time, pickupPlace: `Our stall at ${market.name}, ${market.venue}`.slice(0, 200), pickupDays: marketHoursLabel(market),
+        marketName: market.name, items, total, note,
+      },
+      cancelBy: cancelDeadlineMarket(market.start, avail.cutoffTime),
+      pickupKey: `market:${market.id}`,
+    };
+  }
+
+  // Collection: a listed collection Saturday, on or after the day orders open, before its Wednesday cut-off, not closed (collection.ts).
   const status = saturdayStatus(typeof body.pickupDate === "string" ? body.pickupDate : "", now, {
     cutoffTime: avail.cutoffTime,
     closedDates: avail.closedDates,
@@ -185,6 +215,7 @@ async function parseOrder(body: Record<string, unknown>, env: FormsEnv, now: num
       pickupDate: date, pickupTime: time, pickupPlace: `${point.name}, ${point.area}`, pickupDays: point.days, items, total, note,
     },
     cancelBy: cancelDeadline(date, avail.cutoffTime),
+    pickupKey: pointId,
   };
 }
 
@@ -296,13 +327,13 @@ async function handleOrder(request: Request, env: FormsEnv, body: Record<string,
   const attemptId = typeof body.attemptId === "string" && UUID_V4.test(body.attemptId) ? body.attemptId.toLowerCase() : null;
   if (!attemptId) throw bad();
   precheckTurnstile(env, body.turnstileToken); // not configured (503, logged) or no token (400): refused before parseOrder (which reads KV), the limiter, the orders object, Yoco and email
-  const { payload, cancelBy } = await parseOrder(body, env, now);
+  const { payload, cancelBy, pickupKey } = await parseOrder(body, env, now);
   assertOrdersReady(env); // before counting anything: a switched-off site must not use up anyone's allowance
 
   const amountCents = payload.items.reduce((n, i) => n + i.qty * i.unit * 100, 0); // whole rand today; integer cents
   if (amountCents !== payload.total * 100 || amountCents < 200) throw new Error("order amount mismatch"); // a bug, never user input
   const hash = await contentHash({
-    items: payload.items, pickupId: String(body.pickupId), pickupDate: payload.pickupDate, pickupTime: payload.pickupTime,
+    items: payload.items, pickupId: pickupKey, pickupDate: payload.pickupDate, pickupTime: payload.pickupTime,
     name: payload.name, phone: payload.phone, email: payload.email, note: payload.note,
   });
 
@@ -328,7 +359,7 @@ async function handleOrder(request: Request, env: FormsEnv, body: Record<string,
     begun = await store.begin({
       attemptId, contentHash: hash, ref: payload.ref, amountCents, orderJson: JSON.stringify(payload), cancelBy,
       // Only what the cancellation emails need: no phone (the owner already has it in the order email), no free-text note, no pickup time or collection hours.
-      cancelJson: JSON.stringify({ name: payload.name, email: payload.email, pickupDate: payload.pickupDate, pickupPlace: payload.pickupPlace, items: payload.items, total: payload.total }),
+      cancelJson: JSON.stringify({ name: payload.name, email: payload.email, pickupDate: payload.pickupDate, pickupPlace: payload.pickupPlace, ...(payload.marketName ? { marketName: payload.marketName } : {}), items: payload.items, total: payload.total }),
     });
   } catch {
     await release();

@@ -1,6 +1,6 @@
 // Reads, validates and writes the two KV keys: `availability` and `events` (ADR-0028).
 import { DEFAULT_CUTOFF, isCutoffTime, isSaturday, saturdaysToKeep } from "../artifacts/stuffd-bagels/src/collection";
-import { EVENTS, type MarketEvent } from "../artifacts/stuffd-bagels/src/content";
+import { EVENTS, type MarketEvent, type MarketPreorder } from "../artifacts/stuffd-bagels/src/content";
 import { HttpError } from "./http";
 
 export const LIMITS = {
@@ -9,6 +9,7 @@ export const LIMITS = {
   removedSaturdays: 24,
   keptSaturdays: 24,
   events: 50,
+  preorderDays: 14,
   name: 60,
   venue: 80,
   message: 160,
@@ -163,7 +164,49 @@ function cleanEvent(v: unknown): MarketEvent | null {
   const e = asRecord(v);
   if (typeof e.id !== "string" || typeof e.name !== "string" || typeof e.venue !== "string") return null;
   if (!isRealDate(e.start) || !isRealDate(e.end)) return null;
-  return { id: e.id.slice(0, 64), name: e.name.slice(0, LIMITS.name), venue: e.venue.slice(0, LIMITS.venue), start: e.start, end: e.end };
+  const ev: MarketEvent = { id: e.id.slice(0, 64), name: e.name.slice(0, LIMITS.name), venue: e.venue.slice(0, LIMITS.venue), start: e.start, end: e.end };
+  const pre = cleanPreorder(e.preorder, ev);
+  return pre ? { ...ev, preorder: pre } : ev;
+}
+
+const HHMM_T = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** Stored pre-order settings, checked. Anything odd means "no pre-orders" (the safe side). */
+function cleanPreorder(v: unknown, ev: Pick<MarketEvent, "start" | "end">): MarketPreorder | null {
+  const p = asRecord(v);
+  if (typeof p.enabled !== "boolean" || typeof p.opens !== "string" || typeof p.closes !== "string" || !Array.isArray(p.days)) return null;
+  if (!HHMM_T.test(p.opens) || !HHMM_T.test(p.closes) || p.closes <= p.opens) return null;
+  const days = [...new Set(p.days.filter((d): d is string => isRealDate(d) && d >= ev.start && d <= ev.end))].sort().slice(0, LIMITS.preorderDays);
+  const out: MarketPreorder = { enabled: p.enabled, days, opens: p.opens, closes: p.closes };
+  if (isRealDate(p.opensOn)) out.opensOn = p.opensOn;
+  return out;
+}
+
+/**
+ * Admin save of one market's pre-order settings (PUT /api/admin/events/<id>). Switching ON needs stall hours and at least one
+ * day inside the market, otherwise a plain 400 (spec A1). Switching OFF keeps what was typed so she need not retype it.
+ */
+export function parsePreorderInput(body: Record<string, unknown>, ev: MarketEvent): MarketPreorder {
+  const bad = (msg: string) => new HttpError(400, msg);
+  const raw = asRecord(body.preorder);
+  if (typeof raw.enabled !== "boolean") throw bad("Invalid fields");
+  const opens = typeof raw.opens === "string" ? raw.opens : "";
+  const closes = typeof raw.closes === "string" ? raw.closes : "";
+  const hoursOk = HHMM_T.test(opens) && HHMM_T.test(closes) && closes > opens;
+  const rawDays = raw.days === undefined ? [] : raw.days;
+  if (!Array.isArray(rawDays) || rawDays.length > LIMITS.preorderDays || !rawDays.every((d) => isRealDate(d) && d >= ev.start && d <= ev.end)) {
+    throw bad("Pick pre-order days inside the market's dates.");
+  }
+  const days = [...new Set(rawDays as string[])].sort();
+  const opensOn = raw.opensOn === undefined || raw.opensOn === null || raw.opensOn === "" ? undefined : raw.opensOn;
+  if (opensOn !== undefined && !isRealDate(opensOn)) throw bad("Invalid fields");
+  if (raw.enabled) {
+    if (!hoursOk) throw bad("Add the stall hours first (opening time, then a later closing time).");
+    if (days.length === 0) throw bad("Pick at least one pre-order day.");
+  }
+  const out: MarketPreorder = { enabled: raw.enabled, days, opens: hoursOk ? opens : "00:00", closes: hoursOk ? closes : "00:01" };
+  if (opensOn) out.opensOn = opensOn;
+  return out;
 }
 
 const byStart = (a: MarketEvent, b: MarketEvent) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end);
@@ -215,7 +258,7 @@ export async function publicEvents(kv: KVNamespace | undefined): Promise<MarketE
   }
 }
 
-export function parseEventInput(body: Record<string, unknown>): Omit<MarketEvent, "id"> {
+export function parseEventInput(body: Record<string, unknown>): Omit<MarketEvent, "id" | "preorder"> {
   const bad = () => new HttpError(400, "Invalid fields");
   const name = typeof body.name === "string" ? body.name.trim() : "";
   const venue = typeof body.venue === "string" ? body.venue.trim() : "";
