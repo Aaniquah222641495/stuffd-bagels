@@ -14,7 +14,7 @@ export const menuPricingObject: Record<
 > = {
   "Classic Bagel": {
     price: 65,
-    image: "/card-classic.jpg", // straightened 2026-11-16 (the box was shot about 4 degrees off level)
+    image: "/card-classic.jpg", // client photo IMG_6064 (founder 2026-11-22), framed like the other cards
     avif: "/card-classic.avif",
     desc: "Cream Cheese",
   },
