@@ -13,7 +13,9 @@
  *   1. emails the owner  "New order: <name>, <day>"  (paid, confirmed)  or  "Booking enquiry: <name>, <date>",
  *   2. emails the customer a short branded reply from the owner's address ("order confirmed" for orders),
  *   3. puts the owner email under the Gmail label "Orders" or "Bookings".
- * Nothing is stored except the emails themselves, short-lived duplicate and quota counters, and one small pickup
+ * PREP SHEET (founder 2026-11-24): each paid order is also added to "STUFF'D Orders - prep sheet" in the owner's Drive (first name,
+ * reference, collection details, items, note) so the person preparing sees what to make; see the Prep sheet section below.
+ * Nothing else is stored except the emails themselves, short-lived duplicate and quota counters, and one small pickup
  * reminder per paid order (first name, email, pickup details, items) in Script Properties. The reminder is emailed to the
  * customer at about 08:00 on the collection day and then deleted; a reminder whose day has passed is deleted unsent.
  *
@@ -262,6 +264,7 @@ function process_(raw) {
     if (contentKey) cache.put(contentKey, '1', CONFIG.DUPLICATE_WINDOW_SECONDS);
     if (a.type === 'order') {
       try { saveReminder_(props, a); } catch (err) { console.error('Reminder not saved for ' + a.ref + ': ' + err); }
+      try { addPrepRow_(a); } catch (err) { console.error('Prep sheet row not added for ' + a.ref + ': ' + err); }
     }
   } catch (err) {
     console.error('Owner email failed for ' + a.ref + ': ' + err);
@@ -288,6 +291,8 @@ function processCancel_(a) {
     if (cache.get(key)) return { ok: true, duplicate: true };
     // First, and whatever happens next: a cancelled order must never get "today is collection day". Deleting twice is harmless.
     PropertiesService.getScriptProperties().deleteProperty(REMINDER_PREFIX_ + a.ref);
+    // Take it off the prep sheet's totals so nobody makes bagels for a cancelled order. Never blocks the emails.
+    try { markPrepCancelled_(a); } catch (err) { console.error('Prep sheet not updated for cancelled ' + a.ref + ': ' + err); }
     // Same quota wall as every other email. No booking cap: the refund has already moved, so the owner must hear about it.
     if (MailApp.getRemainingDailyQuota() < CONFIG.MIN_QUOTA) {
       console.error('Email quota nearly used up; refusing the cancellation emails for ' + a.ref);
@@ -769,6 +774,7 @@ function sendReminders() {
         console.error('Reminder failed for ' + r.ref + ': ' + err);
       }
     });
+    try { prunePrepSheet_(); } catch (err) { console.error('Prep sheet clean-up failed: ' + err); }
     console.log('Reminders for ' + today + ': sent ' + sentCount + (skipped ? ', NOT sent (email quota low) ' + skipped : ''));
   } finally {
     lock.releaseLock();
@@ -804,6 +810,135 @@ function reminderHtml_(r) {
     box_('Collect today', day_(r.pickupDate, true), [r.pickupPlace, r.pickupTime ? 'Your preferred time: ' + r.pickupTime : '', r.pickupDays ? (isMarket_(r) ? 'Stall hours: ' : '') + r.pickupDays : '']) +
     items +
     para_("Can't make it or running late? Just reply to this email or call " + CONFIG.PHONE_DISPLAY + '.'));
+}
+
+/* ------------------------------------------------------------------ */
+/* Prep sheet (founder 2026-11-24)                                     */
+/* ------------------------------------------------------------------ */
+/*
+ * A Google Sheet in the owner's Drive, "STUFF'D Orders - prep sheet", so whoever makes the bagels can see what to make. One tab per
+ * collection month ("Nov 2026"), one row per paid order, sorted by collection day. Cancelled orders stay on the sheet, greyed out, and
+ * drop out of the totals. The "To make" table on the right of each tab adds up the bagels per collection day and place (live formula,
+ * paid orders only). Rows typed in by hand with Status "Paid" count too.
+ * Kept to what preparing needs: first name, order reference, collection day/time/place, items and the customer's note. No phone or
+ * email (the reference finds the order email). Tabs are deleted 12 months after their month, like the order emails.
+ */
+const PREP_SHEET_PROP_ = 'prep_sheet_id';
+const PREP_SHEET_NAME_ = "STUFF'D Orders - prep sheet";
+// Menu names exactly as the website sends them, and the short column headings. Anything else (extras, a new bagel) goes in "Other".
+const PREP_ITEMS_ = [['Classic Bagel', 'Classic'], ['Jalapeno Bagel', 'Jalapeno'], ['Cheesy Bagel', 'Cheesy'], ['Pizza Bagel', 'Pizza'], ["Steak'd Bagel", "Steak'd"]];
+const PREP_HEAD_ = ['Collection day', 'Time', 'Where', 'Ref', 'First name'].concat(PREP_ITEMS_.map(function (p) { return p[1]; }), ['Other', 'Bagels', 'Note', 'Status']);
+const PREP_COLS_ = PREP_HEAD_.length; // 14: A..N
+const PREP_REF_COL_ = 4, PREP_STATUS_COL_ = 14;
+
+/** The prep spreadsheet, created on first use. Returns null where Sheets is not available (the Node self-test). */
+function prepBook_() {
+  if (typeof SpreadsheetApp === 'undefined') return null;
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty(PREP_SHEET_PROP_);
+  if (id) {
+    try { return SpreadsheetApp.openById(id); } catch (err) { console.error('Prep sheet ' + id + ' not found, making a new one: ' + err); }
+  }
+  const ss = SpreadsheetApp.create(PREP_SHEET_NAME_);
+  // en_GB so the formulas below always use commas, whatever the account's language; Cape Town time for the dates.
+  ss.setSpreadsheetLocale('en_GB');
+  ss.setSpreadsheetTimeZone(CONFIG.TIMEZONE);
+  props.setProperty(PREP_SHEET_PROP_, ss.getId());
+  return ss;
+}
+
+function prepTabName_(isoDay) {
+  return Utilities.formatDate(new Date(isoDay + 'T12:00:00Z'), CONFIG.TIMEZONE, 'MMM yyyy');
+}
+
+/** The month's tab, made with headings, formats and the "To make" totals the first time it is needed. */
+function prepTab_(ss, isoDay) {
+  const name = prepTabName_(isoDay);
+  let sh = ss.getSheetByName(name);
+  if (sh) return sh;
+  sh = ss.insertSheet(name);
+  sh.getRange(1, 1, 1, PREP_COLS_).setValues([PREP_HEAD_]).setFontWeight('bold').setBackground(COLOURS.sky).setFontColor(COLOURS.ink);
+  sh.setFrozenRows(1);
+  sh.getRange('A:A').setNumberFormat('ddd d mmm');
+  sh.getRange('F:L').setHorizontalAlignment('center');
+  sh.setColumnWidth(3, 220);
+  sh.setColumnWidth(13, 240);
+  // To make: bagels per collection day and place, paid orders only. Starts at column P so it never overlaps the orders.
+  const sums = PREP_ITEMS_.map(function (p, i) { return 'sum(' + String.fromCharCode(70 + i) + ')'; }); // F..J
+  const labels = PREP_ITEMS_.map(function (p, i) { return sums[i] + " '" + p[1].replace(/'/g, '') + "'"; });
+  sh.getRange('P1').setFormula('=IFERROR(QUERY(A1:N, "select A, C, ' + sums.join(', ') + ', sum(L) where N = \'Paid\' and A is not null group by A, C order by A label A \'To make: day\', C \'Where\', ' + labels.join(', ') + ", sum(L) 'Total'\", 1), \"Nothing to make yet\")");
+  sh.getRange('P:P').setNumberFormat('ddd d mmm');
+  sh.getRange('P1:X1').setFontWeight('bold').setBackground(COLOURS.blue).setFontColor(COLOURS.white);
+  // Keep the tabs in month order and drop the empty first sheet a new spreadsheet comes with.
+  const blank = ss.getSheetByName('Sheet1');
+  if (blank && blank.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(blank);
+  const tabs = ss.getSheets().map(function (t) { return [new Date('1 ' + t.getName()).getTime() || 0, t]; }).sort(function (x, y) { return x[0] - y[0]; });
+  tabs.forEach(function (t, i) { ss.setActiveSheet(t[1]); ss.moveActiveSheet(i + 1); });
+  return sh;
+}
+
+/** Text a customer typed must never run as a formula in the sheet. */
+function prepText_(v) {
+  const t = String(v || '');
+  return /^[=+\-@\t\r]/.test(t) ? "'" + t : t;
+}
+
+function findPrepRow_(sh, ref) {
+  if (sh.getLastRow() < 2) return 0;
+  const hit = sh.getRange(2, PREP_REF_COL_, sh.getLastRow() - 1, 1).createTextFinder(ref).matchEntireCell(true).findNext();
+  return hit ? hit.getRow() : 0;
+}
+
+/** One row per paid order. A resend of the same order (the Worker retries) is ignored. */
+function addPrepRow_(a) {
+  const ss = prepBook_();
+  if (!ss) return;
+  const sh = prepTab_(ss, a.pickupDate);
+  if (findPrepRow_(sh, a.ref)) return;
+  const counts = PREP_ITEMS_.map(function () { return 0; });
+  const other = [];
+  let bagels = 0;
+  a.items.forEach(function (it) {
+    const i = PREP_ITEMS_.findIndex(function (p) { return p[0] === it.name; });
+    if (i >= 0) { counts[i] += it.qty; bagels += it.qty; } else other.push(it.qty + ' x ' + it.name);
+  });
+  const where = isMarket_(a) ? 'Market: ' + a.marketName : a.pickupPlace;
+  const row = [new Date(a.pickupDate + 'T12:00:00+02:00'), prepText_(a.pickupTime), prepText_(where), a.ref, prepText_(first_(a.name))]
+    .concat(counts.map(function (n) { return n || ''; }), [prepText_(other.join(', ')), bagels, prepText_(a.note), 'Paid']);
+  sh.appendRow(row);
+  if (sh.getLastRow() > 2) sh.getRange(2, 1, sh.getLastRow() - 1, PREP_COLS_).sort([{ column: 1, ascending: true }, { column: 3, ascending: true }, { column: 2, ascending: true }]);
+}
+
+/** A cancelled order stays on the sheet (greyed out) but no longer counts in "To make". */
+function markPrepCancelled_(a) {
+  const ss = prepBook_();
+  if (!ss) return;
+  const sh = ss.getSheetByName(prepTabName_(a.pickupDate));
+  const row = sh ? findPrepRow_(sh, a.ref) : 0;
+  if (!row) return;
+  const status = a.outcome === 'failed' ? 'Cancelled: refund FAILED, check email' : a.outcome === 'pending' ? 'Cancelled (refund pending)' : 'Cancelled (refunded)';
+  sh.getRange(row, PREP_STATUS_COL_).setValue(status);
+  sh.getRange(row, 1, 1, PREP_COLS_ - 1).setFontColor('#9aa3b5').setFontLine('line-through');
+}
+
+/** Deletes month tabs more than 12 months old (same as the order emails). Run by the daily reminder trigger. */
+function prunePrepSheet_() {
+  const id = typeof SpreadsheetApp === 'undefined' ? null : PropertiesService.getScriptProperties().getProperty(PREP_SHEET_PROP_);
+  if (!id) return;
+  const ss = SpreadsheetApp.openById(id);
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - 13); // the tab's month plus 12 full months
+  ss.getSheets().forEach(function (t) {
+    const start = new Date('1 ' + t.getName());
+    if (!isNaN(start.getTime()) && start < cutoff && ss.getSheets().length > 1) ss.deleteSheet(t);
+  });
+}
+
+/** Run once from the editor: makes the prep sheet (Google asks you to allow Sheets) and logs its link. Safe to run again. */
+function setupPrepSheet() {
+  const ss = prepBook_();
+  prepTab_(ss, Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd'));
+  console.log('Prep sheet ready: ' + ss.getUrl());
 }
 
 /* ------------------------------------------------------------------ */
