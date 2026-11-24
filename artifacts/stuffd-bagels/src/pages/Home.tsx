@@ -935,11 +935,11 @@ export default function Home() {
             label="Markets"
             id="where"
             title="Where we at"
-            note="The cart moves around Cape Town."
+            note="The cart moves around Cape Town. Walk up and buy at the cart, no order needed."
           />
           {openMarkets.length > 0 && !ordersOffRaw && (
             <p className="-mt-4 mb-10 text-base font-medium max-w-[52ch]" data-testid="preorder-line">
-              Skip the queue: pre-order online and collect at the stall on market day.{" "}
+              Or skip the queue: pre-order online and collect at the stall on market day.{" "}
               {openMarkets.length === 1 ? (
                 <a
                   href={`/?market=${encodeURIComponent(openMarkets[0].id)}#order`}

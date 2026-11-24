@@ -56,7 +56,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   // 1. Only the open market has a Pre-order link; the walk-up and the closed one have none
   await open("/");
   const line = await page.getByTestId("preorder-line").textContent();
-  assert.match(line, /Skip the queue: pre-order online and collect at the stall on market day\. Pre-order for Preorder Market/);
+  assert.match(line, /Or skip the queue: pre-order online and collect at the stall on market day\. Pre-order for Preorder Market/);
   const links = page.locator("a[aria-label^='Pre-order for']:visible");
   assert.equal(await links.count(), 1, "one Pre-order link, under the one open market");
   assert.equal(await page.getByTestId("preorder-line").getByRole("link", { name: /Pre-order for Preorder Market/ }).count(), 1, "and the named link in the top line");
