@@ -6,7 +6,7 @@ import { menuPricingObject, FAQ } from "./content";
 
 export const SITE_URL = "https://stuffdbagels.co.za";
 export const SITE_NAME = "STUFF'D Bagels";
-export const LAST_UPDATED = "2026-11-16";
+export const LAST_UPDATED = "2026-11-25";
 const OG_IMAGE = `${SITE_URL}/opengraph.jpg`;
 const EMAIL = "stuffd.bagels@gmail.com";
 
