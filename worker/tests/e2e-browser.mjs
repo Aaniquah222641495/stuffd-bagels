@@ -54,7 +54,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   const t0 = await page.locator("body").textContent();
   assert.ok(t0.includes("Order by Wednesday, collect on Saturday."), "collection rule on the menu");
   assert.ok(t0.includes("The cart moves around Cape Town."), "markets note (a market with pre-orders off is walk-up only: no pre-order line)");
-  assert.ok(!t0.includes("Skip the queue"), "no pre-order line when no market takes pre-orders");
+  assert.ok(!t0.includes("skip the queue"), "no pre-order line when no market takes pre-orders");
   assert.ok(t0.includes("Where and when do I collect my order?") && t0.includes("Order by Wednesday, collect on Saturday."), "FAQ states the rule");
   assert.equal(await page.locator("a[href*='wa.me'], a[href^='tel:']").count(), 0, "no WhatsApp or phone link on the public page (client's number is private)");
   assert.ok(!/8472|whatsapp/i.test(t0), "no phone number or WhatsApp wording on the public page");

@@ -66,7 +66,7 @@ function mapsUrl(venue: string) {
 }
 
 /** Google Calendar "add event" link. All-day, so the end date is the day after the last day. */
-function calendarUrl(e: { name: string; venue: string; start: string; end: string }) {
+function calendarUrl(e: { name: string; venue: string; start: string; end: string }, preorders = false) {
   const end = parseDay(e.end);
   end.setDate(end.getDate() + 1);
   const q = new URLSearchParams({
@@ -74,7 +74,9 @@ function calendarUrl(e: { name: string; venue: string; start: string; end: strin
     text: `STUFF'D Bagels at ${e.name}`,
     dates: `${ymd(parseDay(e.start))}/${ymd(end)}`,
     location: e.venue,
-    details: "Find the blue STUFF'D cart. No order needed, come and buy at the cart.",
+    details: preorders
+      ? "Find the blue STUFF'D cart. Buy at the cart, or pre-order at stuffdbagels.co.za and collect at the stall."
+      : "Find the blue STUFF'D cart. No order needed, come and buy at the cart.",
   });
   return `https://calendar.google.com/calendar/render?${q.toString()}`;
 }
@@ -209,7 +211,7 @@ function TrailLinks({
         </a>
       )}
       <a
-        href={calendarUrl(sched)}
+        href={calendarUrl(sched, !!preorder)}
         target="_blank"
         rel="noopener noreferrer"
         className={cls}
@@ -933,11 +935,11 @@ export default function Home() {
             label="Markets"
             id="where"
             title="Where we at"
-            note="The cart moves around Cape Town."
+            note="The cart moves around Cape Town. Walk up and buy at the cart, no order needed."
           />
           {openMarkets.length > 0 && !ordersOffRaw && (
             <p className="-mt-4 mb-10 text-base font-medium max-w-[52ch]" data-testid="preorder-line">
-              Skip the queue: pre-order online and collect at the stall on market day.{" "}
+              Or skip the queue: pre-order online and collect at the stall on market day.{" "}
               {openMarkets.length === 1 ? (
                 <a
                   href={`/?market=${encodeURIComponent(openMarkets[0].id)}#order`}
