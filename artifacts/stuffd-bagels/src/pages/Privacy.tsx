@@ -13,7 +13,7 @@ export default function Privacy() {
         </div>
       </div>
       <div className="max-w-3xl mx-auto px-5 sm:px-8 py-12 leading-relaxed text-base [&_h2]:font-bubble [&_h2]:text-3xl [&_h2]:mt-10 [&_h2]:mb-3 [&_h2]:leading-none [&_ul]:pl-5 [&_li]:mt-1.5 [&_a]:font-bold [&_a]:text-blue [&_a]:underline [&_a]:underline-offset-4">
-        <p className="m-0">Last updated 22 November 2026.</p>
+        <p className="m-0">Last updated 25 November 2026.</p>
 
         <h2>Who we are</h2>
         <p className="m-0">Stuff'd Bagels is a trading name of Sherezaan Khan (sole proprietor), 33 Ulm Way, Strandfontein. We are the "responsible party" under the Protection of Personal Information Act (POPIA). Our Information Officer is Sherezaan Khan. Contact us at <a href={`mailto:${EMAIL}`}>{EMAIL}</a>.</p>
@@ -35,6 +35,7 @@ export default function Privacy() {
           <li><strong>Cloudflare Turnstile</strong> checks that the person using our order and enquiry forms is not a bot. It is Cloudflare's service and uses some of your browser's details for that check.</li>
         </ul>
         <p className="m-0 mt-3"><strong>Collection-day reminder.</strong> After you pay we email you a reminder on the morning of your collection day. It is about your order, not marketing. For this, a small copy of your order (first name, email address, pickup details and what you ordered) is kept in the Stuff'd Bagels Google account until that morning, then deleted.</p>
+        <p className="m-0 mt-3"><strong>Preparing your order.</strong> So our kitchen knows what to make, each paid order is also added to a prep list in the Stuff'd Bagels Google account: your first name, order reference, collection day, time and place, what you ordered and your note. No phone number or email address. Each month's list is deleted 12 months later, like our order emails.</p>
         <p className="m-0 mt-3"><strong>Cancelling.</strong> Your confirmation email has a private link to cancel your order and get a refund before the cut-off. Anyone who has the link can cancel the order, so please don't forward the email. When you cancel we email you to confirm, tell the owner, and ask Yoco to refund the card you paid with. The cancel page uses Cloudflare Turnstile (above) to check that you are not a bot.</p>
 
         <h2>Other countries</h2>
