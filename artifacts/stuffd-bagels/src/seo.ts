@@ -7,7 +7,7 @@ import { menuPricingObject, FAQ } from "./content";
 export const SITE_URL = "https://stuffdbagels.co.za";
 export const SITE_NAME = "STUFF'D Bagels";
 export const LAST_UPDATED = "2026-11-25";
-const OG_IMAGE = `${SITE_URL}/opengraph.jpg`;
+const OG_IMAGE = `${SITE_URL}/og-image.jpg`; // client logo + box of bagels, 1200x630 (2026-11-25)
 const EMAIL = "stuffd.bagels@gmail.com";
 
 export interface PageMeta {
@@ -32,7 +32,7 @@ const business = {
     "Cape Town's first stuffed bagel. Korean-inspired, handmade stuffed bagels from our cart at markets and festivals across Cape Town. Halal menu. Order on the website by Wednesday and collect on Saturday at one of our pickup points, or just buy at the cart at a market. Online orders are confirmed once paid.",
   url: `${SITE_URL}/`,
   image: [OG_IMAGE, `${SITE_URL}/hero-bagel.jpeg`],
-  logo: `${SITE_URL}/logo-badge.png`,
+  logo: `${SITE_URL}/icon-512.png`,
   email: EMAIL,
   servesCuisine: ["Bagels", "Street food"],
   foundingDate: "2026",
@@ -144,9 +144,9 @@ export function headHtml(m: PageMeta): string {
     `<meta property="og:description" content="${esc(m.description)}" />`,
     url ? `<meta property="og:url" content="${url}" />` : "",
     `<meta property="og:image" content="${OG_IMAGE}" />`,
-    `<meta property="og:image:width" content="1280" />`,
-    `<meta property="og:image:height" content="720" />`,
-    `<meta property="og:image:alt" content="STUFF'D Bagels: stuffed bagels in Cape Town" />`,
+    `<meta property="og:image:width" content="1200" />`,
+    `<meta property="og:image:height" content="630" />`,
+    `<meta property="og:image:alt" content="STUFF'D Bagels logo beside a box of stuffed bagels: Korean street-food style bagels in Cape Town" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${esc(m.title)}" />`,
     `<meta name="twitter:description" content="${esc(m.description)}" />`,
