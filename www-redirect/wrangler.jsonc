@@ -1,0 +1,9 @@
+// Redirect-only Worker for the www address. Deploy: cd www-redirect && npx wrangler@4.148.0 deploy
+// The custom domain creates the www DNS record in the stuffdbagels.co.za zone by itself.
+{
+  "name": "stuffdbagels-www",
+  "main": "index.js",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": false,
+  "routes": [{ "pattern": "www.stuffdbagels.co.za", "custom_domain": true }]
+}
