@@ -578,3 +578,4 @@
 /* Menu links land below the sticky ticker and the waffle button (founder 2026-11-25). */
 h2[id] { scroll-margin-top: 6.5rem; }
 #order, #details, #book { scroll-margin-top: 4.5rem; }
+@media (min-width: 1024px) { h2[id] { scroll-margin-top: 10rem; } #order, #details, #book { scroll-margin-top: 6.5rem; } }

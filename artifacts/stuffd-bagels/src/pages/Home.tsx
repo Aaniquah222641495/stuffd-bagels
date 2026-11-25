@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { BookingForm } from "@/components/booking-form";
-import { MobileNav } from "@/components/mobile-nav";
+import { DesktopNav, MobileNav } from "@/components/mobile-nav";
 import { TURNSTILE_WAIT_MESSAGE, TurnstileBox, useTurnstile } from "@/components/turnstile";
 import { DEFAULT_CUTOFF, availableMarketDays, availableSaturdays, cutoffDay, hoursCaveat, hoursLabel, marketCutoffDay, marketHoursLabel, marketState, niceDay, openingNote, pickupHours, timeSlots } from "@/collection";
 import {
@@ -794,7 +794,7 @@ export default function Home() {
   tsReset.current = ts.reset;
 
   return (
-    <div className="bg-paper min-h-screen text-ink overflow-x-clip">
+    <div id="top" className="bg-paper min-h-screen text-ink overflow-x-clip">
       {/* STICKY TICKER: thin and quiet */}
       <div className="sticky top-0 z-40">
         <div className="overflow-hidden bg-ink">
@@ -802,12 +802,13 @@ export default function Home() {
             {TICKER_TEXT.repeat(6)}
           </div>
         </div>
+        <DesktopNav />
         <MobileNav />
       </div>
 
       {/* ─── HERO: cobalt panel left, a table of bagels right ─────────── */}
       <header className="relative bg-blue text-white">
-        <div className="lg:grid lg:grid-cols-[1.02fr_1fr] lg:min-h-[min(860px,calc(100dvh-32px))]">
+        <div className="lg:grid lg:grid-cols-[1.02fr_1fr] lg:min-h-[min(860px,calc(100dvh-96px))]">
           <div className="sesame relative flex flex-col justify-center gap-7 px-5 sm:px-10 pt-12 pb-20 lg:py-20 lg:pr-16 lg:pl-[max(2.5rem,calc((100vw-72rem)/2+2.5rem))]">
             <p className="hero-pop eyebrow text-white/90 m-0">Cape Town's first stuffed bagel</p>
             {/* The client's logo. The alt text is the H1 for search engines and screen readers. */}

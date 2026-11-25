@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 /** Mobile menu (founder 2026-11-25): a waffle (3x3 dots) button under the ticker that opens the page's sections. Phones and tablets only. */
-const LINKS: { href: string; label: string }[] = [
+export const NAV_LINKS: { href: string; label: string }[] = [
   { href: "#where", label: "Markets" },
   { href: "#order", label: "Menu" },
   { href: "#details", label: "Order online" },
@@ -75,7 +75,7 @@ export function MobileNav() {
       >
         <nav aria-label="Sections">
           <ul className="m-0 p-0 list-none">
-            {LINKS.map((l) => (
+            {NAV_LINKS.map((l) => (
               <li key={l.href}>
                 <a
                   href={l.href}
@@ -90,5 +90,37 @@ export function MobileNav() {
         </nav>
       </div>
     </div>
+  );
+}
+
+/** Desktop nav bar (founder 2026-11-25): under the ticker, sticks with it. Laptops and up only; phones use the waffle. */
+export function DesktopNav() {
+  const links = NAV_LINKS.filter((l) => l.href !== "#details");
+  return (
+    <nav aria-label="Sections" className="hidden lg:block bg-paper/95 backdrop-blur border-b-2 border-ink" data-testid="desktop-nav">
+      <div className="mx-auto max-w-6xl px-10 h-16 flex items-center justify-between gap-8">
+        <a href="#top" className="shrink-0" aria-label="STUFF'D Bagels, back to the top">
+          <img src="/logo-blue.svg" alt="" width={967} height={369} className="block h-10 w-auto" />
+        </a>
+        <ul className="m-0 p-0 list-none flex items-center gap-7">
+          {links.map((l) => (
+            <li key={l.href}>
+              <a href={l.href} className="font-bold text-sm text-ink underline-offset-[6px] decoration-2 decoration-blue hover:underline focus-visible:underline">
+                {l.label}
+              </a>
+            </li>
+          ))}
+          <li>
+            <a
+              href="#order"
+              className="inline-flex items-center rounded-full border-2 border-ink bg-blue text-white px-5 py-2 font-black uppercase tracking-widest text-xs transition-transform duration-150 hover:-translate-y-0.5 active:translate-y-0.5"
+              style={{ boxShadow: "0 3px 0 var(--sb-ink)" }}
+            >
+              Order online
+            </a>
+          </li>
+        </ul>
+      </div>
+    </nav>
   );
 }
