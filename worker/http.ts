@@ -128,3 +128,9 @@ export async function readRawText(request: Request, max: number): Promise<string
     throw new HttpError(400, "Invalid request");
   }
 }
+
+/** The kitchen prep sheet's address (plain var PREP_SHEET_URL, not a secret). Only an https Google Sheets link is passed on; anything else is "". */
+export function prepSheetLink(value: string | undefined): string {
+  const v = (value ?? "").trim();
+  return /^https:\/\/docs\.google\.com\/spreadsheets\/d\/[A-Za-z0-9_-]+(?:[/?#][^\s"<>]*)?$/.test(v) ? v : "";
+}

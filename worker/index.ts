@@ -8,7 +8,7 @@ import { handleForm } from "./forms";
 import { turnstileSiteKey } from "./turnstile";
 import { handleAttention, handleStatus, handleWebhook } from "./payments";
 import { handleCancel, handleCancelCheck } from "./cancel";
-import { HttpError, errorResponse, json, plainHttpRefused, readJsonObject, withNoindex } from "./http";
+import { HttpError, errorResponse, json, plainHttpRefused, prepSheetLink, readJsonObject, withNoindex } from "./http";
 import {
   LIMITS,
   parseAvailabilityInput,
@@ -38,6 +38,8 @@ export interface Env {
   APP_ENV?: string;
   // "1" on the preview: every page and file gets X-Robots-Tag: noindex, nofollow (the preview must never be indexed).
   NOINDEX?: string;
+  // Link to the prep sheet (Google Sheet) shown on the admin page. Plain var, not a secret: set under "vars" in wrangler.jsonc (production), empty on preview.
+  PREP_SHEET_URL?: string;
   // Web app URL of the client's Google Apps Script (apps-script/Code.gs). Worker secret, set by the founder.
   APPS_SCRIPT_URL?: string;
   // Required shared token (32+ random characters), must match SHARED_TOKEN in the script. No token, no forwarding.
@@ -85,7 +87,7 @@ async function handleAdmin(request: Request, env: Env, parts: string[]): Promise
   if (resource === "availability" && id === undefined) {
     methodOnly(request, ["GET", "POST"]);
     const kv = needKv(env);
-    if (request.method === "GET") return json(withToday(await readAvailabilitySafe(kv)));
+    if (request.method === "GET") return json({ ...withToday(await readAvailabilitySafe(kv)), prepSheetUrl: prepSheetLink(env.PREP_SHEET_URL) });
     const next = parseAvailabilityInput(await readJsonObject(request), await readAvailabilitySafe(kv));
     await writeAvailability(kv, next);
     return json({ ok: true });

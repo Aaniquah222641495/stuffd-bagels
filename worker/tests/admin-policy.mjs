@@ -63,4 +63,8 @@ assert.equal(http.plainHttpRefused(new URL("http://localhost.evil.example/api/x"
 const res = http.withNoindex(new Response("<html>", { status: 404, headers: { "content-type": "text/html" } }));
 assert.equal(res.headers.get("X-Robots-Tag"), "noindex, nofollow"); assert.equal(res.status, 404); assert.equal(await res.text(), "<html>"); assert.equal(res.headers.get("content-type"), "text/html");
 ok("plain-HTTP /api refused except loopback (look-alike hostnames refused); noindex helper keeps status, body and headers");
+const sheet = (v) => http.prepSheetLink(v);
+assert.equal(sheet("https://docs.google.com/spreadsheets/d/abc_-123/edit#gid=0"), "https://docs.google.com/spreadsheets/d/abc_-123/edit#gid=0");
+for (const bad of [undefined, "", "   ", "http://docs.google.com/spreadsheets/d/abc", "javascript:alert(1)", "https://docs.google.com/spreadsheets/d/", "https://docs.google.com.evil.example/spreadsheets/d/a", "https://evil.example/?https://docs.google.com/spreadsheets/d/a", "https://docs.google.com/document/d/abc"]) assert.equal(sheet(bad), "", String(bad));
+ok("prep sheet link: only an https Google Sheets address is passed to the admin page, anything else is empty");
 console.log(`admin-policy: all ${n} groups passed`);

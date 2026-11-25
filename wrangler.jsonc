@@ -69,7 +69,7 @@
   // TURNSTILE_SITE_KEY: the PUBLIC sitekey of the "Stuff'd Bagels forms" widget (Cloudflare dashboard > Turnstile, Managed mode, hostname
   // stuffdbagels.co.za). Not a secret. The matching secret is TURNSTILE_SECRET_KEY, a Worker secret set by the founder, never here: until it is
   // set the Worker refuses every order and booking (fails closed).
-  "vars": { "APP_ENV": "production", "TURNSTILE_SITE_KEY": "0x4AAAAAAGIpBftgw-wYSqUM", "YOCO_MODE": "live", "SITE_ORIGIN": "https://stuffdbagels.co.za" },
+  "vars": { "APP_ENV": "production", "TURNSTILE_SITE_KEY": "0x4AAAAAAGIpBftgw-wYSqUM", "YOCO_MODE": "live", "SITE_ORIGIN": "https://stuffdbagels.co.za", "PREP_SHEET_URL": "https://docs.google.com/spreadsheets/d/1EBXmKtzQ8mD7BiJ1aVe0S9B7IBgcX1HNxlJsp22_hCw/edit" },
   "env": {
     // Preview for the client and the founder: separate Worker, separate KV, separate password.
     "preview": {
@@ -79,7 +79,7 @@
       // The preview is never indexed: NOINDEX makes the Worker add X-Robots-Tag to every page and file, so it must run for all paths
       // here (a few thousand extra Worker requests a month on the preview only; production keeps static requests free).
       // Yoco TEST mode, sent back to the preview's own address. Order data here is separate from production's.
-      "vars": { "APP_ENV": "preview", "NOINDEX": "1", "TURNSTILE_SITE_KEY": "1x00000000000000000000AA", "YOCO_MODE": "test", "SITE_ORIGIN": "https://stuffdbagels-preview.thedigitalpantryza.workers.dev" },
+      "vars": { "APP_ENV": "preview", "NOINDEX": "1", "TURNSTILE_SITE_KEY": "1x00000000000000000000AA", "YOCO_MODE": "test", "SITE_ORIGIN": "https://stuffdbagels-preview.thedigitalpantryza.workers.dev", "PREP_SHEET_URL": "https://docs.google.com/spreadsheets/d/1EBXmKtzQ8mD7BiJ1aVe0S9B7IBgcX1HNxlJsp22_hCw/edit" },
       "assets": {
         "directory": "./artifacts/stuffd-bagels/dist/public",
         "binding": "ASSETS",
