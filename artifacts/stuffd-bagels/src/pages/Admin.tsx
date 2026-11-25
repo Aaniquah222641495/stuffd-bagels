@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { collectionSaturdays, isSaturday, marketClash, marketCutoffDay, niceDay, opensOnFor, sastDay, saturdayWarning, skippedSaturdays } from "@/collection";
 import type { MarketPreorder } from "@/content";
 
@@ -15,6 +15,8 @@ interface Availability {
   removedSaturdays: string[];
   keptSaturdays: string[];
   opensOn: Record<string, string>;
+  /** Link to the prep sheet, from the Worker. Empty until it is set up. */
+  prepSheetUrl?: string;
 }
 
 interface PickupPoint {
@@ -92,6 +94,9 @@ export default function Admin() {
   const [savingPickup, setSavingPickup] = useState(false);
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [attention, setAttention] = useState<AttentionItem[]>([]);
+  const [navOpen, setNavOpen] = useState(false);
+  const navButtonRef = useRef<HTMLButtonElement>(null);
+  const navPanelRef = useRef<HTMLDivElement>(null);
 
   const loadEvents = useCallback(async (pw: string) => {
     const res = await fetch(apiUrl("/admin/events"), {
@@ -148,6 +153,39 @@ export default function Admin() {
   useEffect(() => {
     if (password) load(password);
   }, []);
+
+  // Mobile menu: Escape and a tap outside close it (Escape returns focus to the button); opening moves focus to the first link;
+  // growing to the desktop width shows the inline links instead, so the panel closes.
+  useEffect(() => {
+    if (!navOpen) return;
+    navPanelRef.current?.querySelector("a")?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setNavOpen(false);
+        navButtonRef.current?.focus();
+      }
+    };
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (!navPanelRef.current?.contains(t) && !navButtonRef.current?.contains(t)) setNavOpen(false);
+    };
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const onMq = () => mq.matches && setNavOpen(false);
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    mq.addEventListener("change", onMq);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+      mq.removeEventListener("change", onMq);
+    };
+  }, [navOpen]);
+
+  function signOut() {
+    sessionStorage.removeItem("admin_pw");
+    setAuthed(false);
+    setDraft("");
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -378,6 +416,9 @@ export default function Admin() {
     else setPickupError(SOMETHING_WRONG);
   }
 
+  // Only a Google Sheets link is ever shown (the Worker checks too).
+  const prepUrl = data?.prepSheetUrl && /^https:\/\/docs\.google\.com\/spreadsheets\/d\//.test(data.prepSheetUrl) ? data.prepSheetUrl : "";
+
   const inputCls =
     "w-full border-2 border-ink px-3 py-2 text-sm font-medium bg-paper focus:outline-none focus:border-blue";
   const btnCls =
@@ -437,36 +478,56 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen bg-paper">
-      {/* Header */}
-      <header
-        className="border-b-2 border-ink px-6 py-4 flex items-center justify-between"
-        style={{ background: "var(--sb-ink)" }}
-      >
-        <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="logo" className="h-8 w-8 object-contain invert" />
-          <h1
-            className="font-black tracking-widest text-white uppercase"
-            style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.1rem" }}
+      {/* Header: sticky nav bar. Inline links from 1024px; below that a waffle button opens the same links in a panel. */}
+      <header className="sticky top-0 z-40 border-b-2 border-ink" style={{ background: "var(--sb-ink)" }}>
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 py-2">
+          <a href="#top" className="flex min-h-11 items-center gap-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+            <img src="/logo.png" alt="" className="h-8 w-8 object-contain invert" />
+            <h1
+              className="font-black tracking-widest text-white uppercase"
+              style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.1rem" }}
+            >
+              Admin<span className="hidden sm:inline"> — Stuff'd Bagels</span>
+            </h1>
+          </a>
+          <nav aria-label="Admin sections" className="hidden lg:flex items-center gap-1">
+            {NAV_LINKS.map((l) => (
+              <a key={l.href} href={l.href} className={`${navLinkCls} px-3`}>{l.label}</a>
+            ))}
+            <button onClick={signOut} className={`${navLinkCls} ml-3 border-l border-white/30 pl-5 pr-2`}>Sign Out</button>
+          </nav>
+          <button
+            ref={navButtonRef}
+            type="button"
+            aria-expanded={navOpen}
+            aria-controls="admin-nav-panel"
+            aria-label="Menu"
+            onClick={() => setNavOpen((o) => !o)}
+            className="lg:hidden flex h-11 w-11 items-center justify-center border-2 border-white/60 text-white hover:border-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
-            Admin — Stuff'd Bagels
-          </h1>
+            <span aria-hidden="true" className="grid grid-cols-3 gap-[5px]">
+              {Array.from({ length: 9 }, (_, n) => (
+                <span key={n} className="block h-[5px] w-[5px] rounded-full bg-current" />
+              ))}
+            </span>
+          </button>
         </div>
-        <button
-          className="text-white/80 hover:text-white text-xs tracking-widest uppercase font-bold transition-colors"
-          onClick={() => {
-            sessionStorage.removeItem("admin_pw");
-            setAuthed(false);
-            setDraft("");
-          }}
-        >
-          Sign Out
-        </button>
+        {navOpen && (
+          <div id="admin-nav-panel" ref={navPanelRef} className="lg:hidden border-t border-white/20" style={{ background: "var(--sb-ink)" }}>
+            <nav aria-label="Admin sections" className="mx-auto flex max-w-6xl flex-col px-2 sm:px-4 py-2">
+              {NAV_LINKS.map((l) => (
+                <a key={l.href} href={l.href} onClick={() => setNavOpen(false)} className={`${navLinkCls} px-4`}>{l.label}</a>
+              ))}
+              <button onClick={signOut} className={`${navLinkCls} mt-1 border-t border-white/20 px-4 text-left`}>Sign Out</button>
+            </nav>
+          </div>
+        )}
       </header>
 
-      <main className="max-w-2xl mx-auto px-6 py-10 space-y-10">
+      <main id="top" className="max-w-6xl mx-auto px-4 sm:px-6 py-8 lg:py-10 space-y-10">
 
         {attention.length > 0 && (
-          <section aria-labelledby="attention-heading" data-testid="orders-attention" className="rounded-2xl border-2 border-red-700 bg-white p-5">
+          <section aria-labelledby="attention-heading" data-testid="orders-attention" className="rounded-2xl border-2 border-red-700 bg-white p-5 max-w-3xl">
             <h2 id="attention-heading" className="m-0 text-base font-black text-red-700">
               {attention.length} paid {attention.length === 1 ? "order needs" : "orders need"} you
             </h2>
@@ -488,8 +549,36 @@ export default function Admin() {
           </section>
         )}
 
+        {/* ── Prep sheet ────────────────────────────────────── */}
+        <section id="prep-sheet" aria-labelledby="prep-heading" data-testid="prep-sheet" className="scroll-mt-24 border-2 border-ink p-5 sm:p-6" style={{ borderLeftWidth: 8, borderLeftColor: ACCENT }}>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 id="prep-heading" className="m-0 font-black tracking-widest uppercase text-sm">Prep sheet: what to make</h2>
+              <p className="text-xs text-ink/75 mt-2 mb-0 tracking-wide max-w-xl">
+                {prepUrl
+                  ? "Every paid order, by collection month, with a To make totals table. It opens in Google Sheets."
+                  : "Your prep sheet will appear here once it is set up."}
+              </p>
+            </div>
+            {prepUrl && (
+              <a
+                href={prepUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${btnCls} inline-flex min-h-11 shrink-0 items-center justify-center text-white`}
+                style={{ background: ACCENT, borderColor: ACCENT }}
+              >
+                Open prep sheet
+              </a>
+            )}
+          </div>
+        </section>
+
+        {/* Desktop: the three short settings on the left, collection rules on the right. Mobile: one column in the same order. */}
+        <div className="grid gap-10 lg:grid-cols-2 lg:gap-x-14 lg:items-start">
+        <div className="space-y-10">
         {/* ── 01 Order Status ───────────────────────────────── */}
-        <section>
+        <section id="order-status" className="scroll-mt-24">
           <SectionHead num="01" label="Order Status" />
           <button
             onClick={() => setData({ ...data, ordersEnabled: !data.ordersEnabled })}
@@ -514,7 +603,7 @@ export default function Admin() {
         </section>
 
         {/* ── 02 Closed Message ─────────────────────────────── */}
-        <section>
+        <section id="closed-message" className="scroll-mt-24">
           <SectionHead num="02" label="Closed Message" />
           <textarea
             aria-label="Closed message"
@@ -530,7 +619,7 @@ export default function Admin() {
         </section>
 
         {/* ── 03 Closed Dates ───────────────────────────────── */}
-        <section>
+        <section id="closed-dates" className="scroll-mt-24">
           <SectionHead num="03" label="Closed Dates" />
           <div className="flex gap-2 mb-4">
             <input
@@ -566,15 +655,16 @@ export default function Admin() {
             paused for the day (SAST timezone).
           </p>
         </section>
+        </div>
 
         {/* ── 04 Collection rules ───────────────────────────── */}
-        <section>
+        <section id="collection-rules" className="scroll-mt-24">
           <SectionHead num="04" label="Collection Rules" />
           <p className="text-xs text-ink/75 mb-4 tracking-wide">
             Customers collect on Saturdays only, at your pickup points. Orders for a Saturday close on the Wednesday before.
           </p>
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className="col-span-2 sm:col-span-1">
               <label htmlFor="cutoff-time" className="block text-[10px] font-black tracking-widest uppercase text-ink/75 mb-1">
                 Wednesday cut-off time
               </label>
@@ -608,7 +698,7 @@ export default function Admin() {
                     </span>
                   )}
                 </span>
-                <label className="flex items-center gap-2 text-xs font-bold tracking-wide">
+                <label className="flex items-center gap-2 whitespace-nowrap text-xs font-bold tracking-wide">
                   Orders open on
                   <input
                     type="date"
@@ -670,6 +760,7 @@ export default function Admin() {
             </p>
           )}
         </section>
+        </div>
 
         {/* ── Save availability ─────────────────────────────── */}
         <div className="flex items-center gap-4 border-t-2 border-ink pt-6">
@@ -689,7 +780,8 @@ export default function Admin() {
         </div>
 
         {/* ── 05 Pickup points ─────────────────────────────── */}
-        <section className="border-t-2 border-ink pt-10" aria-labelledby="pickups-heading">
+        <div className="grid gap-10 lg:grid-cols-2 lg:gap-x-14 lg:items-start lg:border-t-2 lg:border-ink lg:pt-10">
+        <section id="pickups" className="scroll-mt-24 border-t-2 border-ink pt-10 lg:pt-0 lg:border-t-0" aria-labelledby="pickups-heading">
           <SectionHead num="05" label="Pickup Points" id="pickups-heading" />
           <p className="text-xs text-ink/75 mb-6 tracking-wide">
             Where customers collect their online orders, on Saturdays. They choose one when they order. Changes can take up
@@ -878,7 +970,7 @@ export default function Admin() {
         </section>
 
         {/* ── 06 Market dates ──────────────────────────────── */}
-        <section className="border-t-2 border-ink pt-10">
+        <section id="markets" className="scroll-mt-24 border-t-2 border-ink pt-10 lg:pt-0 lg:border-t-0">
           <SectionHead num="06" label="Markets: Where We At" />
           <p className="text-xs text-ink/75 mb-6 tracking-wide">
             Market dates appear on the home page under "Where we at". By default people just buy at the cart. Switch on
@@ -996,11 +1088,24 @@ export default function Admin() {
             </div>
           )}
         </section>
+        </div>
 
       </main>
     </div>
   );
 }
+
+const NAV_LINKS = [
+  { href: "#prep-sheet", label: "Prep sheet" },
+  { href: "#order-status", label: "Orders" },
+  { href: "#closed-message", label: "Message" },
+  { href: "#closed-dates", label: "Closed dates" },
+  { href: "#collection-rules", label: "Collection" },
+  { href: "#pickups", label: "Pickups" },
+  { href: "#markets", label: "Markets" },
+];
+const navLinkCls =
+  "flex min-h-11 items-center text-xs tracking-widest uppercase font-bold text-white/80 hover:text-white transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white";
 
 const LONGEST_PREORDER_MARKET_DAYS = 14;
 

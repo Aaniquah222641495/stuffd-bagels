@@ -69,7 +69,7 @@
   // TURNSTILE_SITE_KEY: the PUBLIC sitekey of the "Stuff'd Bagels forms" widget (Cloudflare dashboard > Turnstile, Managed mode, hostname
   // stuffdbagels.co.za). Not a secret. The matching secret is TURNSTILE_SECRET_KEY, a Worker secret set by the founder, never here: until it is
   // set the Worker refuses every order and booking (fails closed).
-  "vars": { "APP_ENV": "production", "TURNSTILE_SITE_KEY": "0x4AAAAAAGIpBftgw-wYSqUM", "YOCO_MODE": "live", "SITE_ORIGIN": "https://stuffdbagels.co.za" },
+  "vars": { "APP_ENV": "production", "TURNSTILE_SITE_KEY": "0x4AAAAAAGIpBftgw-wYSqUM", "YOCO_MODE": "live", "SITE_ORIGIN": "https://stuffdbagels.co.za", "PREP_SHEET_URL": "" },
   "env": {
     // Preview for the client and the founder: separate Worker, separate KV, separate password.
     "preview": {
