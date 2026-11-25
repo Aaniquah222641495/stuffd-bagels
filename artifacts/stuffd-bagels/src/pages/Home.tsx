@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { BookingForm } from "@/components/booking-form";
+import { MobileNav } from "@/components/mobile-nav";
 import { TURNSTILE_WAIT_MESSAGE, TurnstileBox, useTurnstile } from "@/components/turnstile";
 import { DEFAULT_CUTOFF, availableMarketDays, availableSaturdays, cutoffDay, hoursCaveat, hoursLabel, marketCutoffDay, marketHoursLabel, marketState, niceDay, openingNote, pickupHours, timeSlots } from "@/collection";
 import {
@@ -793,12 +794,15 @@ export default function Home() {
   tsReset.current = ts.reset;
 
   return (
-    <div className="bg-paper min-h-screen text-ink overflow-x-hidden">
+    <div className="bg-paper min-h-screen text-ink overflow-x-clip">
       {/* STICKY TICKER: thin and quiet */}
-      <div className="sticky top-0 z-40 overflow-hidden bg-ink">
-        <div aria-hidden="true" className="ticker-track whitespace-pre py-2 text-white/90 font-bold text-[10px] tracking-[0.3em] uppercase">
-          {TICKER_TEXT.repeat(6)}
+      <div className="sticky top-0 z-40">
+        <div className="overflow-hidden bg-ink">
+          <div aria-hidden="true" className="ticker-track whitespace-pre py-2 text-white/90 font-bold text-[10px] tracking-[0.3em] uppercase">
+            {TICKER_TEXT.repeat(6)}
+          </div>
         </div>
+        <MobileNav />
       </div>
 
       {/* ─── HERO: cobalt panel left, a table of bagels right ─────────── */}
